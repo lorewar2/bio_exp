@@ -65,6 +65,35 @@ pub fn pairwise (seq_x: &Vec<u8>, seq_y: &Vec<u8>, match_score: i32, mismatch_sc
             }
         }
     }
+    // print stuff
+    println!("simple ins matrix");
+    for i in 0..seq_x.len() + 1 {
+        for j in 0..seq_y.len() + 1 {
+            print!("{:>3} ", ins_matrix[i][j]);
+        }
+        println!("");
+    }
+    println!("simple match matrix");
+    for i in 0..seq_x.len() + 1 {
+        for j in 0..seq_y.len() + 1 {
+            print!("{:>3} ", match_matrix[i][j]);
+        }
+        println!("");
+    }
+    println!("simple del matrix");
+    for i in 0..seq_x.len() + 1 {
+        for j in 0..seq_y.len() + 1 {
+            print!("{:>3} ", del_matrix[i][j]);
+        }
+        println!("");
+    }
+    println!("simple back matrix");
+    for i in 0..seq_x.len() + 1 {
+        for j in 0..seq_y.len() + 1 {
+            print!("{:>3} ", back_matrix[i][j]);
+        }
+        println!("");
+    }
     // back tracing using back matrix and filling out align_vec
     let mut i = seq_x.len();
     let mut j = seq_y.len();
