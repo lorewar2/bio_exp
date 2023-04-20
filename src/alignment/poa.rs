@@ -1,5 +1,5 @@
 
-use petgraph::{graph::NodeIndex, visit::Topo, Directed, Graph, Incoming};
+use petgraph::{graph::NodeIndex, visit::Topo, Directed, Graph, Incoming, Outgoing};
 use std::cmp;
 
 pub const MIN_ISIZE: isize = -858_993_459;
@@ -43,19 +43,6 @@ impl Poa {
             // find the current processing node in topoindices
             match alignment.0 as char {
                 'i' => {
-                    prev_node = current_node;
-                    current_node = Some(topo_indices[graph_index - 1]);
-                    if prev_node_require_update {
-                        match self.poa_graph.find_edge(current_node.unwrap(), prev_node.unwrap()) {
-                            Some(edge) => {
-                                *self.poa_graph.edge_weight_mut(edge).unwrap() += 1;
-                            }
-                            None => {
-                                self.poa_graph.add_edge(current_node.unwrap(), prev_node.unwrap(), 1);
-                            }
-                        }
-                    }
-                    prev_node_require_update = false;
                     graph_index = alignment.1;
                 },
                 'm' => {
@@ -107,8 +94,6 @@ impl Poa {
                 },
                 _ => (),
             }
-            //println!("graph index == {}", graph_index);
-            //println!("query index == {}", query_index);
         }
     }
 
@@ -121,10 +106,10 @@ impl Poa {
         }
         // make three matrices
         // initialize the weight matrix with zeros
-        let mut match_matrix: Vec<Vec<(isize, usize)>> = vec![vec![(0, 0); query.len() + 1]; self.poa_graph.node_count() + 1]; // match or mismatch diagonal edges  // score and the aligned one location
-        let mut del_matrix: Vec<Vec<(isize, usize)>> = vec![vec![(0, 0); query.len() + 1]; self.poa_graph.node_count() + 1];  // x deletions right direction edges // score and the aligned one location
-        let mut ins_matrix: Vec<Vec<(isize, usize)>> = vec![vec![(0, 0); query.len() + 1]; self.poa_graph.node_count() + 1]; // x insertion down direction edges // score and the aligned one location
-        let mut back_matrix: Vec<Vec<(char, usize)>> = vec![vec![('0', 0); query.len() + 1]; self.poa_graph.node_count() + 1];
+        let mut match_matrix: Vec<Vec<(isize, usize)>> = vec![vec![(0, 0); query.len() + 1]; topo_indices.len() + 1]; // match or mismatch diagonal edges  // score and the aligned one location
+        let mut del_matrix: Vec<Vec<(isize, usize)>> = vec![vec![(0, 0); query.len() + 1]; topo_indices.len() + 1];  // x deletions right direction edges // score and the aligned one location
+        let mut ins_matrix: Vec<Vec<(isize, usize)>> = vec![vec![(0, 0); query.len() + 1]; topo_indices.len() + 1]; // x insertion down direction edges // score and the aligned one location
+        let mut back_matrix: Vec<Vec<(char, usize)>> = vec![vec![('0', 0); query.len() + 1]; topo_indices.len() + 1];
         // fill the first row and column
         let mut graph_index = 1;
         let mut query_index = 1;
@@ -243,6 +228,7 @@ impl Poa {
                 }
             }
         }
+        /* 
         println!("printing ins matrix");
         for graph_index in 0..topo_indices.len() + 1 {
             for query_index in 0..query.len() + 1 {
@@ -270,6 +256,7 @@ impl Poa {
             }
             println!("");
         }
+        */
         // backtrace
         // back tracing using back matrix and filling out align_vec
         let mut align_vec: Vec<(u8, usize)> = vec![];
@@ -316,5 +303,69 @@ impl Poa {
         }
         
         align_vec
+    }
+    pub fn consensus(&self) -> (Vec<u8>, Vec<usize>) {
+        let mut output: Vec<u8> = vec![];
+        let mut topopos: Vec<usize> = vec![];
+        let mut topo = Topo::new(&self.poa_graph);
+        let mut topo_indices = Vec::new();
+        let mut max_index = 0;
+        let mut max_score = 0.0;
+
+        while let Some(node) = topo.next(&self.poa_graph) {
+            topo_indices.push(node);
+            if max_index < node.index(){
+                max_index = node.index();
+            }
+        }
+        topo_indices.reverse();
+        //define score and nextinpath vectors with capacity of num nodes.
+        let mut weight_scores: Vec<i32> = vec![0; max_index + 1];
+        let mut scores: Vec<f64> = vec![0.0; max_index + 1];
+        let mut next_in_path: Vec<usize> = vec![0; max_index + 1];
+        //iterate thorugh the nodes in revere
+        for node in topo_indices{
+            //print!("\nstart node: {:?}", self.graph.raw_nodes()[node.index()].weight);
+            let mut best_weight_score_edge: (i32, f64, usize) = (-1 , -1.0, 123456789);
+            //let mut outEdges = self.graph.neighbors_directed(node, Outgoing).detach();
+            let mut neighbour_nodes = self.poa_graph.neighbors_directed(node, Outgoing);
+            while let Some(neighbour_node) = neighbour_nodes.next() {
+                //print!(" end node: {:?}", self.graph.raw_nodes()[neighbour_node.index()].weight);
+                let mut edges = self.poa_graph.edges_connecting(node, neighbour_node);
+                let mut weight: i32 = 0;
+                while let Some(edge) = edges.next() {
+                    weight += edge.weight().clone();
+                    //print!(" Edge of weight {}", weight);
+                }
+                let weight_score_edge = (weight, scores[neighbour_node.index()], neighbour_node.index());
+                if weight_score_edge > best_weight_score_edge{
+                    best_weight_score_edge = weight_score_edge;
+                }
+            }
+            //save score and traceback
+            if best_weight_score_edge.0 as f64 + best_weight_score_edge.1 > max_score{
+                max_score = best_weight_score_edge.0 as f64 + best_weight_score_edge.1;
+            }
+            scores[node.index()] = best_weight_score_edge.0 as f64 + best_weight_score_edge.1;
+            next_in_path[node.index()] = best_weight_score_edge.2;
+            weight_scores[node.index()] = best_weight_score_edge.0;
+        }
+        let mut pos = scores.iter().position(|&r| r == max_score).unwrap();
+        //calculate the start weight score
+        let mut consensus_started: bool = false;
+        let weight_average = scores[pos] / scores.len() as f64;
+        let weight_threshold = weight_average as i32 / 2;
+        while pos != 123456789 {
+            //continue if starting weight score is too low
+            if consensus_started == false && weight_scores[pos] <= weight_threshold {
+                pos = next_in_path[pos];
+                continue;
+            }
+            consensus_started = true;
+            topopos.push(pos as usize);
+            output.push(self.poa_graph.raw_nodes()[pos].weight);
+            pos = next_in_path[pos];
+        }
+        (output, topopos)
     }
 }
