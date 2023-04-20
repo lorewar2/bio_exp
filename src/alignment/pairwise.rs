@@ -98,6 +98,7 @@ pub fn pairwise (seq_x: &Vec<u8>, seq_y: &Vec<u8>, match_score: i32, mismatch_sc
     let mut i = seq_x.len();
     let mut j = seq_y.len();
     let score = match_matrix[i][j];
+    let mut break_on_next = false;
     loop {
         match back_matrix[i][j] {
             'i' => {
@@ -120,8 +121,11 @@ pub fn pairwise (seq_x: &Vec<u8>, seq_y: &Vec<u8>, match_score: i32, mismatch_sc
             },
             _ => (),
         }
-        if i == 0 && j == 0 {
+        if break_on_next {
             break;
+        }
+        if i == 0 && j == 0 {
+            break_on_next = true;
         }
     }
     (align_vec.into_iter().rev().collect(), score)

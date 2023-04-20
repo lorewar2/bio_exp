@@ -1,10 +1,11 @@
 
-use petgraph::{Direction::Outgoing, graph::NodeIndex, visit::Topo, Directed, Graph, Incoming};
+use petgraph::{graph::NodeIndex, visit::Topo, Directed, Graph, Incoming};
 use std::cmp;
 
 pub const MIN_ISIZE: isize = -858_993_459;
+pub const MAX_USIZE: usize = 858_993_459;
 pub struct Poa {
-    poa_graph: Graph<u8, i32, Directed, usize>,
+    pub poa_graph: Graph<u8, i32, Directed, usize>,
     match_score: i32,
     mismatch_score: i32,
     gap_open_score: i32,
@@ -25,11 +26,93 @@ impl Poa {
         }
         Poa {poa_graph: graph, match_score: match_score, mismatch_score: mismatch_score, gap_open_score: gap_open_score, gap_extend_score: gap_extend_score}
     }
-    pub fn add_to_poa (query: &Vec<u8>) {
-        
+    pub fn add_to_poa (&mut self, query: &Vec<u8>) {
+        // get topological ordering of the graph
+        let mut topo = Topo::new(&self.poa_graph);
+        let mut topo_indices = Vec::new();
+        while let Some(node) = topo.next(&self.poa_graph) {
+            topo_indices.push(node);
+        }
+        let align_vec = self.get_alignment(query);
+        let mut graph_index = topo_indices.len();
+        let mut query_index = query.len();
+        let mut current_node: Option<NodeIndex<usize>> = None;
+        let mut prev_node: Option<NodeIndex<usize>>;
+        let mut prev_node_require_update = false;
+        for alignment in align_vec {
+            // find the current processing node in topoindices
+            match alignment.0 as char {
+                'i' => {
+                    prev_node = current_node;
+                    current_node = Some(topo_indices[graph_index - 1]);
+                    if prev_node_require_update {
+                        match self.poa_graph.find_edge(current_node.unwrap(), prev_node.unwrap()) {
+                            Some(edge) => {
+                                *self.poa_graph.edge_weight_mut(edge).unwrap() += 1;
+                            }
+                            None => {
+                                self.poa_graph.add_edge(current_node.unwrap(), prev_node.unwrap(), 1);
+                            }
+                        }
+                    }
+                    prev_node_require_update = false;
+                    graph_index = alignment.1;
+                },
+                'm' => {
+                    prev_node = current_node;
+                    current_node = Some(topo_indices[graph_index - 1]);
+                    // find the edge between alignment.1 and current node
+                    if prev_node_require_update {
+                        match self.poa_graph.find_edge(current_node.unwrap(), prev_node.unwrap()) {
+                            Some(edge) => {
+                                *self.poa_graph.edge_weight_mut(edge).unwrap() += 1;
+                            }
+                            None => {
+                                self.poa_graph.add_edge(current_node.unwrap(), prev_node.unwrap(), 1);
+                            }
+                        }
+                    }
+                    query_index -= 1;
+                    graph_index = alignment.1;
+                    prev_node_require_update = true;
+                },
+                's' => {
+                    // make a new node
+                    prev_node = current_node;
+                    current_node = Some(self.poa_graph.add_node(query[query_index - 1]));
+                    match prev_node {
+                        Some(x) => {
+                            // connect the new node to the current one
+                            self.poa_graph.add_edge(current_node.unwrap(), x, 1);
+                        },
+                        None => {},
+                    }
+                    prev_node_require_update = true;
+                    query_index -= 1;
+                    graph_index = alignment.1;
+                }
+                'd' => {
+                    // make a new node
+                    prev_node = current_node;
+                    current_node = Some(self.poa_graph.add_node(query[query_index - 1]));
+                    match prev_node {
+                        Some(x) => {
+                            // connect the new node to the current one
+                            self.poa_graph.add_edge(current_node.unwrap(), x, 1);
+                        },
+                        None => {},
+                    }
+                    prev_node_require_update = true;
+                    query_index -= 1;
+                },
+                _ => (),
+            }
+            //println!("graph index == {}", graph_index);
+            //println!("query index == {}", query_index);
+        }
     }
 
-    pub fn get_alignment (self, query: &Vec<u8>) {
+    pub fn get_alignment (&self, query: &Vec<u8>) -> Vec<(u8, usize)> {
         // get topological ordering of the graph
         let mut topo = Topo::new(&self.poa_graph);
         let mut topo_indices = Vec::new();
@@ -38,20 +121,20 @@ impl Poa {
         }
         // make three matrices
         // initialize the weight matrix with zeros
-        let mut match_matrix: Vec<Vec<(isize, (usize, usize))>> = vec![vec![(0, (0, 0)); query.len() + 1]; self.poa_graph.node_count() + 1]; // match or mismatch diagonal edges  // score and the aligned one location
-        let mut del_matrix: Vec<Vec<(isize, (usize, usize))>> = vec![vec![(0, (0, 0)); query.len() + 1]; self.poa_graph.node_count() + 1];  // x deletions right direction edges // score and the aligned one location
-        let mut ins_matrix: Vec<Vec<(isize, (usize, usize))>> = vec![vec![(0, (0, 0)); query.len() + 1]; self.poa_graph.node_count() + 1]; // x insertion down direction edges // score and the aligned one location
-        let mut back_matrix: Vec<Vec<(char, (usize, usize))>> = vec![vec![('m', (0, 0)); query.len() + 1]; self.poa_graph.node_count() + 1];
+        let mut match_matrix: Vec<Vec<(isize, usize)>> = vec![vec![(0, 0); query.len() + 1]; self.poa_graph.node_count() + 1]; // match or mismatch diagonal edges  // score and the aligned one location
+        let mut del_matrix: Vec<Vec<(isize, usize)>> = vec![vec![(0, 0); query.len() + 1]; self.poa_graph.node_count() + 1];  // x deletions right direction edges // score and the aligned one location
+        let mut ins_matrix: Vec<Vec<(isize, usize)>> = vec![vec![(0, 0); query.len() + 1]; self.poa_graph.node_count() + 1]; // x insertion down direction edges // score and the aligned one location
+        let mut back_matrix: Vec<Vec<(char, usize)>> = vec![vec![('0', 0); query.len() + 1]; self.poa_graph.node_count() + 1];
         // fill the first row and column
         let mut graph_index = 1;
         let mut query_index = 1;
         // the first column
         for graph_node in &topo_indices {
             if graph_index == 1 {
-                back_matrix[graph_index][0] = ('i', (0, 0));
-                ins_matrix[graph_index][0] = (self.gap_open_score as isize + self.gap_extend_score as isize, (0, 0));
-                del_matrix[graph_index][0] = (self.gap_open_score as isize + self.gap_extend_score as isize, (0, 0));
-                match_matrix[graph_index][0] = (self.gap_open_score as isize + self.gap_extend_score as isize, (0, 0));
+                back_matrix[graph_index][0] = ('i', 0);
+                ins_matrix[graph_index][0] = (self.gap_open_score as isize + self.gap_extend_score as isize, 0);
+                del_matrix[graph_index][0] = (self.gap_open_score as isize + self.gap_extend_score as isize, 0);
+                match_matrix[graph_index][0] = (self.gap_open_score as isize + self.gap_extend_score as isize, 0);
             }
             else if graph_index > 1 {
                 let mut max_score = MIN_ISIZE;
@@ -69,26 +152,26 @@ impl Poa {
                         max_position = position + 1;
                     }
                 }
-                back_matrix[graph_index][0] = ('i', (max_position, 0)); // max position is the matrix position not sequence position (seq_pos = max_pos - 1)
-                ins_matrix[graph_index][0] = (max_score, (max_position, 0));
-                del_matrix[graph_index][0] = (max_score, (max_position, 0));
-                match_matrix[graph_index][0] = (max_score, (max_position, 0));
+                back_matrix[graph_index][0] = ('i', max_position); // max position is the matrix position not sequence position (seq_pos = max_pos - 1)
+                ins_matrix[graph_index][0] = (max_score, max_position);
+                del_matrix[graph_index][0] = (max_score, max_position);
+                match_matrix[graph_index][0] = (max_score, max_position);
             }
             graph_index += 1;
         }
         // the first row
         for _ in query {
             if query_index == 1 {
-                back_matrix[0][query_index] = ('d', (0, 0));
-                ins_matrix[0][query_index] = (self.gap_open_score as isize + self.gap_extend_score as isize, (0, 0));
-                del_matrix[0][query_index] = (self.gap_open_score as isize + self.gap_extend_score as isize, (0, 0));
-                match_matrix[0][query_index] = (self.gap_open_score as isize + self.gap_extend_score as isize, (0, 0));
+                back_matrix[0][query_index] = ('d', 0);
+                ins_matrix[0][query_index] = (self.gap_open_score as isize + self.gap_extend_score as isize, 0);
+                del_matrix[0][query_index] = (self.gap_open_score as isize + self.gap_extend_score as isize, 0);
+                match_matrix[0][query_index] = (self.gap_open_score as isize + self.gap_extend_score as isize, 0);
             }
             else if query_index > 1 {
-                back_matrix[0][query_index] = ('d', (0, query_index - 1));
-                del_matrix[0][query_index] = (del_matrix[0][query_index - 1].0 + self.gap_extend_score as isize, (0, query_index - 1));
-                ins_matrix[0][query_index] = (del_matrix[0][query_index - 1].0 + self.gap_extend_score as isize, (0, query_index - 1));
-                match_matrix[0][query_index] = (del_matrix[0][query_index - 1].0 + self.gap_extend_score as isize, (0, query_index - 1));
+                back_matrix[0][query_index] = ('d', 0);
+                del_matrix[0][query_index] = (del_matrix[0][query_index - 1].0 + self.gap_extend_score as isize, 0);
+                ins_matrix[0][query_index] = (del_matrix[0][query_index - 1].0 + self.gap_extend_score as isize, 0);
+                match_matrix[0][query_index] = (del_matrix[0][query_index - 1].0 + self.gap_extend_score as isize, 0);
             }
             query_index += 1;
         }
@@ -98,7 +181,7 @@ impl Poa {
                 // fill the delete matrix simple
                 let temp_del_score = del_matrix[graph_index][query_index - 1].0 + self.gap_extend_score as isize;
                 let temp_match_score = match_matrix[graph_index][query_index - 1].0 + self.gap_open_score as isize + self.gap_extend_score as isize;
-                del_matrix[graph_index][query_index] = (cmp::max(temp_del_score, temp_match_score), (graph_index, query_index - 1));
+                del_matrix[graph_index][query_index] = (cmp::max(temp_del_score, temp_match_score), graph_index);
                 // fill the insert matrix complex
                 let mut temp_ins_score = MIN_ISIZE;
                 let mut temp_ins_position = 0;
@@ -125,13 +208,13 @@ impl Poa {
                     }
                 }
                 if graph_index == 1 {
-                    ins_matrix[graph_index][query_index] = (ins_matrix[graph_index - 1][query_index].0 + self.gap_extend_score as isize, (graph_index - 1, query_index));
+                    ins_matrix[graph_index][query_index] = (ins_matrix[graph_index - 1][query_index].0 + self.gap_extend_score as isize, graph_index - 1);
                 }
                 else if temp_match_score > temp_ins_score {
-                    ins_matrix[graph_index][query_index] = (temp_match_score, (temp_match_position, query_index));
+                    ins_matrix[graph_index][query_index] = (temp_match_score, temp_match_position);
                 }
                 else if temp_ins_score >= temp_match_score {
-                    ins_matrix[graph_index][query_index] = (temp_ins_score, (temp_ins_position, query_index));
+                    ins_matrix[graph_index][query_index] = (temp_ins_score, temp_ins_position);
                 }
                 // fill the match matrix bit more complex ....
                 let temp_ins_score = ins_matrix[graph_index][query_index].0;
@@ -140,15 +223,15 @@ impl Poa {
                 // match or substitution
                 if query[query_index - 1] == self.poa_graph.raw_nodes()[topo_indices[graph_index - 1].index()].weight {
                     temp_match_score = match_matrix[temp_match_position][query_index - 1].0 + self.match_score as isize;
-                    back_matrix[graph_index][query_index] = ('m', (temp_match_position, query_index - 1));
+                    back_matrix[graph_index][query_index] = ('m', temp_match_position);
                 }
                 else {
                     temp_match_score = match_matrix[temp_match_position][query_index - 1].0 + self.mismatch_score as isize;
-                    back_matrix[graph_index][query_index] = ('s', (temp_match_position, query_index - 1));
+                    back_matrix[graph_index][query_index] = ('s', temp_match_position);
                 }
                 // filling out the match matrix
                 if (temp_match_score >= temp_ins_score) && (temp_match_score >= temp_del_score) {
-                    match_matrix[graph_index][query_index] = (temp_match_score, (temp_match_position, query_index));
+                    match_matrix[graph_index][query_index] = (temp_match_score, temp_match_position);
                 }
                 else if temp_ins_score > temp_del_score {
                     match_matrix[graph_index][query_index] = ins_matrix[graph_index][query_index];
@@ -189,40 +272,49 @@ impl Poa {
         }
         // backtrace
         // back tracing using back matrix and filling out align_vec
-    let mut align_vec: Vec<(u8, usize, usize)> = vec![];
-    let mut i = topo_indices.len();
-    let mut j = query.len();
-    let score = match_matrix[i][j].0;
-    loop {
-        match back_matrix[i][j].0 {
-            'i' => {
-                align_vec.push(('i' as u8, back_matrix[i][j].1.0, back_matrix[i][j].1.1));
-                i = back_matrix[i][j].1.0;
+        let mut align_vec: Vec<(u8, usize)> = vec![];
+        let mut i = topo_indices.len();
+        let mut j = query.len();
+        let mut break_on_next = false;
+        loop {
+            match back_matrix[i][j].0 {
+                'i' => {
+                    align_vec.push(('i' as u8, back_matrix[i][j].1));
+                    i = back_matrix[i][j].1;
+                    
+                },
+                'm' => {
+                    align_vec.push(('m' as u8, back_matrix[i][j].1));
+                    i = back_matrix[i][j].1;
+                    j = j - 1;
+                    
+                },
+                's' => {
+                    align_vec.push(('s' as u8, back_matrix[i][j].1));
+                    i = back_matrix[i][j].1;
+                    j = j - 1;
+                    
+                }
+                'd' => {
+                    align_vec.push(('d' as u8, back_matrix[i][j].1));
+                    j = j - 1;
                 
-            },
-            'm' => {
-                align_vec.push(('m' as u8, back_matrix[i][j].1.0, back_matrix[i][j].1.1));
-                i = back_matrix[i][j].1.0;
-                j = j - 1;
-                
-            },
-            's' => {
-                align_vec.push(('s' as u8, back_matrix[i][j].1.0, back_matrix[i][j].1.1));
-                i = back_matrix[i][j].1.0;
-                j = j - 1;
-                
+                },
+                _ => (),
             }
-            'd' => {
-                align_vec.push(('d' as u8, back_matrix[i][j].1.0, back_matrix[i][j].1.1));
-                j = j - 1;
-               
-            },
-            _ => (),
+            if break_on_next {
+                let pos = align_vec.len() - 1;
+                align_vec[pos].1 = MAX_USIZE;
+                break;
+            }
+            if i == 0 && j == 0 {
+                break_on_next = true;
+            }
         }
-        if i == 0 && j == 0 {
-            break;
+        for base in &align_vec {
+            println!("{} {}", base.0 as char, base.1);
         }
-    }
-    println!("{:?}", align_vec);
+        
+        align_vec
     }
 }
