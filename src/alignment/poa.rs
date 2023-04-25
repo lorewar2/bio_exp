@@ -21,6 +21,12 @@ pub struct PoaMatrixCell {
     insert_prev: usize,
     back: char,
 }
+#[derive(Clone)]
+pub struct SimpleMatrixCell {
+    score: isize,
+    prev: usize,
+    back: char,
+}
 
 impl Poa {
     pub fn initialize (start_query: &Vec<u8>, match_score: i32, mismatch_score: i32, gap_open_score: i32, gap_extend_score: i32) -> Self {
@@ -43,7 +49,7 @@ impl Poa {
         while let Some(node) = topo.next(&self.poa_graph) {
             topo_indices.push(node);
         }
-        let align_vec = self.get_alignment(query);
+        let align_vec = self.get_alignment_simple(query);
         let mut graph_index = topo_indices.len();
         let mut query_index = query.len();
         let mut current_node: Option<NodeIndex<usize>> = None;
@@ -53,22 +59,32 @@ impl Poa {
             // find the current processing node in topoindices
             match alignment.0 as char {
                 'i' => {
+                    print!("i am being inserted {}", graph_index);
+                    print!(" current node  {}", current_node.unwrap().index());
+                    println!("");
                     graph_index = alignment.1;
                 },
                 'm' => {
                     prev_node = current_node;
                     current_node = Some(topo_indices[graph_index - 1]);
+                    print!("matching {} next {}", graph_index, alignment.1);
+                    print!(" current node  {}", current_node.unwrap().index());
                     // find the edge between alignment.1 and current node
                     if prev_node_require_update {
                         match self.poa_graph.find_edge(current_node.unwrap(), prev_node.unwrap()) {
                             Some(edge) => {
                                 *self.poa_graph.edge_weight_mut(edge).unwrap() += 1;
+                                
+                                print!(" connecting to {} ", prev_node.unwrap().index());
                             }
                             None => {
                                 self.poa_graph.add_edge(current_node.unwrap(), prev_node.unwrap(), 1);
+                               
+                                print!(" connecting to {} ", prev_node.unwrap().index());
                             }
                         }
                     }
+                    println!("");
                     query_index -= 1;
                     graph_index = alignment.1;
                     prev_node_require_update = true;
@@ -105,6 +121,7 @@ impl Poa {
                 _ => (),
             }
         }
+        println!("Sss");
     }
 
     pub fn get_alignment (&self, query: &Vec<u8>) -> Vec<(u8, usize)> {
@@ -206,7 +223,15 @@ impl Poa {
                 // get the i,j from the deletion matrix
                 let temp_del_score = poa_matrix[graph_index][query_index].delete_score;
                 // match or substitution
-                if query[query_index - 1] == self.poa_graph.raw_nodes()[topo_indices[graph_index - 1].index()].weight {
+                let test_position;
+                if temp_match_position == 0 {
+                    test_position = 0;
+                }
+                else {
+                    test_position = temp_match_position;
+                }
+                //println!("test pos = {} graph index - 1 == {}", test_position, graph_index - 1);
+                if query[query_index - 1] == self.poa_graph.raw_nodes()[topo_indices[test_position].index()].weight {
                     temp_match_score = poa_matrix[temp_match_position][query_index - 1].match_score + self.match_score as isize;
                     poa_matrix[graph_index][query_index].back = 'm';
                 }
@@ -215,19 +240,20 @@ impl Poa {
                     poa_matrix[graph_index][query_index].back = 's';
                 }
                 // filling out the match matrix
-                if (temp_match_score >= temp_ins_score) && (temp_match_score >= temp_del_score) {
-                    poa_matrix[graph_index][query_index].match_score = temp_match_score;
-                    poa_matrix[graph_index][query_index].match_prev = temp_match_position;
-                }
-                else if temp_ins_score > temp_del_score {
+                
+                if (temp_ins_score >= temp_match_score) && (temp_ins_score >= temp_del_score) {
                     poa_matrix[graph_index][query_index].match_score = poa_matrix[graph_index][query_index].insert_score;
                     poa_matrix[graph_index][query_index].match_prev = poa_matrix[graph_index][query_index].insert_prev;
                     poa_matrix[graph_index][query_index].back = 'i';
                 }
-                else {
+                else if temp_del_score >= temp_match_score {
                     poa_matrix[graph_index][query_index].match_score = poa_matrix[graph_index][query_index].delete_score;
                     poa_matrix[graph_index][query_index].match_prev = query_index - 1;
                     poa_matrix[graph_index][query_index].back = 'd';
+                }
+                else {
+                    poa_matrix[graph_index][query_index].match_score = temp_match_score;
+                    poa_matrix[graph_index][query_index].match_prev = temp_match_position;
                 }
             }
         }
@@ -284,6 +310,196 @@ impl Poa {
                 }
                 'd' => {
                     align_vec.push(('d' as u8, i));
+                    j = j - 1;
+                },
+                _ => (),
+            }
+            if break_on_next {
+                let pos = align_vec.len() - 1;
+                align_vec[pos].1 = MAX_USIZE;
+                break;
+            }
+            if i == 0 && j == 0 {
+                break_on_next = true;
+            }
+        }
+        for base in &align_vec {
+            println!("{} {}", base.0 as char, base.1);
+        }
+        align_vec
+    }
+
+    pub fn get_alignment_simple (&self, query: &Vec<u8>) -> Vec<(u8, usize)> {
+        // get topological ordering of the graph
+        let mut topo = Topo::new(&self.poa_graph);
+        let mut topo_indices = Vec::new();
+        while let Some(node) = topo.next(&self.poa_graph) {
+            topo_indices.push(node);
+        }
+        // initialize the weight matrix with zeros
+        let mut poa_matrix: Vec<Vec<SimpleMatrixCell>> = vec![vec![SimpleMatrixCell { score: (0), prev: (0), back: ('0') }; query.len() + 1]; topo_indices.len() + 1];
+        // fill the first row and column
+        let mut graph_index = 1;
+        let mut query_index = 1;
+        // the first column
+        for graph_node in &topo_indices {
+            if graph_index == 1 {
+                let temp_value = self.gap_open_score as isize;
+                poa_matrix[graph_index][0] = SimpleMatrixCell { score: (temp_value), prev: (0), back: ('i') };
+            }
+            else if graph_index > 1 {
+                let mut max_score = MIN_ISIZE;
+                let mut max_position = 0;
+                // go through all the incoming nodes to this one and find the one with the max score
+                let prevs: Vec<NodeIndex<usize>> = self.poa_graph.neighbors_directed(*graph_node, Incoming).collect();
+                for prev_node in &prevs {
+                    // find the index of the node in topo list
+                    let position = topo_indices.iter().position(|r| r == prev_node).unwrap();
+                    // get the score and add gap_extend
+                    let temp_score = poa_matrix[position + 1][0].score + self.gap_open_score as isize;
+                    //save the max score and position
+                    if temp_score > max_score {
+                        max_score = temp_score;
+                        max_position = position + 1;
+                    }
+                }
+                poa_matrix[graph_index][0] = SimpleMatrixCell { score: (max_score), prev: (max_position), back: ('i') };
+            }
+            graph_index += 1;
+        }
+        // the first row
+        for _ in query {
+            if query_index == 1 {
+                let temp_value = self.gap_open_score as isize;
+                poa_matrix[0][query_index] = SimpleMatrixCell { score: (temp_value), prev: (0), back: ('d') };
+            }
+            else if query_index > 1 {
+                let temp_value = poa_matrix[0][query_index - 1].score + self.gap_open_score as isize;
+                poa_matrix[0][query_index] = SimpleMatrixCell { score: (temp_value), prev: (0), back: ('d') };
+            }
+            query_index += 1;
+        }
+        // fill the rest
+        for graph_index in 1..topo_indices.len() + 1 {
+            for query_index in 1..query.len() + 1 {
+                let temp_del_score = poa_matrix[graph_index][query_index - 1].score + self.gap_open_score as isize;
+                let mut temp_ins_score = MIN_ISIZE;
+                let mut temp_ins_position = 0;
+                let mut temp_match_score = MIN_ISIZE;
+                let mut temp_match_position = 0;
+                let prevs: Vec<NodeIndex<usize>> = self.poa_graph.neighbors_directed(topo_indices[graph_index - 1], Incoming).collect();
+                for prev_node in &prevs {
+                    // find the index of the node in topo list
+                    let position = topo_indices.iter().position(|r| r == prev_node).unwrap();
+                    // highest insert score and location
+                    // get the score and add gap_extend
+                    let temp_score = poa_matrix[position + 1][query_index].score + self.gap_open_score as isize;
+                    // save the max score and position
+                    if temp_score > temp_ins_score {
+                        temp_ins_score = temp_score;
+                        temp_ins_position = position + 1;
+                    }
+                    // highest match score and location
+                    let temp_score = poa_matrix[position + 1][query_index - 1].score + self.match_score as isize;
+                    // save the max score and position
+                    if temp_score > temp_match_score {
+                        println!("match score : {} ", temp_score - self.match_score as isize);
+                        temp_match_score = temp_score;
+                        temp_match_position = position + 1;
+                    }
+                }
+                //println!("test pos = {} graph index - 1 == {}", test_position, graph_index - 1);
+                if query[query_index - 1] == self.poa_graph.raw_nodes()[topo_indices[temp_match_position].index()].weight {
+                    temp_match_score = poa_matrix[temp_match_position][query_index - 1].score + self.match_score as isize;
+                    poa_matrix[graph_index][query_index].back = 'm';
+                }
+                else {
+                    temp_match_score = poa_matrix[temp_match_position][query_index - 1].score + self.mismatch_score as isize;
+                    poa_matrix[graph_index][query_index].back = 's';
+                }
+                // filling out the match matrix
+                print!("position {} {} mat del in {} {} {} ", graph_index, query_index, temp_match_score - self.match_score as isize, temp_del_score - self.gap_open_score as isize, temp_ins_score - self.gap_open_score as isize);
+                println!(" real mat del in {} {} {}", temp_match_score , temp_del_score, temp_ins_score);
+
+                if (temp_ins_score >= temp_match_score) && (temp_ins_score >= temp_del_score) {
+                    poa_matrix[graph_index][query_index].score = temp_ins_score;
+                    poa_matrix[graph_index][query_index].prev = temp_ins_position;
+                    poa_matrix[graph_index][query_index].back = 'i';
+                }
+                else if temp_del_score >= temp_match_score {
+                    poa_matrix[graph_index][query_index].score = temp_del_score;
+                    poa_matrix[graph_index][query_index].prev = query_index - 1;
+                    poa_matrix[graph_index][query_index].back = 'd';
+                }
+                else {
+                    print!(" {} == {} ", query[query_index - 1], self.poa_graph.raw_nodes()[topo_indices[temp_match_position].index()].weight);
+                    poa_matrix[graph_index][query_index].score = temp_match_score;
+                    poa_matrix[graph_index][query_index].prev = temp_match_position;
+                }
+            }
+        }
+        
+        println!("printing score matrix");
+        print!("{:>3} {:>3} ", 'S', 'S');
+        for query_index in 0..query.len() {
+            print!("{:>3} ", query[query_index] as char);
+        }
+        println!("");
+        for graph_index in 0..topo_indices.len() + 1 {
+            if graph_index != 0 {
+                print!("{:>3} ", self.poa_graph.raw_nodes()[topo_indices[graph_index - 1].index()].weight as char);
+            }
+            else {
+                print!("{:>3} ", 'S');
+            }
+            for query_index in 0..query.len() + 1 {
+                print!("{:>3} ", poa_matrix[graph_index][query_index].score);
+            }
+            println!("");
+        }
+        println!("printing back matrix");
+        print!("{:>3} {:>3} ", 'S', 'S');
+        for query_index in 0..query.len() {
+            print!("{:>3} ", query[query_index] as char);
+        }
+        println!("");
+        for graph_index in 0..topo_indices.len() + 1 {
+            if graph_index != 0 {
+                print!("{:>3} ", self.poa_graph.raw_nodes()[topo_indices[graph_index - 1].index()].weight as char);
+            }
+            else {
+                print!("{:>3} ", 'S');
+            }
+            for query_index in 0..query.len() + 1 {
+                print!("{:>3} ", poa_matrix[graph_index][query_index].back);
+            }
+            println!("");
+        }
+        
+        // backtrace
+        // back tracing using back matrix and filling out align_vec
+        let mut align_vec: Vec<(u8, usize)> = vec![];
+        let mut i = topo_indices.len();
+        let mut j = query.len();
+        let mut break_on_next = false;
+        loop {
+            match poa_matrix[i][j].back {
+                'i' => {
+                    align_vec.push(('i' as u8, poa_matrix[i][j].prev));
+                    i = poa_matrix[i][j].prev;
+                },
+                'm' => {
+                    align_vec.push(('m' as u8, poa_matrix[i][j].prev));
+                    i = poa_matrix[i][j].prev;
+                    j = j - 1;
+                },
+                's' => {
+                    align_vec.push(('s' as u8, poa_matrix[i][j].prev));
+                    i = poa_matrix[i][j].prev;
+                    j = j - 1;
+                }
+                'd' => {
+                    align_vec.push(('d' as u8, poa_matrix[i][j].prev));
                     j = j - 1;
                 },
                 _ => (),
