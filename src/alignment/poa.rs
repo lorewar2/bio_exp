@@ -1,5 +1,5 @@
 
-use petgraph::{graph::{NodeIndex, self}, visit::Topo, Directed, Graph, Incoming, Outgoing};
+use petgraph::{graph::{NodeIndex}, visit::Topo, Directed, Graph, Incoming, Outgoing};
 use std::cmp;
 
 pub const MIN_ISIZE: isize = -858_993_459;
@@ -49,7 +49,7 @@ impl Poa {
         while let Some(node) = topo.next(&self.poa_graph) {
             topo_indices.push(node);
         }
-        let align_vec = self.get_alignment(query);
+        let align_vec = self.get_alignment_simple(query);
         let mut graph_index = topo_indices.len();
         let mut query_index = query.len();
         let mut current_node: Option<NodeIndex<usize>> = None;
@@ -59,32 +59,32 @@ impl Poa {
             // find the current processing node in topoindices
             match alignment.0 as char {
                 'i' => {
-                    print!("i am being inserted {}", graph_index);
+                    //print!("i am being inserted {}", graph_index);
                     //print!(" current node  {}", current_node.unwrap().index());
-                    println!("");
+                    //println!("");
                     graph_index = alignment.1;
                 },
                 'm' => {
                     prev_node = current_node;
                     current_node = Some(topo_indices[graph_index - 1]);
-                    print!("matching {} next {}", graph_index, alignment.1);
-                    print!(" current node  {}", current_node.unwrap().index());
+                    //print!("matching {} next {}", graph_index, alignment.1);
+                    //print!(" current node  {}", current_node.unwrap().index());
                     // find the edge between alignment.1 and current node
                     if prev_node_require_update {
                         match self.poa_graph.find_edge(current_node.unwrap(), prev_node.unwrap()) {
                             Some(edge) => {
                                 *self.poa_graph.edge_weight_mut(edge).unwrap() += 1;
                                 
-                                print!(" connecting to {} ", prev_node.unwrap().index());
+                                //print!(" connecting to {} ", prev_node.unwrap().index());
                             }
                             None => {
                                 self.poa_graph.add_edge(current_node.unwrap(), prev_node.unwrap(), 1);
                                
-                                print!(" connecting to {} ", prev_node.unwrap().index());
+                                //print!(" connecting to {} ", prev_node.unwrap().index());
                             }
                         }
                     }
-                    println!("");
+                    //println!("");
                     query_index -= 1;
                     graph_index = alignment.1;
                     prev_node_require_update = true;
@@ -121,7 +121,7 @@ impl Poa {
                 _ => (),
             }
         }
-        println!("Sss");
+        //println!("Sss");
     }
 
     pub fn get_alignment (&self, query: &Vec<u8>) -> Vec<(u8, usize)> {
@@ -386,6 +386,7 @@ impl Poa {
                 for prev_node in &prevs {
                     // find the index of the node in topo list
                     let position = topo_indices.iter().position(|r| r == prev_node).unwrap();
+                    //println!("position {} == prevnodeindex {}", position, prev_node.index());
                     // highest insert score and location
                     // get the score and add gap_extend
                     let temp_score = poa_matrix[position + 1][query_index].score + self.gap_open_score as isize;
@@ -441,7 +442,7 @@ impl Poa {
                 }
             }
         }
-        
+        /* 
         println!("printing score matrix");
         print!("{:>3} {:>3} ", 'S', 'S');
         for query_index in 0..query.len() {
@@ -478,7 +479,7 @@ impl Poa {
             }
             println!("");
         }
-        
+        */
         // backtrace
         // back tracing using back matrix and filling out align_vec
         let mut align_vec: Vec<(u8, usize)> = vec![];
@@ -516,8 +517,8 @@ impl Poa {
                 break_on_next = true;
             }
         }
-        for base in &align_vec {
-            println!("{} {}", base.0 as char, base.1);
+        for _base in &align_vec {
+            //println!("{} {}", base.0 as char, base.1);
         }
         align_vec
     }
