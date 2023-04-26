@@ -1,5 +1,5 @@
 
-use petgraph::{graph::NodeIndex, visit::Topo, Directed, Graph, Incoming, Outgoing};
+use petgraph::{graph::{NodeIndex, self}, visit::Topo, Directed, Graph, Incoming, Outgoing};
 use std::cmp;
 
 pub const MIN_ISIZE: isize = -858_993_459;
@@ -49,7 +49,7 @@ impl Poa {
         while let Some(node) = topo.next(&self.poa_graph) {
             topo_indices.push(node);
         }
-        let align_vec = self.get_alignment_simple(query);
+        let align_vec = self.get_alignment(query);
         let mut graph_index = topo_indices.len();
         let mut query_index = query.len();
         let mut current_node: Option<NodeIndex<usize>> = None;
@@ -60,7 +60,7 @@ impl Poa {
             match alignment.0 as char {
                 'i' => {
                     print!("i am being inserted {}", graph_index);
-                    print!(" current node  {}", current_node.unwrap().index());
+                    //print!(" current node  {}", current_node.unwrap().index());
                     println!("");
                     graph_index = alignment.1;
                 },
@@ -223,15 +223,8 @@ impl Poa {
                 // get the i,j from the deletion matrix
                 let temp_del_score = poa_matrix[graph_index][query_index].delete_score;
                 // match or substitution
-                let test_position;
-                if temp_match_position == 0 {
-                    test_position = 0;
-                }
-                else {
-                    test_position = temp_match_position;
-                }
                 //println!("test pos = {} graph index - 1 == {}", test_position, graph_index - 1);
-                if query[query_index - 1] == self.poa_graph.raw_nodes()[topo_indices[test_position].index()].weight {
+                if query[query_index - 1] == self.poa_graph.raw_nodes()[topo_indices[graph_index - 1].index()].weight {
                     temp_match_score = poa_matrix[temp_match_position][query_index - 1].match_score + self.match_score as isize;
                     poa_matrix[graph_index][query_index].back = 'm';
                 }
@@ -265,13 +258,15 @@ impl Poa {
             }
             println!("");
         }
+        */
         println!("printing match matrix");
         for graph_index in 0..topo_indices.len() + 1 {
             for query_index in 0..query.len() + 1 {
-                print!("{:>3} ", match_matrix[graph_index][query_index].0);
+                print!("{:>3} ", poa_matrix[graph_index][query_index].match_score);
             }
             println!("");
         }
+        /* 
         println!("printing del matrix");
         for graph_index in 0..topo_indices.len() + 1 {
             for query_index in 0..query.len() + 1 {
@@ -403,23 +398,31 @@ impl Poa {
                     let temp_score = poa_matrix[position + 1][query_index - 1].score + self.match_score as isize;
                     // save the max score and position
                     if temp_score > temp_match_score {
-                        println!("match score : {} ", temp_score - self.match_score as isize);
+                        //println!("match score : {} ", temp_score - self.match_score as isize);
                         temp_match_score = temp_score;
                         temp_match_position = position + 1;
                     }
                 }
+                //println!("match score : {} ", temp_match_score - self.match_score as isize);
                 //println!("test pos = {} graph index - 1 == {}", test_position, graph_index - 1);
-                if query[query_index - 1] == self.poa_graph.raw_nodes()[topo_indices[temp_match_position].index()].weight {
+                if query[query_index - 1] == self.poa_graph.raw_nodes()[topo_indices[graph_index - 1].index()].weight {
                     temp_match_score = poa_matrix[temp_match_position][query_index - 1].score + self.match_score as isize;
                     poa_matrix[graph_index][query_index].back = 'm';
+                    //print!("position {} {} mat del in {} {} {} ", graph_index, query_index, temp_match_score - self.match_score as isize, temp_del_score - self.gap_open_score as isize, temp_ins_score - self.gap_open_score as isize);
+                    
                 }
                 else {
+                    if temp_match_position > 1{
+                        //println!("test {}", self.poa_graph.raw_nodes()[topo_indices[graph_index - 1].index()].weight);
+                    }
+                    
                     temp_match_score = poa_matrix[temp_match_position][query_index - 1].score + self.mismatch_score as isize;
                     poa_matrix[graph_index][query_index].back = 's';
+                    //print!("position {} {} mat del in {} {} {} ", graph_index, query_index, temp_match_score - self.mismatch_score as isize, temp_del_score - self.gap_open_score as isize, temp_ins_score - self.gap_open_score as isize);
                 }
                 // filling out the match matrix
-                print!("position {} {} mat del in {} {} {} ", graph_index, query_index, temp_match_score - self.match_score as isize, temp_del_score - self.gap_open_score as isize, temp_ins_score - self.gap_open_score as isize);
-                println!(" real mat del in {} {} {}", temp_match_score , temp_del_score, temp_ins_score);
+                
+                //println!(" real mat del in {} {} {}", temp_match_score , temp_del_score, temp_ins_score);
 
                 if (temp_ins_score >= temp_match_score) && (temp_ins_score >= temp_del_score) {
                     poa_matrix[graph_index][query_index].score = temp_ins_score;
@@ -432,7 +435,7 @@ impl Poa {
                     poa_matrix[graph_index][query_index].back = 'd';
                 }
                 else {
-                    print!(" {} == {} ", query[query_index - 1], self.poa_graph.raw_nodes()[topo_indices[temp_match_position].index()].weight);
+                    //print!(" {} == {} ", query[query_index - 1], self.poa_graph.raw_nodes()[topo_indices[graph_index - 1].index()].weight);
                     poa_matrix[graph_index][query_index].score = temp_match_score;
                     poa_matrix[graph_index][query_index].prev = temp_match_position;
                 }
@@ -571,7 +574,7 @@ impl Poa {
         let weight_threshold = weight_average as i32 / 2;
         while pos != 123456789 {
             //continue if starting weight score is too low
-            if consensus_started == false && weight_scores[pos] <= weight_threshold {
+            if consensus_started == false && weight_scores[pos] < weight_threshold {
                 pos = next_in_path[pos];
                 continue;
             }

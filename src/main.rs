@@ -6,13 +6,13 @@ use generator::simple::get_random_sequences_from_generator;
 use alignment::poa::Poa;
 use petgraph::dot::Dot;
 
-const SEED: u64 = 1;
-const GAP_OPEN: i32 = -4;
+const SEED: u64 = 2;
+const GAP_OPEN: i32 = -2;
 const GAP_EXTEND: i32 = -2;
 const MATCH: i32 = 2;
 const MISMATCH: i32 = -3;
-const RANDOM_SEQUENCE_LENGTH: usize = 10;
-const NUMBER_OF_RANDOM_SEQUENCES: usize = 3;
+const RANDOM_SEQUENCE_LENGTH: usize = 200;
+const NUMBER_OF_RANDOM_SEQUENCES: usize = 5;
 
 fn main() {
     let seqvec = get_random_sequences_from_generator(RANDOM_SEQUENCE_LENGTH, NUMBER_OF_RANDOM_SEQUENCES, SEED);
