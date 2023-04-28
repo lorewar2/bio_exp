@@ -6,7 +6,7 @@ pub struct HomopolymerCell {
 }
 
 impl HomopolymerCell {
-    fn new(base: u8, frequency: usize) -> Self {
+    pub fn new(base: u8, frequency: usize) -> Self {
         HomopolymerCell {
             base: base,
             frequency: frequency,

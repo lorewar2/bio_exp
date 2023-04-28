@@ -57,6 +57,9 @@ impl Poa {
                 'm' => {
                     prev_node = current_node;
                     current_node = Some(topo_indices[graph_index - 1]);
+                    let _temp_base = self.poa_graph.node_weight(current_node.unwrap()).unwrap().base;
+                    // modify this
+                    //*self.poa_graph.node_weight_mut(current_node.unwrap()).unwrap() = HomopolymerCell::new(_temp_base, alignment.2);
                     if prev_node_require_update {
                         match self.poa_graph.find_edge(current_node.unwrap(), prev_node.unwrap()) {
                             Some(edge) => {
@@ -103,7 +106,7 @@ impl Poa {
         }
     }
 
-    pub fn get_alignment_simple (&self, query: &Vec<HomopolymerCell>) -> Vec<(u8, usize)> {
+    pub fn get_alignment_simple (&self, query: &Vec<HomopolymerCell>) -> Vec<(u8, usize, usize)> {
         // get topological ordering of the graph
         let mut topo = Topo::new(&self.poa_graph);
         let mut topo_indices = Vec::new();
@@ -132,7 +135,6 @@ impl Poa {
                     // find the index of the node in topo list
                     let position = topo_indices.iter().position(|r| r == prev_node).unwrap();
                     // get the score and add gap_extend
-                    
                     let temp_score = poa_matrix[position + 1][0].score + (self.gap_open_score * temp_freq as i32) as isize;
                     //save the max score and position
                     if temp_score > max_score {
@@ -199,11 +201,7 @@ impl Poa {
                     
                 }
                 else {
-                    if temp_match_position > 1{
-                        //println!("test {}", self.poa_graph.raw_nodes()[topo_indices[graph_index - 1].index()].weight);
-                    }
-                    
-                    temp_match_score = poa_matrix[temp_match_position][query_index - 1].score + (self.mismatch_score * temp_freq_match as i32) as isize;
+                    temp_match_score = poa_matrix[temp_match_position][query_index - 1].score + (self.mismatch_score * temp_freq_query as i32) as isize;
                     poa_matrix[graph_index][query_index].back = 's';
                     //print!("position {} {} mat del in {} {} {} ", graph_index, query_index, temp_match_score - self.mismatch_score as isize, temp_del_score - self.gap_open_score as isize, temp_ins_score - self.gap_open_score as isize);
                 }
@@ -271,28 +269,28 @@ impl Poa {
         */
         // backtrace
         // back tracing using back matrix and filling out align_vec
-        let mut align_vec: Vec<(u8, usize)> = vec![];
+        let mut align_vec: Vec<(u8, usize, usize)> = vec![];
         let mut i = topo_indices.len();
         let mut j = query.len();
         let mut break_on_next = false;
         loop {
             match poa_matrix[i][j].back {
                 'i' => {
-                    align_vec.push(('i' as u8, poa_matrix[i][j].prev));
+                    align_vec.push(('i' as u8, poa_matrix[i][j].prev, poa_matrix[i][j].freq));
                     i = poa_matrix[i][j].prev;
                 },
                 'm' => {
-                    align_vec.push(('m' as u8, poa_matrix[i][j].prev));
+                    align_vec.push(('m' as u8, poa_matrix[i][j].prev, poa_matrix[i][j].freq));
                     i = poa_matrix[i][j].prev;
                     j = j - 1;
                 },
                 's' => {
-                    align_vec.push(('s' as u8, poa_matrix[i][j].prev));
+                    align_vec.push(('s' as u8, poa_matrix[i][j].prev, poa_matrix[i][j].freq));
                     i = poa_matrix[i][j].prev;
                     j = j - 1;
                 }
                 'd' => {
-                    align_vec.push(('d' as u8, poa_matrix[i][j].prev));
+                    align_vec.push(('d' as u8, poa_matrix[i][j].prev, poa_matrix[i][j].freq));
                     j = j - 1;
                 },
                 _ => (),
