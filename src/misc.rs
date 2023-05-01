@@ -14,6 +14,62 @@ impl HomopolymerCell {
     }
 }
 
+pub fn find_error_in_three_base_context (reference: &String, reads: &Vec<String>) {
+    assert!(reference.len() >= 3);
+    for read in reads {
+        assert!(read.len() >= 3);
+    }
+    // make a vector with 4096 entries for each correct and incorrect count eg entry index AAA -> AAA = 0 & TTT -> TTT = 4095
+    let mut count_vector: Vec<(usize, usize)> = vec![(0, 0); 4096];
+    // ignore the edges
+    let mut index = 1;
+    loop {
+        // check if index is at the end of the ref
+        if index + 1 >= reference.len() {
+            break;
+        } 
+        // get the three base around index in reference
+        let mut ref_3base: Vec<u8> = reference.as_bytes()[index - 1..index + 2].to_vec();
+        // get the bits of ref_3base
+
+        // go through the reads and count the errors and correct ones
+        for read in reads {
+            if !(index + 1 >= read.len()) {
+                let read_3base: Vec<u8> = read.as_bytes()[index - 1..index + 2].to_vec();
+                // check if the middle base is same or not
+                let correct = check_if_middle_base_same (&ref_3base, &read_3base);
+                // get the bits of read_3base
+
+                // concancate the two together
+
+                let count_vector_index = 0;
+                // add the entry to the count_vector
+                if correct {
+                    count_vector[count_vector_index].1 += 1;
+                }
+                else {
+                    count_vector[count_vector_index].0 += 1;
+                }
+            }
+        }
+        index += 1;
+    }
+    
+
+
+}
+
+pub fn check_if_middle_base_same (ref_3base: &Vec<u8>, read_3base: &Vec<u8>) -> bool {
+    assert!(ref_3base.len() == 3);
+    assert!(read_3base.len() == 3);
+    if ref_3base[1] == read_3base[1] {
+        true
+    }
+    else {
+        false
+    }
+}
+
 pub fn convert_sequence_to_homopolymer (sequence: &String) -> Vec<HomopolymerCell> {
     let mut homopolymer_vec: Vec<HomopolymerCell> = vec![];
     let mut prev_base: u8 = 0;
