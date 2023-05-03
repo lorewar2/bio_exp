@@ -10,8 +10,10 @@ use alignment::poahomopolymer::Poa;
 //use petgraph::dot::Dot;
 use misc::get_consensus_score;
 use misc::convert_sequence_to_homopolymer;
+use misc::find_error_in_three_base_context;
 use misc::HomopolymerCell;
-use rust_htslib::bcf::{Reader, Read};
+use rust_htslib::faidx;
+use rust_htslib::bam::{Read, IndexedReader};
 use std::convert::TryFrom;
 
 const SEED: u64 = 2;
@@ -19,49 +21,42 @@ const GAP_OPEN: i32 = -2;
 const GAP_EXTEND: i32 = 0;
 const MATCH: i32 = 2;
 const MISMATCH: i32 = -2;
-const RANDOM_SEQUENCE_LENGTH: usize = 100;
+const RANDOM_SEQUENCE_LENGTH: usize = 1000;
 const NUMBER_OF_RANDOM_SEQUENCES: usize = 5;
 
 fn main() {
-    homopolymer_test();
-    //read_vcf_file();
+    //homopolymer_test();
+    //let seqvec = get_random_sequences_from_generator(RANDOM_SEQUENCE_LENGTH, NUMBER_OF_RANDOM_SEQUENCES, SEED);
+    //find_error_in_three_base_context (&seqvec[0], &seqvec);
+    //read_fai_file();
+    read_bam_file();
 }
 
-fn read_vcf_file () {
-    let path = &"data/output.vcf.gz";
-    let mut bcf = Reader::from_path(path).expect("Error opening file.");
-    // iterate through each row of the vcf body.
-    for (_i, record_result) in bcf.records().enumerate() {
-        let record = record_result.expect("Fail to read record");
-        let mut s = String::new();
-        for allele in record.alleles() {
-            for c in allele {
-                s.push(char::from(*c))
-            }
-            s.push(' ')
+fn read_bam_file () {
+    let path = &"/Users/wmw0016/Documents/mount1/data1/hifi_consensus/try2/merged.bam";
+    let mut bam = IndexedReader::from_path(path).unwrap();
+    bam.fetch(("chr1", 10005, 10500)).unwrap(); // coordinates 10000..20000 on reference named "chrX"
+    let mut index = 0;
+    for read in bam.records() {
+        //println!("read name: {:?}", read.unwrap().qname());
+        let readunwrapped = read.unwrap();
+        println!("read {} {:?}", readunwrapped.pos(), readunwrapped.seq().as_bytes());
+        for character in readunwrapped.qname() {
+            print!("{}", *character as char);
         }
-        // 0-based position and the list of alleles
-        println!("Locus: {}, Alleles: {}", record.pos(), s);
-        // number of sample in the vcf
-        let sample_count = usize::try_from(record.sample_count()).unwrap();
-        // Counting ref, alt and missing alleles for each sample
-        let mut n_ref = vec![0; sample_count];
-        let mut n_alt = vec![0; sample_count];
-        let mut n_missing = vec![0; sample_count];
-        let gts = record.genotypes().expect("Error reading genotypes");
-        for sample_index in 0..sample_count {
-            // for each sample
-            for gta in gts.get(sample_index).iter() {
-                // for each allele
-                match gta.index() {
-                    Some(0) => n_ref[sample_index] += 1,  // reference allele
-                    Some(_) => n_alt[sample_index] += 1,  // alt allele
-                    None => n_missing[sample_index] += 1, // missing allele
-                }
-            }
-        }
+        break;
+        println!("");
+        index += 1;
     }
+    println!("{}", index);
 }
+
+fn read_fai_file () {
+    let path = &"data/GRCh38.fa";
+    let mut fasta_reader = faidx::Reader::from_path(path).expect("Error opening file.");
+    println!("{}", fasta_reader.fetch_seq_string("chr1", 10000, 10500).unwrap());
+}
+
 fn homopolymer_test () {
     // get random generated data
     let seqvec = get_random_sequences_from_generator(RANDOM_SEQUENCE_LENGTH, NUMBER_OF_RANDOM_SEQUENCES, SEED);
