@@ -10,7 +10,7 @@ const PRINT_ALL: bool = false;
 const USEPACBIODATA: bool = false;
 const NUM_OF_ITER_FOR_PARALLEL: usize = 10;
 
-fn get_consensus_quality_scores(seq_num: usize, consensus: &Vec<u8>, topology: &Vec<usize>, graph: &Graph<u8, i32, Directed, usize>) -> (Vec<f64>, Vec<bool>, Vec<Vec<usize>>, Vec<String>) {
+pub fn get_consensus_quality_scores(seq_num: usize, consensus: &Vec<u8>, topology: &Vec<usize>, graph: &Graph<u8, i32, Directed, usize>) -> (Vec<f64>, Vec<bool>, Vec<Vec<usize>>, Vec<String>) {
     let mut quality_scores: Vec<f64> = vec![];
     let mut validity: Vec<bool> = vec![];
     let mut base_count_vec: Vec<Vec<usize>> = vec![];

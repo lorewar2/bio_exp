@@ -1,12 +1,6 @@
 use crate::alignment::pairwise::pairwise;
 
-pub fn find_error_in_three_base_context (reference: &String, reads: &Vec<String> ) {
-    assert!(reference.len() >= 3);
-    for read in reads {
-        assert!(read.len() >= 3);
-    }
-    // make a vector with 256 entries for each correct and incorrect count eg entry index AAA -> A = 0 & TTT -> T = 255
-    let mut count_vector: Vec<usize> = vec![0; 256];
+pub fn find_error_in_three_base_context (reference: &String, reads: &Vec<String>, count_vector: &mut Vec<usize>) {
     // ignore the edges
     let mut index = 1;
     loop {
@@ -17,18 +11,18 @@ pub fn find_error_in_three_base_context (reference: &String, reads: &Vec<String>
         // get the three base around index in reference
         let ref_3base: Vec<u8> = reference.as_bytes()[index - 1..index + 2].to_vec();
         // print the ref 3 bases
-        print!("ref base: ");
-        for base in &ref_3base {
-            print!("{}", *base as char);
+        //print!("ref base: ");
+        for _base in &ref_3base {
+            //print!("{}", *base as char);
         }
-        println!("");
+        //println!("");
         // get the bits of ref_3base
         let ref_6bit = get_6bit_from_3base (&ref_3base);
         // go through the reads and count the errors and correct ones
         for read in reads {
             if !(index + 1 >= read.len()) {
                 let read_base: u8 = read.as_bytes()[index];
-                println!("read base: {}", read_base as char);
+                //println!("read base: {}", read_base as char);
                 // get the bits of read_3base
                 let error_base_bit = get_2bit_from_base (&read_base);
                 // concancate the two together
@@ -39,8 +33,8 @@ pub fn find_error_in_three_base_context (reference: &String, reads: &Vec<String>
         }
         index += 1;
     }
-    println!("{:?}", count_vector);
-    print_3base_context_results (&count_vector);
+    //println!("{:?}", count_vector);
+    //print_3base_context_results (&count_vector);
 }
 
 pub fn print_3base_context_results (count_vector: &Vec<usize>) {
@@ -50,7 +44,11 @@ pub fn print_3base_context_results (count_vector: &Vec<usize>) {
     let mut temp_wrong_count = 0;
     for index in 0..256 {
         let (current_base, mutation, correct) = get_3base_mutation_result_from_8bit (index as u8);
-        println!("current base: {:?}, mutation: {}, count: {}", current_base, mutation, count_vector[index]);
+        for base in &current_base {
+            print!("{}", *base as char);
+        }
+        print!(" -> {}, count: {}", mutation as char, count_vector[index]);
+        println!("");
         if correct {
             temp_correct_count += count_vector[index];
         }
@@ -64,9 +62,14 @@ pub fn print_3base_context_results (count_vector: &Vec<usize>) {
             checker += 4;
         }
     }
+    println!("STATS");
     for index in 0..64 {
         let percentage = stats_for_3bases[index].1 as f64 / (stats_for_3bases[index].1  + stats_for_3bases[index].0) as f64;
-        println!("current base: {:?}, correct {} incorrect {} percentage {}", get_3base_from_6bit(index as u8), stats_for_3bases[index].0, stats_for_3bases[index].1, percentage);
+        for base in get_3base_from_6bit(index as u8) {
+            print!("{}", base as char);
+        }
+        print!(" Correct: {:>8} Error: {:>8} Error rate: {:>8}", stats_for_3bases[index].0, stats_for_3bases[index].1, percentage);
+        println!("");
     }
 }
 pub fn get_3base_from_6bit (_6bit: u8) -> Vec<u8> {

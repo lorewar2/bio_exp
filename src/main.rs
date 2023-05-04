@@ -4,6 +4,7 @@ mod generator;
 mod misc;
 mod quality;
 
+
 use generator::simple::get_random_sequences_from_generator;
 use alignment::poarustbio::Aligner;
 use alignment::poahomopolymer::Poa;
@@ -11,6 +12,8 @@ use alignment::poahomopolymer::Poa;
 use misc::get_consensus_score;
 use misc::convert_sequence_to_homopolymer;
 use misc::find_error_in_three_base_context;
+use misc::print_3base_context_results;
+//use quality::topology_cut::get_consensus_quality_scores;
 use misc::HomopolymerCell;
 use rust_htslib::faidx;
 use rust_htslib::bam::{Read, IndexedReader};
@@ -22,42 +25,89 @@ const MATCH: i32 = 2;
 const MISMATCH: i32 = -2;
 const RANDOM_SEQUENCE_LENGTH: usize = 1000;
 const NUMBER_OF_RANDOM_SEQUENCES: usize = 5;
-const THREE_BASE_CONTEXT_READ_LENGTH: usize = 100;
+const THREE_BASE_CONTEXT_READ_LENGTH: usize = 1000;
 
 fn main() {
     //homopolymer_test();
     //let seqvec = get_random_sequences_from_generator(RANDOM_SEQUENCE_LENGTH, NUMBER_OF_RANDOM_SEQUENCES, SEED);
-    //find_error_in_three_base_context (&seqvec[0], &seqvec);
-    //read_fai_file();
-    //
     pipeline_3base_context();
 }
 
-fn pipeline_3base_context () {
-    // go from chr1 to chr21
-    let mut position_base = 1000000;
-    // go from 1mil to 24mil bases in small lengths
-    // do 1 iteration to test
-    // get the reference genome of length
-
-    //get the reads
-    read_bam_file(position_base);
-    read_fai_file(position_base);
-
+fn pipeline_quality_score () {
+    // find the error position
+    let error_pos = 1000000;
+    let error_chr = String::from("chr1");
+    // get the reads corrosponding to the position
+    let reads = get_read_and_readnames_from_bam(&error_pos, &error_chr);
+    // get the sub reads of the reads // do poa with the reads
+    for read in &reads {
+        get_subreads_from_readname(&read.1);
+    }
+    // check the quality scores at that location or if fixed
 }
 
-fn read_bam_file (required_start_pos: usize) {
-    let mut read_vec: Vec<String> = vec![];
+fn get_read_and_readnames_from_bam (error_pos: &usize, error_chr: &String) -> Vec<(String, String, usize)> {
+    let mut reads_names_and_errorpos: Vec<(String, String, usize)> = vec![];
     let path = &"data/merged.bam";
-    let mut bam = IndexedReader::from_path(path).unwrap();
-    bam.fetch(("chr1", required_start_pos as i64, required_start_pos as i64 + THREE_BASE_CONTEXT_READ_LENGTH as i64 - 1)).unwrap();
-    let mut index = 0;
-    for read in bam.records() {
-        index += 1;
-        if index < 5 {
+    let mut bam_reader = IndexedReader::from_path(path).unwrap();
+    bam_reader.fetch((error_chr, *error_pos as i64, *error_pos as i64)).unwrap();
+    for read in bam_reader.records() {
+        let readunwrapped = read.unwrap();
+        let read_index = error_pos - readunwrapped.pos() as usize;
+        let read_name = String::from_utf8(readunwrapped.qname().to_vec()).expect("");
+        let read_string = String::from_utf8(readunwrapped.seq().as_bytes().to_vec()).expect("");
+        reads_names_and_errorpos.push((read_string.clone(),read_name.clone(), read_index));
+    }
+    reads_names_and_errorpos
+}
+
+fn get_subreads_from_readname (read_name: &String) -> Vec<String>  {
+    let subreads = vec![];
+
+    subreads
+}
+fn pipeline_3base_context () {
+    // make a vector with 256 entries for each correct and incorrect count eg entry index AAA -> A = 0 & TTT -> T = 255
+    let mut count_vector: Vec<usize> = vec![0; 256];
+    // go from chr1 to chr21
+    for index in 1..2 {
+        let chromosone = format!("{}{}", String::from("chr"), index.to_string());
+        println!("Reading {}", chromosone);
+        let mut position_base = 1090000;
+        // go from 1mil to 24mil bases in small lengths
+        loop {
+            if position_base % 100000 == 0 {
+                println!("Position {}", position_base);
+            }
+            //get the reads and reference
+            let path = &"data/merged.bam";
+            let mut bam_reader = IndexedReader::from_path(path).unwrap();
+            let path = &"data/GRCh38.fa";
+            let mut fai_reader = faidx::Reader::from_path(path).unwrap();
+            let reads = read_bam_file(position_base, &chromosone, &mut bam_reader);
+            let reference = read_fai_file(position_base, &chromosone, &mut fai_reader);
+            // process
+            find_error_in_three_base_context(&reference, &reads, &mut count_vector);
+            position_base += THREE_BASE_CONTEXT_READ_LENGTH;
+            if position_base > 5000000 {
+                break;
+            }
+        }
+    }
+    // print the results
+    print_3base_context_results(&count_vector);
+}
+
+
+
+fn read_bam_file (required_start_pos: usize, chromosone: &String, reader: &mut IndexedReader) -> Vec<String> {
+    let mut read_vec: Vec<String> = vec![];
+    reader.fetch((chromosone, required_start_pos as i64, required_start_pos as i64 + THREE_BASE_CONTEXT_READ_LENGTH as i64 - 1)).unwrap();
+    for read in reader.records() {
+        let readunwrapped = read.unwrap();
+        if readunwrapped.seq_len() < THREE_BASE_CONTEXT_READ_LENGTH {
             continue;
         }
-        let readunwrapped = read.unwrap();
         let mut temp_character_vec: Vec<char> = vec![];
         let mut temp_read_vec: Vec<u8> = vec![];
         // get the read start position
@@ -70,7 +120,7 @@ fn read_bam_file (required_start_pos: usize) {
                 'M' => {         
                     let temp_string: String = temp_character_vec.clone().into_iter().collect();
                     let temp_int = temp_string.parse::<usize>().unwrap();
-                    println!("M RUNNIN at pos {} for {}", current_ref_pos, temp_int); 
+                    //println!("M RUNNIN at pos {} for {}", current_ref_pos, temp_int); 
                     if (current_ref_pos + temp_int >= required_start_pos)
                         && (current_ref_pos <= required_start_pos + THREE_BASE_CONTEXT_READ_LENGTH) {
                         let p1;
@@ -78,7 +128,7 @@ fn read_bam_file (required_start_pos: usize) {
                         // case when both end partial match is required
                         if (current_ref_pos < required_start_pos) && (current_ref_pos + temp_int > required_start_pos + THREE_BASE_CONTEXT_READ_LENGTH) {
                             p1 = required_start_pos - current_ref_pos + current_read_pos;
-                            p2 = current_read_pos + required_start_pos + THREE_BASE_CONTEXT_READ_LENGTH - current_ref_pos;;
+                            p2 = current_read_pos + required_start_pos + THREE_BASE_CONTEXT_READ_LENGTH - current_ref_pos;
                         }
                         // case when start partial matches are required
                         else if (current_ref_pos < required_start_pos) && (current_ref_pos + temp_int >= required_start_pos) {
@@ -87,7 +137,6 @@ fn read_bam_file (required_start_pos: usize) {
                         }
                         // case when end partial matches are required
                         else if (current_ref_pos <= required_start_pos + THREE_BASE_CONTEXT_READ_LENGTH) && (current_ref_pos + temp_int > required_start_pos + THREE_BASE_CONTEXT_READ_LENGTH) {
-                            
                             p1 = current_read_pos;
                             p2 = current_read_pos + required_start_pos + THREE_BASE_CONTEXT_READ_LENGTH - current_ref_pos;
                         }
@@ -103,9 +152,9 @@ fn read_bam_file (required_start_pos: usize) {
                     temp_character_vec = vec![];
                 },
                 'H' => {
-                    let temp_string: String = temp_character_vec.clone().into_iter().collect();
-                    let temp_int = temp_string.parse::<usize>().unwrap();
-                    current_read_pos += temp_int;
+                    //let temp_string: String = temp_character_vec.clone().into_iter().collect();
+                    //let temp_int = temp_string.parse::<usize>().unwrap();
+                    //current_read_pos += temp_int;
                     temp_character_vec = vec![];
                 },
                 'S' => {
@@ -123,7 +172,7 @@ fn read_bam_file (required_start_pos: usize) {
                 'N' => {
                     let temp_string: String = temp_character_vec.clone().into_iter().collect();
                     let temp_int = temp_string.parse::<usize>().unwrap();
-                    println!("N RUNNIN at pos {} for {}", current_ref_pos, temp_int); 
+                    //println!("N RUNNIN at pos {} for {}", current_ref_pos, temp_int); 
                     if (current_ref_pos + temp_int >= required_start_pos)
                         && (current_ref_pos <= required_start_pos + THREE_BASE_CONTEXT_READ_LENGTH) {
                         let p1;
@@ -131,7 +180,7 @@ fn read_bam_file (required_start_pos: usize) {
                         // case when both end partial match is required
                         if (current_ref_pos < required_start_pos) && (current_ref_pos + temp_int > required_start_pos + THREE_BASE_CONTEXT_READ_LENGTH) {
                             p1 = required_start_pos - current_ref_pos + current_read_pos;
-                            p2 = current_read_pos + required_start_pos + THREE_BASE_CONTEXT_READ_LENGTH - current_ref_pos;;
+                            p2 = current_read_pos + required_start_pos + THREE_BASE_CONTEXT_READ_LENGTH - current_ref_pos;
                         }
                         // case when start partial matches are required
                         else if (current_ref_pos < required_start_pos) && (current_ref_pos + temp_int >= required_start_pos) {
@@ -159,7 +208,7 @@ fn read_bam_file (required_start_pos: usize) {
                     
                     let temp_string: String = temp_character_vec.clone().into_iter().collect();
                     let temp_int = temp_string.parse::<usize>().unwrap();
-                    println!("D RUNNIN at pos {} for {}", current_ref_pos, temp_int); 
+                    //println!("D RUNNIN at pos {} for {}", current_ref_pos, temp_int); 
                     if (current_ref_pos + temp_int >= required_start_pos)
                         && (current_ref_pos <= required_start_pos + THREE_BASE_CONTEXT_READ_LENGTH) {
                         let p1;
@@ -167,7 +216,7 @@ fn read_bam_file (required_start_pos: usize) {
                         // case when both end partial match is required
                         if (current_ref_pos < required_start_pos) && (current_ref_pos + temp_int > required_start_pos + THREE_BASE_CONTEXT_READ_LENGTH) {
                             p1 = required_start_pos - current_ref_pos + current_read_pos;
-                            p2 = current_read_pos + required_start_pos + THREE_BASE_CONTEXT_READ_LENGTH - current_ref_pos;;
+                            p2 = current_read_pos + required_start_pos + THREE_BASE_CONTEXT_READ_LENGTH - current_ref_pos;
                         }
                         // case when start partial matches are required
                         else if (current_ref_pos < required_start_pos) && (current_ref_pos + temp_int >= required_start_pos) {
@@ -176,7 +225,6 @@ fn read_bam_file (required_start_pos: usize) {
                         }
                         // case when end partial matches are required
                         else if (current_ref_pos <= required_start_pos + THREE_BASE_CONTEXT_READ_LENGTH) && (current_ref_pos + temp_int > required_start_pos + THREE_BASE_CONTEXT_READ_LENGTH) {
-                            
                             p1 = current_read_pos;
                             p2 = current_read_pos + required_start_pos + THREE_BASE_CONTEXT_READ_LENGTH - current_ref_pos;
                         }
@@ -200,17 +248,17 @@ fn read_bam_file (required_start_pos: usize) {
         // take care of cases when string is not long enough to cover the whole ref required
         read_vec.push(String::from_utf8(temp_read_vec).expect("Found invalid UTF-8"));
     }
-    for read in read_vec {
-        println!("{}",read);
-        println!("read ln {}", read.len());
+    for _read in &read_vec {
+        //println!("{}",read);
+        //println!("read ln {}", read.len());
     }
+    read_vec
 }
 
-fn read_fai_file (start_pos: usize) {
-    let path = &"data/GRCh38.fa";
-    let mut fasta_reader = faidx::Reader::from_path(path).expect("Error opening file.");
-    println!("The ref sequenece");
-    println!("{}", fasta_reader.fetch_seq_string("chr1", start_pos, start_pos + THREE_BASE_CONTEXT_READ_LENGTH).unwrap());
+fn read_fai_file (start_pos: usize, chromosone: &String, reader: &mut faidx::Reader) -> String {
+    //println!("The ref sequenece");
+    //println!("{}", fasta_reader.fetch_seq_string(chromosone, start_pos, start_pos + THREE_BASE_CONTEXT_READ_LENGTH).unwrap());
+    reader.fetch_seq_string(chromosone, start_pos, start_pos + THREE_BASE_CONTEXT_READ_LENGTH).unwrap()
 }
 
 fn homopolymer_test () {
