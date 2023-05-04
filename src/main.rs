@@ -30,7 +30,8 @@ const THREE_BASE_CONTEXT_READ_LENGTH: usize = 1000;
 fn main() {
     //homopolymer_test();
     //let seqvec = get_random_sequences_from_generator(RANDOM_SEQUENCE_LENGTH, NUMBER_OF_RANDOM_SEQUENCES, SEED);
-    pipeline_3base_context();
+    pipeline_quality_score();
+    //pipeline_3base_context();
 }
 
 fn pipeline_quality_score () {
@@ -41,7 +42,8 @@ fn pipeline_quality_score () {
     let reads = get_read_and_readnames_from_bam(&error_pos, &error_chr);
     // get the sub reads of the reads // do poa with the reads
     for read in &reads {
-        get_subreads_from_readname(&read.1);
+        get_subreads_from_readname(&read.1, &error_pos, &error_chr);
+
     }
     // check the quality scores at that location or if fixed
 }
@@ -50,7 +52,7 @@ fn get_read_and_readnames_from_bam (error_pos: &usize, error_chr: &String) -> Ve
     let mut reads_names_and_errorpos: Vec<(String, String, usize)> = vec![];
     let path = &"data/merged.bam";
     let mut bam_reader = IndexedReader::from_path(path).unwrap();
-    bam_reader.fetch((error_chr, *error_pos as i64, *error_pos as i64)).unwrap();
+    bam_reader.fetch((error_chr, *error_pos as i64, *error_pos as i64 + 1)).unwrap();
     for read in bam_reader.records() {
         let readunwrapped = read.unwrap();
         let read_index = error_pos - readunwrapped.pos() as usize;
@@ -61,9 +63,28 @@ fn get_read_and_readnames_from_bam (error_pos: &usize, error_chr: &String) -> Ve
     reads_names_and_errorpos
 }
 
-fn get_subreads_from_readname (read_name: &String) -> Vec<String>  {
-    let subreads = vec![];
-
+fn get_subreads_from_readname (read_name: &String, error_pos: &usize, error_chr: &String) -> Vec<String>  {
+    let mut subreads = vec![];
+    // open the bam file corrosponding to the read_name
+    println!("{}", read_name);
+    let mut split_text_iter = (read_name.split("/")).into_iter();
+    let chip_name = split_text_iter.next().unwrap();
+    let consensus_name = split_text_iter.next().unwrap();
+    // get the subreads corrosponding to read_name and position
+    let bam_file_path = format!("/Users/wmw0016/Documents/mount1/data1/hifi_consensus/try2/{}.subreads.mapped.bam", chip_name);
+    let mut bam_reader = IndexedReader::from_path(bam_file_path).unwrap();
+    bam_reader.fetch((error_chr, *error_pos as i64, *error_pos as i64 + 1)).unwrap();
+    for read in bam_reader.records() {
+        let readunwrapped = read.unwrap();
+        let read_name = String::from_utf8(readunwrapped.qname().to_vec()).expect("");
+        let mut read_name_iter = read_name.split("/");
+        let subread_chip = read_name_iter.next().unwrap();
+        let subread_name = read_name_iter.next().unwrap();
+        if subread_name == consensus_name {
+            subreads.push(String::from_utf8(readunwrapped.seq().as_bytes().to_vec()).expect(""));
+            println!("{} {}", subread_chip, subread_name);
+        }
+    }
     subreads
 }
 fn pipeline_3base_context () {
