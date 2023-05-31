@@ -4,7 +4,6 @@ mod generator;
 mod misc;
 mod quality;
 
-
 use generator::simple::get_random_sequences_from_generator;
 use alignment::poarustbio::Aligner;
 use alignment::poahomopolymer::Poa;
@@ -16,7 +15,9 @@ use misc::print_3base_context_results;
 //use quality::topology_cut::get_consensus_quality_scores;
 use misc::HomopolymerCell;
 use rust_htslib::faidx;
-use rust_htslib::bam::{Read, IndexedReader};
+use rust_htslib::bam::{Read as BamRead, IndexedReader};
+use rust_htslib::bcf::{Reader, Read as BcfRead};
+use std::convert::TryFrom;
 
 const SEED: u64 = 2;
 const GAP_OPEN: i32 = -2;
@@ -30,8 +31,59 @@ const THREE_BASE_CONTEXT_READ_LENGTH: usize = 1000;
 fn main() {
     //homopolymer_test();
     //let seqvec = get_random_sequences_from_generator(RANDOM_SEQUENCE_LENGTH, NUMBER_OF_RANDOM_SEQUENCES, SEED);
-    pipeline_quality_score();
+    //pipeline_quality_score();
     //pipeline_3base_context();
+    read_vcf_file();
+}
+
+fn pipeline_quality_score_error_graph () {
+    // get the errors from himut vcf (no somatic mutations in this file)
+
+    // get the quality scores in the ccs
+    
+    // get the actual counts of the errors
+
+    // draw graph
+
+}
+
+fn read_vcf_file() {
+    let path = &"data/output.vcf.gz";
+    let mut bcf = Reader::from_path(path).expect("Error opening file.");
+    // iterate through each row of the vcf body.
+    for (_, record_result) in bcf.records().enumerate() {
+        let record = record_result.expect("Fail to read record");
+        let mut s = String::new();
+        println!("{:?}", record.desc());
+        for allele in record.alleles() {
+            for c in allele {
+                s.push(char::from(*c))
+            }
+            s.push(' ')
+        }
+        // 0-based position and the list of alleles
+        println!("Locus: {}, Alleles: {}", record.pos(), s);
+        // number of sample in the vcf
+        let sample_count = usize::try_from(record.sample_count()).unwrap();
+        // Counting ref, alt and missing alleles for each sample
+        let mut n_ref = vec![0; sample_count];
+        let mut n_alt = vec![0; sample_count];
+        let mut n_missing = vec![0; sample_count];
+        let gts = record.genotypes().expect("Error reading genotypes");
+        for sample_index in 0..sample_count {
+            // for each sample
+            for gta in gts.get(sample_index).iter() {
+                // for each allele
+                match gta.index() {
+                    Some(0) => n_ref[sample_index] += 1,  // reference allele
+                    Some(_) => n_alt[sample_index] += 1,  // alt allele
+                    None => n_missing[sample_index] += 1, // missing allele
+                }
+            }
+        }
+        println!("sample count: {}", n_ref.len());
+        println!("num of referce allele: {}\nnum of alt allele: {}\nnum of missing allele: {}\n\n", n_ref[0], n_alt[0], n_missing[0]);
+    }
 }
 
 fn pipeline_quality_score () {
@@ -71,7 +123,7 @@ fn get_subreads_from_readname (read_name: &String, error_pos: &usize, error_chr:
     let chip_name = split_text_iter.next().unwrap();
     let consensus_name = split_text_iter.next().unwrap();
     // get the subreads corrosponding to read_name and position
-    let bam_file_path = format!("/Users/wmw0016/Documents/mount1/data1/hifi_consensus/try2/{}.subreads.mapped.bam", chip_name);
+    let bam_file_path = format!("/Users/wmw0016/Documents/mount5/data1/hifi_consensus/try2/{}.subreads.mapped.bam", chip_name);
     let mut bam_reader = IndexedReader::from_path(bam_file_path).unwrap();
     bam_reader.fetch((error_chr, *error_pos as i64, *error_pos as i64 + 1)).unwrap();
     for read in bam_reader.records() {
