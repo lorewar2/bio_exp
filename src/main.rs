@@ -17,7 +17,6 @@ use misc::HomopolymerCell;
 use rust_htslib::faidx;
 use rust_htslib::bam::{Read as BamRead, IndexedReader};
 use rust_htslib::bcf::{Reader, Read as BcfRead};
-use std::convert::TryFrom;
 
 const SEED: u64 = 2;
 const GAP_OPEN: i32 = -2;
@@ -27,63 +26,213 @@ const MISMATCH: i32 = -2;
 const RANDOM_SEQUENCE_LENGTH: usize = 1000;
 const NUMBER_OF_RANDOM_SEQUENCES: usize = 5;
 const THREE_BASE_CONTEXT_READ_LENGTH: usize = 1000;
+pub const MAX_USIZE: usize = 858_993_459;
 
 fn main() {
     //homopolymer_test();
     //let seqvec = get_random_sequences_from_generator(RANDOM_SEQUENCE_LENGTH, NUMBER_OF_RANDOM_SEQUENCES, SEED);
     //pipeline_quality_score();
     //pipeline_3base_context();
-    read_vcf_file();
+    //get_quality_score_count();
+    pipeline_quality_score_error_graph ();
 }
 
 fn pipeline_quality_score_error_graph () {
-    // get the errors from himut vcf (no somatic mutations in this file)
-
     // get the quality scores in the ccs
-    
-    // get the actual counts of the errors
 
-    // draw graph
-
+    // get the errors from himut vcf (no somatic mutations in this file)
+    let error_locations = get_error_bases_from_himut_vcf();
+    // get the quality scores of error positions
+    get_error_quality_score_count (error_locations);
 }
 
-fn read_vcf_file() {
-    let path = &"data/output.vcf.gz";
+fn get_error_quality_score_count (error_locus_vec: Vec<(String, usize)>) {
+    let mut quality_score_count: Vec<usize> = vec![0; 94];
+    // read the merged mapped sorted bam file
+    let path = &"data/merged.bam";
+    let mut bam_reader = IndexedReader::from_path(path).unwrap();
+    let mut index = 0;
+    // go through the errors and update the count
+    for error_locus in error_locus_vec {
+        let position_base = error_locus.1;
+        let temp_quality_scores = get_quality_scores_at_location (position_base, 1, &error_locus.0, &mut bam_reader);
+        for quality_score in temp_quality_scores {
+            quality_score_count[quality_score as usize] += 1;
+        }
+        if index % 1000 == 0 {
+            println!("currently processing error {}", index);
+        }
+        index += 1;
+    }
+    println!("{:#?}", quality_score_count);
+}
+
+fn get_error_bases_from_himut_vcf () -> Vec<(String, usize)> {
+    let mut error_locus_vec: Vec<(String, usize)> = vec![];
+    let path = &"data/somatic.vcf";
     let mut bcf = Reader::from_path(path).expect("Error opening file.");
     // iterate through each row of the vcf body.
     for (_, record_result) in bcf.records().enumerate() {
         let record = record_result.expect("Fail to read record");
-        let mut s = String::new();
-        println!("{:?}", record.desc());
-        for allele in record.alleles() {
-            for c in allele {
-                s.push(char::from(*c))
+        let temp_str = record.desc();
+        let mut split_text_iter = (temp_str.split(":")).into_iter();
+        let chromosone = split_text_iter.next().unwrap();
+        error_locus_vec.push((chromosone.to_string(), record.pos() as usize));
+    }
+    println!("number of errors = {}", error_locus_vec.len());
+    error_locus_vec
+}
+
+fn get_quality_score_count () {
+    let skip_length = 3000;
+    let continue_threshold = 10000;
+    let mut continue_count = 0;
+    let mut quality_score_count: Vec<usize> = vec![0; 94];
+    // read the merged mapped sorted bam file
+    let path = &"data/merged.bam";
+    let mut bam_reader = IndexedReader::from_path(path).unwrap();
+    // go from chr1 to chr21
+    for index in 1..22 {
+        let chromosone = format!("{}{}", String::from("chr"), index.to_string());
+        println!("Reading {}", chromosone);
+        let mut position_base = 5000000;
+        let mut prev_93_count = MAX_USIZE; 
+        // go from 1mil to 240mil bases in small lengths (skip length)
+        loop {
+            if position_base % 1000000 == 0 {
+                println!("Position {}", position_base);
             }
-            s.push(' ')
-        }
-        // 0-based position and the list of alleles
-        println!("Locus: {}, Alleles: {}", record.pos(), s);
-        // number of sample in the vcf
-        let sample_count = usize::try_from(record.sample_count()).unwrap();
-        // Counting ref, alt and missing alleles for each sample
-        let mut n_ref = vec![0; sample_count];
-        let mut n_alt = vec![0; sample_count];
-        let mut n_missing = vec![0; sample_count];
-        let gts = record.genotypes().expect("Error reading genotypes");
-        for sample_index in 0..sample_count {
-            // for each sample
-            for gta in gts.get(sample_index).iter() {
-                // for each allele
-                match gta.index() {
-                    Some(0) => n_ref[sample_index] += 1,  // reference allele
-                    Some(_) => n_alt[sample_index] += 1,  // alt allele
-                    None => n_missing[sample_index] += 1, // missing allele
+            // iterate through by counting the quality scores.
+            let temp_quality_scores = get_quality_scores_at_location (position_base, skip_length, &chromosone, &mut bam_reader);
+            for quality_score in temp_quality_scores {
+                quality_score_count[quality_score as usize] += 1;
+            }
+            //println!("{:?}", quality_score_count);
+            if quality_score_count[93] == prev_93_count {
+                continue_count += 1;
+                if continue_count >= continue_threshold {
+                    break;
                 }
             }
+            else {
+                continue_count = 0;
+            }
+            prev_93_count = quality_score_count[93];
+            position_base += skip_length;
         }
-        println!("sample count: {}", n_ref.len());
-        println!("num of referce allele: {}\nnum of alt allele: {}\nnum of missing allele: {}\n\n", n_ref[0], n_alt[0], n_missing[0]);
     }
+    println!("{:#?}", quality_score_count);
+}
+
+fn get_quality_scores_at_location (required_pos: usize, required_len: usize, chromosone: &String, reader: &mut IndexedReader) -> Vec<u8> {
+    // reused function, this one will only work for a single position
+    let mut quals: Vec<u8> = vec![];
+    
+    match reader.fetch((chromosone, required_pos as i64, required_pos as i64 + required_len as i64)) {
+        Ok(_) => {},
+        Err(_) => {return vec![]},
+    }
+    for read in reader.records() {
+        let readunwrapped = read.unwrap();
+        if readunwrapped.seq_len() < required_len {
+            continue;
+        }
+        let mut temp_character_vec: Vec<char> = vec![];
+        // get the read start position
+        let read_start_pos = readunwrapped.pos() as usize;
+        let mut current_ref_pos = read_start_pos;
+        let mut current_read_pos = 0;
+        // decode the cigar string
+        for character in readunwrapped.cigar().to_string().as_bytes() {
+            match *character as char {
+                'M' => {         
+                    let temp_string: String = temp_character_vec.clone().into_iter().collect();
+                    let temp_int = temp_string.parse::<usize>().unwrap();
+                    if (current_ref_pos + temp_int >= required_pos)
+                        && (current_ref_pos <= required_pos + required_len) {
+                        let (p1, p2) = get_required_start_end_positions_from_read (temp_int, current_ref_pos, current_read_pos, required_pos, required_len);
+                        for index in p1..p2 {
+                            quals.push(readunwrapped.qual()[index]);
+                        }
+                    }
+                    current_ref_pos += temp_int;
+                    current_read_pos += temp_int;
+                    temp_character_vec = vec![];
+                },
+                'H' => {
+                    temp_character_vec = vec![];
+                },
+                'S' => {
+                    let temp_string: String = temp_character_vec.clone().into_iter().collect();
+                    let temp_int = temp_string.parse::<usize>().unwrap();
+                    current_read_pos += temp_int;
+                    temp_character_vec = vec![];
+                },
+                'I' => {
+                    let temp_string: String = temp_character_vec.clone().into_iter().collect();
+                    let temp_int = temp_string.parse::<usize>().unwrap();
+                    current_read_pos += temp_int;
+                    temp_character_vec = vec![];
+                },
+                'N' => {
+                    let temp_string: String = temp_character_vec.clone().into_iter().collect();
+                    let temp_int = temp_string.parse::<usize>().unwrap();
+                    if (current_ref_pos + temp_int >= required_pos)
+                        && (current_ref_pos <= required_pos + required_len) {
+                        let (p1, p2) = get_required_start_end_positions_from_read (temp_int, current_ref_pos, current_read_pos, required_pos, required_len);
+                        for _ in p1..p2 {
+                            quals.push(0);
+                        }
+                    }
+                    current_ref_pos += temp_int;
+                    temp_character_vec = vec![];
+                },
+                'D' => {
+                    let temp_string: String = temp_character_vec.clone().into_iter().collect();
+                    let temp_int = temp_string.parse::<usize>().unwrap();
+                    if (current_ref_pos + temp_int >= required_pos)
+                        && (current_ref_pos <= required_pos + required_len) {
+                        let (p1, p2) = get_required_start_end_positions_from_read (temp_int, current_ref_pos, current_read_pos, required_pos, required_len);
+                        for _ in p1..p2 {
+                            quals.push(0);
+                        }
+                    }
+                    current_ref_pos += temp_int;
+                    temp_character_vec = vec![];
+                },
+                _ => {
+                    temp_character_vec.push(*character as char);
+                },
+            }
+        }
+    }
+    quals
+}
+
+fn get_required_start_end_positions_from_read (section_length: usize, current_ref_pos: usize, current_read_pos: usize, required_pos: usize, required_len: usize) -> (usize, usize) {
+    let p1;
+    let p2;
+    // case when both end partial match is required
+    if (current_ref_pos < required_pos) && (current_ref_pos + section_length > required_pos + required_len) {
+        p1 = required_pos - current_ref_pos + current_read_pos;
+        p2 = current_read_pos + required_pos + required_len - current_ref_pos;
+    }
+    // case when start partial matches are required
+    else if (current_ref_pos < required_pos) && (current_ref_pos + section_length >= required_pos) {
+        p1 = required_pos - current_ref_pos + current_read_pos;
+        p2 = current_read_pos + section_length;
+    }
+    // case when end partial matches are required
+    else if (current_ref_pos <= required_pos + required_len) && (current_ref_pos + section_length > required_pos + required_len) {
+        p1 = current_read_pos;
+        p2 = current_read_pos + required_pos + required_len - current_ref_pos;
+    }
+    // normal case
+    else {
+        p1 = current_read_pos;
+        p2 = current_read_pos + section_length;
+    }
+    (p1, p2)
 }
 
 fn pipeline_quality_score () {
@@ -196,28 +345,7 @@ fn read_bam_file (required_start_pos: usize, chromosone: &String, reader: &mut I
                     //println!("M RUNNIN at pos {} for {}", current_ref_pos, temp_int); 
                     if (current_ref_pos + temp_int >= required_start_pos)
                         && (current_ref_pos <= required_start_pos + THREE_BASE_CONTEXT_READ_LENGTH) {
-                        let p1;
-                        let p2;
-                        // case when both end partial match is required
-                        if (current_ref_pos < required_start_pos) && (current_ref_pos + temp_int > required_start_pos + THREE_BASE_CONTEXT_READ_LENGTH) {
-                            p1 = required_start_pos - current_ref_pos + current_read_pos;
-                            p2 = current_read_pos + required_start_pos + THREE_BASE_CONTEXT_READ_LENGTH - current_ref_pos;
-                        }
-                        // case when start partial matches are required
-                        else if (current_ref_pos < required_start_pos) && (current_ref_pos + temp_int >= required_start_pos) {
-                            p1 = required_start_pos - current_ref_pos + current_read_pos;
-                            p2 = current_read_pos + temp_int;
-                        }
-                        // case when end partial matches are required
-                        else if (current_ref_pos <= required_start_pos + THREE_BASE_CONTEXT_READ_LENGTH) && (current_ref_pos + temp_int > required_start_pos + THREE_BASE_CONTEXT_READ_LENGTH) {
-                            p1 = current_read_pos;
-                            p2 = current_read_pos + required_start_pos + THREE_BASE_CONTEXT_READ_LENGTH - current_ref_pos;
-                        }
-                        // normal case
-                        else {
-                            p1 = current_read_pos;
-                            p2 = current_read_pos + temp_int;
-                        }
+                        let (p1, p2) = get_required_start_end_positions_from_read (temp_int, current_ref_pos, current_read_pos, required_start_pos, THREE_BASE_CONTEXT_READ_LENGTH);
                         temp_read_vec = [temp_read_vec, readunwrapped.seq().as_bytes()[p1..p2].to_vec()].concat();
                     }
                     current_ref_pos += temp_int;
@@ -225,9 +353,6 @@ fn read_bam_file (required_start_pos: usize, chromosone: &String, reader: &mut I
                     temp_character_vec = vec![];
                 },
                 'H' => {
-                    //let temp_string: String = temp_character_vec.clone().into_iter().collect();
-                    //let temp_int = temp_string.parse::<usize>().unwrap();
-                    //current_read_pos += temp_int;
                     temp_character_vec = vec![];
                 },
                 'S' => {
@@ -248,28 +373,7 @@ fn read_bam_file (required_start_pos: usize, chromosone: &String, reader: &mut I
                     //println!("N RUNNIN at pos {} for {}", current_ref_pos, temp_int); 
                     if (current_ref_pos + temp_int >= required_start_pos)
                         && (current_ref_pos <= required_start_pos + THREE_BASE_CONTEXT_READ_LENGTH) {
-                        let p1;
-                        let p2;
-                        // case when both end partial match is required
-                        if (current_ref_pos < required_start_pos) && (current_ref_pos + temp_int > required_start_pos + THREE_BASE_CONTEXT_READ_LENGTH) {
-                            p1 = required_start_pos - current_ref_pos + current_read_pos;
-                            p2 = current_read_pos + required_start_pos + THREE_BASE_CONTEXT_READ_LENGTH - current_ref_pos;
-                        }
-                        // case when start partial matches are required
-                        else if (current_ref_pos < required_start_pos) && (current_ref_pos + temp_int >= required_start_pos) {
-                            p1 = required_start_pos - current_ref_pos + current_read_pos;
-                            p2 = current_read_pos + temp_int;
-                        }
-                        // case when end partial matches are required
-                        else if (current_ref_pos <= required_start_pos + THREE_BASE_CONTEXT_READ_LENGTH) && (current_ref_pos + temp_int > required_start_pos + THREE_BASE_CONTEXT_READ_LENGTH) {
-                            p1 = current_read_pos;
-                            p2 = current_read_pos + required_start_pos + THREE_BASE_CONTEXT_READ_LENGTH - current_ref_pos;
-                        }
-                        // normal case
-                        else {
-                            p1 = current_read_pos;
-                            p2 = current_read_pos + temp_int;
-                        }
+                        let (p1, p2) = get_required_start_end_positions_from_read (temp_int, current_ref_pos, current_read_pos, required_start_pos, THREE_BASE_CONTEXT_READ_LENGTH);
                         for _ in p1..p2 {
                             temp_read_vec.push('X' as u8);
                         }
@@ -278,34 +382,12 @@ fn read_bam_file (required_start_pos: usize, chromosone: &String, reader: &mut I
                     temp_character_vec = vec![];
                 },
                 'D' => {
-                    
                     let temp_string: String = temp_character_vec.clone().into_iter().collect();
                     let temp_int = temp_string.parse::<usize>().unwrap();
                     //println!("D RUNNIN at pos {} for {}", current_ref_pos, temp_int); 
                     if (current_ref_pos + temp_int >= required_start_pos)
                         && (current_ref_pos <= required_start_pos + THREE_BASE_CONTEXT_READ_LENGTH) {
-                        let p1;
-                        let p2;
-                        // case when both end partial match is required
-                        if (current_ref_pos < required_start_pos) && (current_ref_pos + temp_int > required_start_pos + THREE_BASE_CONTEXT_READ_LENGTH) {
-                            p1 = required_start_pos - current_ref_pos + current_read_pos;
-                            p2 = current_read_pos + required_start_pos + THREE_BASE_CONTEXT_READ_LENGTH - current_ref_pos;
-                        }
-                        // case when start partial matches are required
-                        else if (current_ref_pos < required_start_pos) && (current_ref_pos + temp_int >= required_start_pos) {
-                            p1 = required_start_pos - current_ref_pos + current_read_pos;
-                            p2 = current_read_pos + temp_int;
-                        }
-                        // case when end partial matches are required
-                        else if (current_ref_pos <= required_start_pos + THREE_BASE_CONTEXT_READ_LENGTH) && (current_ref_pos + temp_int > required_start_pos + THREE_BASE_CONTEXT_READ_LENGTH) {
-                            p1 = current_read_pos;
-                            p2 = current_read_pos + required_start_pos + THREE_BASE_CONTEXT_READ_LENGTH - current_ref_pos;
-                        }
-                        // normal case
-                        else {
-                            p1 = current_read_pos;
-                            p2 = current_read_pos + temp_int;
-                        }
+                        let (p1, p2) = get_required_start_end_positions_from_read (temp_int, current_ref_pos, current_read_pos, required_start_pos, THREE_BASE_CONTEXT_READ_LENGTH);
                         for _ in p1..p2 {
                             temp_read_vec.push('X' as u8);
                         }
@@ -320,10 +402,6 @@ fn read_bam_file (required_start_pos: usize, chromosone: &String, reader: &mut I
         }
         // take care of cases when string is not long enough to cover the whole ref required
         read_vec.push(String::from_utf8(temp_read_vec).expect("Found invalid UTF-8"));
-    }
-    for _read in &read_vec {
-        //println!("{}",read);
-        //println!("read ln {}", read.len());
     }
     read_vec
 }
