@@ -15,7 +15,7 @@ use misc::print_3base_context_results;
 //use quality::topology_cut::get_consensus_quality_scores;
 use misc::HomopolymerCell;
 use rust_htslib::faidx;
-use rust_htslib::bam::{Read as BamRead, IndexedReader};
+use rust_htslib::bam::{Record, Read as BamRead, IndexedReader as BamIndexedReader, Reader as BamReader};
 use rust_htslib::bcf::{Reader, Read as BcfRead};
 
 const SEED: u64 = 2;
@@ -35,29 +35,167 @@ fn main() {
     //pipeline_3base_context();
     //get_quality_score_count();
     pipeline_quality_score_error_graph ();
+    //pipeline_redo_poa_get_topological_quality_score();
+}
+
+fn pipeline_redo_poa_get_topological_quality_score () {
+    // get the error locations
+    let error_locations = get_error_bases_from_himut_vcf ();
+    // go through the error locations
+    let mut index = 0;
+    for error_location in error_locations {
+        if index < 10000{
+            index += 1;
+            continue;
+        }
+        println!("error chromosone {} position {}", error_location.0, error_location.1);
+        // find the ccs which are in that error
+        let seq_name_and_errorpos_vec = get_corrosponding_seq_name_location_from_bam(error_location.1, &error_location.0);
+        for seq_name_and_errorpos in seq_name_and_errorpos_vec {
+            println!("Processing ccs file {}", seq_name_and_errorpos.1);
+            // find the subreads of that ccs
+            get_the_subreads_by_name(&seq_name_and_errorpos.1);
+            // do poa with the subreads
+
+            // check if fixed
+            // calculate the quality score
+            break;
+        }
+        break;
+    }
+}
+
+fn get_the_subreads_by_name (full_name: &String) -> Vec<String> {
+    let subread_vec: Vec<String> = vec![];
+    let mut split_text_iter = (full_name.split("/")).into_iter();
+    let path = format!("{}{}{}", "/Users/wmw0016/Documents/mount5/data1/hifi_consensus/try2/".to_string(), split_text_iter.next().unwrap(), ".subreads.bam".to_string());
+    let ccs_name = split_text_iter.next().unwrap();
+
+    //search for the subreads with ccs name in the file
+    let mut bam = BamReader::from_path(path).unwrap();
+    let mut record = Record::new();
+    
+    while let Some(r) = bam.read(&mut record) {
+        r.expect("Failed to parse record");
+        let subread_name = String::from_utf8(record.qname().to_vec()).expect("");
+        let mut sub_split_text_iter = (subread_name.split("/")).into_iter();
+        sub_split_text_iter.next().unwrap();
+        let parent_ccs = sub_split_text_iter.next().unwrap();
+        if parent_ccs.eq(ccs_name) {
+            println!("ID: {}", parent_ccs);
+            //println!("sequence {}", String::from_utf8(record.seq().as_bytes().to_vec()).expect(""))
+        }
+        
+        
+    }
+    subread_vec
+}
+
+fn get_corrosponding_seq_name_location_from_bam (error_pos: usize, error_chr: &String) -> Vec<(String, String, usize)> {
+    let mut seq_name_and_errorpos: Vec<(String, String, usize)> = vec![];
+    let path = &"data/merged.bam";
+    let mut bam_reader = BamIndexedReader::from_path(path).unwrap();
+    bam_reader.fetch((error_chr, error_pos as i64, error_pos as i64 + 1)).unwrap();
+    'read_loop: for read in bam_reader.records() {
+        let readunwrapped = read.unwrap();
+        // get the data
+        let mut read_index = 0;
+        let read_name = String::from_utf8(readunwrapped.qname().to_vec()).expect("");
+        let read_string = String::from_utf8(readunwrapped.seq().as_bytes().to_vec()).expect("");
+        if readunwrapped.seq_len() < 5 {
+            continue;
+        }
+        // get the location from the cigar processing
+        let mut temp_character_vec: Vec<char> = vec![];
+        // get the read start position
+        let read_start_pos = readunwrapped.pos() as usize;
+        let mut current_ref_pos = read_start_pos;
+        let mut current_read_pos = 0;
+        // decode the cigar string
+        for character in readunwrapped.cigar().to_string().as_bytes() {
+            match *character as char {
+                'M' => {         
+                    let temp_string: String = temp_character_vec.clone().into_iter().collect();
+                    let temp_int = temp_string.parse::<usize>().unwrap();
+                    if (current_ref_pos + temp_int >= error_pos)
+                        && (current_ref_pos <= error_pos + 1) {
+                        (read_index, _) = get_required_start_end_positions_from_read (temp_int, current_ref_pos, current_read_pos, error_pos, 1);
+                        break;
+                    }
+                    current_ref_pos += temp_int;
+                    current_read_pos += temp_int;
+                    temp_character_vec = vec![];
+                },
+                'H' => {
+                    temp_character_vec = vec![];
+                },
+                'S' => {
+                    let temp_string: String = temp_character_vec.clone().into_iter().collect();
+                    let temp_int = temp_string.parse::<usize>().unwrap();
+                    current_read_pos += temp_int;
+                    temp_character_vec = vec![];
+                },
+                'I' => {
+                    let temp_string: String = temp_character_vec.clone().into_iter().collect();
+                    let temp_int = temp_string.parse::<usize>().unwrap();
+                    current_read_pos += temp_int;
+                    temp_character_vec = vec![];
+                },
+                'N' => {
+                    let temp_string: String = temp_character_vec.clone().into_iter().collect();
+                    let temp_int = temp_string.parse::<usize>().unwrap();
+                    if (current_ref_pos + temp_int >= error_pos)
+                        && (current_ref_pos <= error_pos + 1) {
+                        (_, _) = get_required_start_end_positions_from_read (temp_int, current_ref_pos, current_read_pos, error_pos, 1);
+                        continue 'read_loop;
+                    }
+                    current_ref_pos += temp_int;
+                    temp_character_vec = vec![];
+                },
+                'D' => {
+                    let temp_string: String = temp_character_vec.clone().into_iter().collect();
+                    let temp_int = temp_string.parse::<usize>().unwrap();
+                    if (current_ref_pos + temp_int >= error_pos)
+                        && (current_ref_pos <= error_pos + 1) {
+                        let (_, _) = get_required_start_end_positions_from_read (temp_int, current_ref_pos, current_read_pos, error_pos, 1);
+                        continue 'read_loop;
+                    }
+                    current_ref_pos += temp_int;
+                    temp_character_vec = vec![];
+                },
+                _ => {
+                    temp_character_vec.push(*character as char);
+                },
+            }
+        }
+        seq_name_and_errorpos.push((read_string.clone(), read_name.clone(), read_index));
+    }
+    seq_name_and_errorpos
 }
 
 fn pipeline_quality_score_error_graph () {
     // get the quality scores in the ccs
-
+    //get_quality_score_count ();
     // get the errors from himut vcf (no somatic mutations in this file)
     let error_locations = get_error_bases_from_himut_vcf();
     // get the quality scores of error positions
     get_error_quality_score_count (error_locations);
 }
 
-fn get_error_quality_score_count (error_locus_vec: Vec<(String, usize)>) {
+fn get_error_quality_score_count (error_locus_vec: Vec<(String, usize, char, char)>) {
     let mut quality_score_count: Vec<usize> = vec![0; 94];
     // read the merged mapped sorted bam file
     let path = &"data/merged.bam";
-    let mut bam_reader = IndexedReader::from_path(path).unwrap();
+    let mut bam_reader = BamIndexedReader::from_path(path).unwrap();
     let mut index = 0;
     // go through the errors and update the count
     for error_locus in error_locus_vec {
         let position_base = error_locus.1;
-        let temp_quality_scores = get_quality_scores_at_location (position_base, 1, &error_locus.0, &mut bam_reader);
-        for quality_score in temp_quality_scores {
-            quality_score_count[quality_score as usize] += 1;
+        let temp_quality_scores_and_bases = get_quality_scores_and_base_at_location (position_base, 1, &error_locus.0, &mut bam_reader);
+        for (quality_score, base) in temp_quality_scores_and_bases {
+            if error_locus.3 == base as char {
+                quality_score_count[quality_score as usize] += 1;
+            }
         }
         if index % 1000 == 0 {
             println!("currently processing error {}", index);
@@ -67,17 +205,23 @@ fn get_error_quality_score_count (error_locus_vec: Vec<(String, usize)>) {
     println!("{:#?}", quality_score_count);
 }
 
-fn get_error_bases_from_himut_vcf () -> Vec<(String, usize)> {
-    let mut error_locus_vec: Vec<(String, usize)> = vec![];
+fn get_error_bases_from_himut_vcf () -> Vec<(String, usize, char, char)> {
+    let mut error_locus_vec: Vec<(String, usize, char, char)> = vec![]; //chromosone, position, ref, alt
     let path = &"data/somatic.vcf";
     let mut bcf = Reader::from_path(path).expect("Error opening file.");
     // iterate through each row of the vcf body.
     for (_, record_result) in bcf.records().enumerate() {
         let record = record_result.expect("Fail to read record");
+        let mut allele_vec: Vec<char> = vec![];
+        for allele in record.alleles() {
+            for c in allele {
+                allele_vec.push(char::from(*c));
+            }
+        }
         let temp_str = record.desc();
         let mut split_text_iter = (temp_str.split(":")).into_iter();
         let chromosone = split_text_iter.next().unwrap();
-        error_locus_vec.push((chromosone.to_string(), record.pos() as usize));
+        error_locus_vec.push((chromosone.to_string(), record.pos() as usize, allele_vec[0], allele_vec[1]));
     }
     println!("number of errors = {}", error_locus_vec.len());
     error_locus_vec
@@ -90,7 +234,7 @@ fn get_quality_score_count () {
     let mut quality_score_count: Vec<usize> = vec![0; 94];
     // read the merged mapped sorted bam file
     let path = &"data/merged.bam";
-    let mut bam_reader = IndexedReader::from_path(path).unwrap();
+    let mut bam_reader = BamIndexedReader::from_path(path).unwrap();
     // go from chr1 to chr21
     for index in 1..22 {
         let chromosone = format!("{}{}", String::from("chr"), index.to_string());
@@ -103,9 +247,9 @@ fn get_quality_score_count () {
                 println!("Position {}", position_base);
             }
             // iterate through by counting the quality scores.
-            let temp_quality_scores = get_quality_scores_at_location (position_base, skip_length, &chromosone, &mut bam_reader);
+            let temp_quality_scores = get_quality_scores_and_base_at_location (position_base, skip_length, &chromosone, &mut bam_reader);
             for quality_score in temp_quality_scores {
-                quality_score_count[quality_score as usize] += 1;
+                quality_score_count[quality_score.0 as usize] += 1;
             }
             //println!("{:?}", quality_score_count);
             if quality_score_count[93] == prev_93_count {
@@ -124,9 +268,9 @@ fn get_quality_score_count () {
     println!("{:#?}", quality_score_count);
 }
 
-fn get_quality_scores_at_location (required_pos: usize, required_len: usize, chromosone: &String, reader: &mut IndexedReader) -> Vec<u8> {
+fn get_quality_scores_and_base_at_location (required_pos: usize, required_len: usize, chromosone: &String, reader: &mut BamIndexedReader) -> Vec<(u8, u8)> {
     // reused function, this one will only work for a single position
-    let mut quals: Vec<u8> = vec![];
+    let mut quals: Vec<(u8, u8)> = vec![]; //quality score, base
     
     match reader.fetch((chromosone, required_pos as i64, required_pos as i64 + required_len as i64)) {
         Ok(_) => {},
@@ -152,7 +296,7 @@ fn get_quality_scores_at_location (required_pos: usize, required_len: usize, chr
                         && (current_ref_pos <= required_pos + required_len) {
                         let (p1, p2) = get_required_start_end_positions_from_read (temp_int, current_ref_pos, current_read_pos, required_pos, required_len);
                         for index in p1..p2 {
-                            quals.push(readunwrapped.qual()[index]);
+                            quals.push((readunwrapped.qual()[index], readunwrapped.seq().as_bytes()[p1]));
                         }
                     }
                     current_ref_pos += temp_int;
@@ -177,26 +321,12 @@ fn get_quality_scores_at_location (required_pos: usize, required_len: usize, chr
                 'N' => {
                     let temp_string: String = temp_character_vec.clone().into_iter().collect();
                     let temp_int = temp_string.parse::<usize>().unwrap();
-                    if (current_ref_pos + temp_int >= required_pos)
-                        && (current_ref_pos <= required_pos + required_len) {
-                        let (p1, p2) = get_required_start_end_positions_from_read (temp_int, current_ref_pos, current_read_pos, required_pos, required_len);
-                        for _ in p1..p2 {
-                            quals.push(0);
-                        }
-                    }
                     current_ref_pos += temp_int;
                     temp_character_vec = vec![];
                 },
                 'D' => {
                     let temp_string: String = temp_character_vec.clone().into_iter().collect();
                     let temp_int = temp_string.parse::<usize>().unwrap();
-                    if (current_ref_pos + temp_int >= required_pos)
-                        && (current_ref_pos <= required_pos + required_len) {
-                        let (p1, p2) = get_required_start_end_positions_from_read (temp_int, current_ref_pos, current_read_pos, required_pos, required_len);
-                        for _ in p1..p2 {
-                            quals.push(0);
-                        }
-                    }
                     current_ref_pos += temp_int;
                     temp_character_vec = vec![];
                 },
@@ -235,59 +365,6 @@ fn get_required_start_end_positions_from_read (section_length: usize, current_re
     (p1, p2)
 }
 
-fn pipeline_quality_score () {
-    // find the error position
-    let error_pos = 1000000;
-    let error_chr = String::from("chr1");
-    // get the reads corrosponding to the position
-    let reads = get_read_and_readnames_from_bam(&error_pos, &error_chr);
-    // get the sub reads of the reads // do poa with the reads
-    for read in &reads {
-        get_subreads_from_readname(&read.1, &error_pos, &error_chr);
-
-    }
-    // check the quality scores at that location or if fixed
-}
-
-fn get_read_and_readnames_from_bam (error_pos: &usize, error_chr: &String) -> Vec<(String, String, usize)> {
-    let mut reads_names_and_errorpos: Vec<(String, String, usize)> = vec![];
-    let path = &"data/merged.bam";
-    let mut bam_reader = IndexedReader::from_path(path).unwrap();
-    bam_reader.fetch((error_chr, *error_pos as i64, *error_pos as i64 + 1)).unwrap();
-    for read in bam_reader.records() {
-        let readunwrapped = read.unwrap();
-        let read_index = error_pos - readunwrapped.pos() as usize;
-        let read_name = String::from_utf8(readunwrapped.qname().to_vec()).expect("");
-        let read_string = String::from_utf8(readunwrapped.seq().as_bytes().to_vec()).expect("");
-        reads_names_and_errorpos.push((read_string.clone(),read_name.clone(), read_index));
-    }
-    reads_names_and_errorpos
-}
-
-fn get_subreads_from_readname (read_name: &String, error_pos: &usize, error_chr: &String) -> Vec<String>  {
-    let mut subreads = vec![];
-    // open the bam file corrosponding to the read_name
-    println!("{}", read_name);
-    let mut split_text_iter = (read_name.split("/")).into_iter();
-    let chip_name = split_text_iter.next().unwrap();
-    let consensus_name = split_text_iter.next().unwrap();
-    // get the subreads corrosponding to read_name and position
-    let bam_file_path = format!("/Users/wmw0016/Documents/mount5/data1/hifi_consensus/try2/{}.subreads.mapped.bam", chip_name);
-    let mut bam_reader = IndexedReader::from_path(bam_file_path).unwrap();
-    bam_reader.fetch((error_chr, *error_pos as i64, *error_pos as i64 + 1)).unwrap();
-    for read in bam_reader.records() {
-        let readunwrapped = read.unwrap();
-        let read_name = String::from_utf8(readunwrapped.qname().to_vec()).expect("");
-        let mut read_name_iter = read_name.split("/");
-        let subread_chip = read_name_iter.next().unwrap();
-        let subread_name = read_name_iter.next().unwrap();
-        if subread_name == consensus_name {
-            subreads.push(String::from_utf8(readunwrapped.seq().as_bytes().to_vec()).expect(""));
-            println!("{} {}", subread_chip, subread_name);
-        }
-    }
-    subreads
-}
 fn pipeline_3base_context () {
     // make a vector with 256 entries for each correct and incorrect count eg entry index AAA -> A = 0 & TTT -> T = 255
     let mut count_vector: Vec<usize> = vec![0; 256];
@@ -303,7 +380,7 @@ fn pipeline_3base_context () {
             }
             //get the reads and reference
             let path = &"data/merged.bam";
-            let mut bam_reader = IndexedReader::from_path(path).unwrap();
+            let mut bam_reader = BamIndexedReader::from_path(path).unwrap();
             let path = &"data/GRCh38.fa";
             let mut fai_reader = faidx::Reader::from_path(path).unwrap();
             let reads = read_bam_file(position_base, &chromosone, &mut bam_reader);
@@ -322,7 +399,7 @@ fn pipeline_3base_context () {
 
 
 
-fn read_bam_file (required_start_pos: usize, chromosone: &String, reader: &mut IndexedReader) -> Vec<String> {
+fn read_bam_file (required_start_pos: usize, chromosone: &String, reader: &mut BamIndexedReader) -> Vec<String> {
     let mut read_vec: Vec<String> = vec![];
     reader.fetch((chromosone, required_start_pos as i64, required_start_pos as i64 + THREE_BASE_CONTEXT_READ_LENGTH as i64 - 1)).unwrap();
     for read in reader.records() {
