@@ -34,8 +34,8 @@ fn main() {
     //pipeline_quality_score();
     //pipeline_3base_context();
     //get_quality_score_count();
-    pipeline_quality_score_error_graph ();
-    //pipeline_redo_poa_get_topological_quality_score();
+    //pipeline_quality_score_error_graph ();
+    pipeline_redo_poa_get_topological_quality_score();
 }
 
 fn pipeline_redo_poa_get_topological_quality_score () {
@@ -66,27 +66,99 @@ fn pipeline_redo_poa_get_topological_quality_score () {
 }
 
 fn get_the_subreads_by_name (full_name: &String) -> Vec<String> {
-    let subread_vec: Vec<String> = vec![];
+    let mut subread_vec: Vec<String> = vec![];
     let mut split_text_iter = (full_name.split("/")).into_iter();
-    let path = format!("{}{}{}", "/Users/wmw0016/Documents/mount5/data1/hifi_consensus/try2/".to_string(), split_text_iter.next().unwrap(), ".subreads.bam".to_string());
+    //let path = format!("{}{}{}", "/Users/wmw0016/Documents/mount5/data1/hifi_consensus/try2/".to_string(), split_text_iter.next().unwrap(), ".subreads.bam".to_string());
+    let path = format!("{}", "data/merged.bam");
+    split_text_iter.next().unwrap();
     let ccs_name = split_text_iter.next().unwrap();
 
     //search for the subreads with ccs name in the file
     let mut bam = BamReader::from_path(path).unwrap();
     let mut record = Record::new();
+    //bam.seek(10).unwrap();
+    
+    // variables for finding start position of the records and breaking right after records are read
+    let average_record_len: i64 = 2500000000;
+    let mut index = 0;
+    let mut read_skip = false;
+    let mut read_done = false;
+    let mut read_started = false;
+    let mut read_first_record_found = false;
+    let mut jumped_behind_required_section = false;
+    println!("{}", ccs_name);
+    let required_id_pos = ccs_name.parse::<i64>().unwrap();
     
     while let Some(r) = bam.read(&mut record) {
-        r.expect("Failed to parse record");
-        let subread_name = String::from_utf8(record.qname().to_vec()).expect("");
-        let mut sub_split_text_iter = (subread_name.split("/")).into_iter();
-        sub_split_text_iter.next().unwrap();
-        let parent_ccs = sub_split_text_iter.next().unwrap();
-        if parent_ccs.eq(ccs_name) {
-            println!("ID: {}", parent_ccs);
-            //println!("sequence {}", String::from_utf8(record.seq().as_bytes().to_vec()).expect(""))
+        index += 1;
+        
+        match r {
+            Ok(_) => {
+
+            },
+            Err(_) => {
+                println!("current offset {}", bam.tell());
+                continue;
+            }
         }
-        
-        
+        let subread_name = String::from_utf8(record.qname().to_vec()).expect("");
+        println!("subreadname {}", subread_name);
+        println!("subreadlen {}", record.seq_len());
+        let mut sub_split_text_iter = (subread_name.split("/")).into_iter();
+        let parent_ccs = sub_split_text_iter.next().unwrap();
+        let current_id_pos = parent_ccs.parse::<i64>().unwrap();
+        println!("current offset {} id {} ", bam.tell(), current_id_pos);
+        if required_id_pos != current_id_pos {
+            if !read_started {
+                // if behind the required pos jump forward
+                if required_id_pos > current_id_pos {
+                    // estimate how many record there are between
+                    let jump_value = bam.tell() + (1000) * average_record_len;
+                    println!("jump value {}", jump_value);
+                    // jump
+                    bam.seek(jump_value).unwrap();
+
+                }
+                else {
+                    read_started = true;
+                }
+            }
+            else {
+                // encountered a non match after the required records were found
+                if read_first_record_found {
+                    break;
+                }
+                if (!jumped_behind_required_section) || (required_id_pos < current_id_pos) {
+                    //jump behind 10?
+                    let jump_value = bam.tell() - 10 * 30 * average_record_len;
+                    //jump
+                    bam.seek(jump_value).unwrap();
+                    jumped_behind_required_section = true;
+                }
+            }
+        }
+        else {
+            read_started = true;
+            if read_first_record_found {
+                if record.seq_len() > 0 {
+                    subread_vec.push(String::from_utf8(record.seq().as_bytes().to_vec()).expect(""));
+                }
+            }
+            else {
+                if jumped_behind_required_section {
+                    read_first_record_found = true;
+                    if record.seq_len() > 0 {
+                        subread_vec.push(String::from_utf8(record.seq().as_bytes().to_vec()).expect(""));
+                    }
+                }
+                else {
+                    //jump behind 10?
+                    let jump_value = bam.tell() - 10 * 30 * average_record_len;
+                    //jump
+                    bam.seek(jump_value).unwrap();
+                }
+            }
+        }
     }
     subread_vec
 }
