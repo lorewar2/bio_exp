@@ -7,6 +7,12 @@ mod quality;
 use generator::simple::get_random_sequences_from_generator;
 use alignment::poarustbio::Aligner;
 use alignment::poahomopolymer::Poa;
+use libm::pow;
+use std::io::prelude::*;
+use std::io::BufReader;
+use std::fs::File;
+use std::io::SeekFrom;
+
 //use petgraph::dot::Dot;
 use misc::get_consensus_score;
 use misc::convert_sequence_to_homopolymer;
@@ -59,7 +65,7 @@ fn pipeline_redo_poa_get_topological_quality_score () {
 
             // check if fixed
             // calculate the quality score
-            break;
+            //break;
         }
         break;
     }
@@ -68,98 +74,97 @@ fn pipeline_redo_poa_get_topological_quality_score () {
 fn get_the_subreads_by_name (full_name: &String) -> Vec<String> {
     let mut subread_vec: Vec<String> = vec![];
     let mut split_text_iter = (full_name.split("/")).into_iter();
-    //let path = format!("{}{}{}", "/Users/wmw0016/Documents/mount5/data1/hifi_consensus/try2/".to_string(), split_text_iter.next().unwrap(), ".subreads.bam".to_string());
-    let path = format!("{}", "data/merged.bam");
-    split_text_iter.next().unwrap();
-    let ccs_name = split_text_iter.next().unwrap();
+    let file_name = split_text_iter.next().unwrap();
+    let required_id = split_text_iter.next().unwrap().parse::<i64>().unwrap();
+    let path = format!("{}{}{}", "/Users/wmw0016/Documents/mount5/data1/hifi_consensus/try2/".to_string(), file_name, ".subreads.sam".to_string());
+    // file stuff init
+    let f = File::open(&path).unwrap();
+    let mut reader = BufReader::new(f);
+    let mut buffer = String::new();
 
-    //search for the subreads with ccs name in the file
-    let mut bam = BamReader::from_path(path).unwrap();
-    let mut record = Record::new();
-    //bam.seek(10).unwrap();
-    
-    // variables for finding start position of the records and breaking right after records are read
-    let average_record_len: i64 = 2500000000;
-    let mut index = 0;
-    let mut read_skip = false;
-    let mut read_done = false;
-    let mut read_started = false;
-    let mut read_first_record_found = false;
-    let mut jumped_behind_required_section = false;
-    println!("{}", ccs_name);
-    let required_id_pos = ccs_name.parse::<i64>().unwrap();
-    
-    while let Some(r) = bam.read(&mut record) {
-        index += 1;
-        
-        match r {
-            Ok(_) => {
+    // get the file length
+    reader.seek(SeekFrom::End(0)).expect("");
+    let end_file_pos = reader.stream_position().unwrap();
 
-            },
-            Err(_) => {
-                println!("current offset {}", bam.tell());
-                continue;
-            }
+    // jump to the middle of the file
+    let mut section_start_file_pos = 0;
+    let mut section_end_file_pos = end_file_pos;
+    let mut current_file_pos = (section_start_file_pos + section_end_file_pos) / 2;
+    loop {
+        reader.seek(SeekFrom::Start(current_file_pos)).expect("");
+        // get rid of the half line
+        buffer.clear();
+        reader.read_line(&mut buffer).unwrap();
+        // the required line
+        buffer.clear();
+        reader.read_line(&mut buffer).unwrap();
+        // split it to find the id
+        let mut temp_split_iter = (buffer.split("/")).into_iter();
+        temp_split_iter.next();
+        let current_id;
+        match temp_split_iter.next().unwrap().parse::<i64>() {
+            Ok(x) => {current_id = x;},
+            Err(_) => {break;},
         }
-        let subread_name = String::from_utf8(record.qname().to_vec()).expect("");
-        println!("subreadname {}", subread_name);
-        println!("subreadlen {}", record.seq_len());
-        let mut sub_split_text_iter = (subread_name.split("/")).into_iter();
-        let parent_ccs = sub_split_text_iter.next().unwrap();
-        let current_id_pos = parent_ccs.parse::<i64>().unwrap();
-        println!("current offset {} id {} ", bam.tell(), current_id_pos);
-        if required_id_pos != current_id_pos {
-            if !read_started {
-                // if behind the required pos jump forward
-                if required_id_pos > current_id_pos {
-                    // estimate how many record there are between
-                    let jump_value = bam.tell() + (1000) * average_record_len;
-                    println!("jump value {}", jump_value);
-                    // jump
-                    bam.seek(jump_value).unwrap();
-
-                }
-                else {
-                    read_started = true;
-                }
-            }
-            else {
-                // encountered a non match after the required records were found
-                if read_first_record_found {
+        println!("curr: {}", current_id);
+        // jumping 
+        if required_id == current_id {
+            // when the id is found go back until you reach a different id
+            let mut index = 1;
+            loop {
+                if current_file_pos < index * 10000 {
+                    reader.seek(SeekFrom::Start(0)).expect("");
                     break;
                 }
-                if (!jumped_behind_required_section) || (required_id_pos < current_id_pos) {
-                    //jump behind 10?
-                    let jump_value = bam.tell() - 10 * 30 * average_record_len;
-                    //jump
-                    bam.seek(jump_value).unwrap();
-                    jumped_behind_required_section = true;
+                reader.seek(SeekFrom::Start(current_file_pos - index * 100000)).expect("");
+                // get rid of the half line
+                buffer.clear();
+                reader.read_line(&mut buffer).unwrap();
+                // the required line
+                buffer.clear();
+                reader.read_line(&mut buffer).unwrap();
+                // split it to find the id
+                let mut temp_split_iter = (buffer.split("/")).into_iter();
+                temp_split_iter.next();
+                let current_id;
+                match temp_split_iter.next().unwrap().parse::<i64>() {
+                    Ok(x) => {current_id = x; println!("{}", current_id);},
+                    Err(_) => {break;},
                 }
+                if current_id != required_id {
+                    break;
+                } 
+                index += 1;
             }
+            break;
+        }
+        else if required_id > current_id {
+            section_start_file_pos = current_file_pos;
         }
         else {
-            read_started = true;
-            if read_first_record_found {
-                if record.seq_len() > 0 {
-                    subread_vec.push(String::from_utf8(record.seq().as_bytes().to_vec()).expect(""));
-                }
-            }
-            else {
-                if jumped_behind_required_section {
-                    read_first_record_found = true;
-                    if record.seq_len() > 0 {
-                        subread_vec.push(String::from_utf8(record.seq().as_bytes().to_vec()).expect(""));
-                    }
-                }
-                else {
-                    //jump behind 10?
-                    let jump_value = bam.tell() - 10 * 30 * average_record_len;
-                    //jump
-                    bam.seek(jump_value).unwrap();
-                }
-            }
+            section_end_file_pos = current_file_pos;
         }
+        current_file_pos = (section_start_file_pos + section_end_file_pos) / 2;
     }
+    // count the number of entries
+    let mut count = 0;
+    loop {
+        buffer.clear();
+        reader.read_line(&mut buffer).unwrap();
+        // split it to find the id
+        let mut temp_split_iter = (buffer.split("/")).into_iter();
+        temp_split_iter.next();
+        let current_id;
+        match temp_split_iter.next().unwrap().parse::<i64>() {
+            Ok(x) => {current_id = x;},
+            Err(_) => {break;},
+        }
+        if current_id != required_id {
+            break;
+        }
+        count += 1;
+    }
+    println!("count = {}", count);
     subread_vec
 }
 
