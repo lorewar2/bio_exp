@@ -7,7 +7,7 @@ use statrs::function::factorial::binomial;
 
 const ERROR_PROBABILITY: f64 = 0.85;
 const PRINT_ALL: bool = false;
-const USEPACBIODATA: bool = false;
+const USEPACBIODATA: bool = true;
 const NUM_OF_ITER_FOR_PARALLEL: usize = 10;
 
 pub fn get_consensus_quality_scores(seq_num: usize, consensus: &Vec<u8>, topology: &Vec<usize>, graph: &Graph<u8, i32, Directed, usize>) -> (Vec<f64>, Vec<bool>, Vec<Vec<usize>>, Vec<String>) {
@@ -43,7 +43,7 @@ pub fn get_consensus_quality_scores(seq_num: usize, consensus: &Vec<u8>, topolog
     (quality_scores, validity, base_count_vec, debug_strings)
 }
 
-fn get_parallel_nodes_with_topology_cut (skip_nodes: Vec<usize>, total_seq: usize, target_node: usize, target_node_parent: Option<usize>, target_node_child: Option<usize>, graph: &Graph<u8, i32, Directed, usize>) -> (Vec<usize>, Vec<usize>, Vec<String>) {
+pub fn get_parallel_nodes_with_topology_cut (skip_nodes: Vec<usize>, total_seq: usize, target_node: usize, target_node_parent: Option<usize>, target_node_child: Option<usize>, graph: &Graph<u8, i32, Directed, usize>) -> (Vec<usize>, Vec<usize>, Vec<String>) {
     // vector initialization
     let mut debug_strings: Vec<String> = vec![];
     let mut topology = Topo::new(graph);
@@ -309,7 +309,7 @@ fn get_xiterations_direction_nodes (direction: Direction ,iteration: usize, mut 
     direction_node_list
 }
 
-fn base_quality_score_calculation (mut total_seq: usize, indices_of_parallel_nodes: Vec<usize>, seq_through_parallel_nodes: Vec<usize>, base: u8, graph: &Graph<u8, i32, Directed, usize>) -> (f64, bool, Vec<usize>, Vec<String>) {
+pub fn base_quality_score_calculation (mut total_seq: usize, indices_of_parallel_nodes: Vec<usize>, seq_through_parallel_nodes: Vec<usize>, base: u8, graph: &Graph<u8, i32, Directed, usize>) -> (f64, bool, Vec<usize>, Vec<String>) {
     if USEPACBIODATA {
         total_seq -= 1;
     }
