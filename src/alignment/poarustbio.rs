@@ -213,6 +213,9 @@ impl Aligner {
         }
         self
     }
+    pub fn graph(&self) -> &POAGraph {
+        &self.poa.graph
+    }
 }
 
 /// A partially ordered alignment graph

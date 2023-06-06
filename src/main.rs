@@ -13,7 +13,7 @@ use petgraph::Directed;
 use petgraph::Graph;
 use quality::topology_cut::base_quality_score_calculation;
 use quality::topology_cut::get_parallel_nodes_with_topology_cut;
-use alignment::poabanded::Aligner;
+use alignment::poarustbio::Aligner;
 use alignment::pairwise::pairwise;
 use misc::get_error_bases_from_himut_vcf;
 use misc::get_required_start_end_positions_from_read;
@@ -58,7 +58,7 @@ fn pipeline_redo_poa_get_topological_quality_score () {
             sub_reads.insert(0, seq_name_qual_and_errorpos.0.clone());
             // do poa with the read and subreads, get the poa and consensus
             let mut sequence_number: usize = 0;
-            let mut aligner = Aligner::new(MATCH, MISMATCH, GAP_OPEN, &sub_reads[0].as_bytes().to_vec(), 100);
+            let mut aligner = Aligner::new(MATCH, MISMATCH, GAP_OPEN, &sub_reads[0].as_bytes().to_vec());
             for sub_read in &sub_reads {
                 if sequence_number != 0 {
                     aligner.global(&sub_read.as_bytes().to_vec()).add_to_graph();
@@ -77,7 +77,7 @@ fn pipeline_redo_poa_get_topological_quality_score () {
 
             let (parallel_nodes, parallel_num_incoming_seq, _) = get_parallel_nodes_with_topology_cut (skip_nodes, sequence_number,  calculated_topology[position], target_node_parent, target_node_child, calculated_graph);
             let (calculated_quality_score, _, _, _) = base_quality_score_calculation (sequence_number, parallel_nodes, parallel_num_incoming_seq, calculated_consensus[position], calculated_graph);
-            println!("QUALITY SCORE {} {}", calculated_quality_score, seq_name_qual_and_errorpos.3);
+            println!("QUALITY SCORE {} {}", calculated_quality_score, seq_name_qual_and_errorpos.2);
             break;
         }
     }
@@ -267,8 +267,8 @@ fn get_the_subreads_by_name (full_name: &String) -> Vec<String> {
             let mut data_split_iter = (buffer.split("\t")).into_iter();
             for _ in 0..9 {data_split_iter.next();}
             subread_vec.push(data_split_iter.next().unwrap().to_string());
+            count += 1;
         }
-        count += 1;
     }
     println!("count = {}", count);
     subread_vec
