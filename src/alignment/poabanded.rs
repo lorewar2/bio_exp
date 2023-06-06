@@ -184,15 +184,15 @@ impl Traceback {
 pub struct Aligner {
     traceback: Traceback,
     query: Vec<u8>,
-    pub poa: Poa,
+    pub poa: BandedPoa,
 }
 
 impl Aligner {
-    pub fn new(match_score: i32, mismatch_score: i32, gap_open_score: i32, reference: &Vec<u8>) -> Self {
+    pub fn new(match_score: i32, mismatch_score: i32, gap_open_score: i32, reference: &Vec<u8>, band_size: i32) -> Self {
         Aligner {
             traceback: Traceback::new(),
             query: reference.to_vec(),
-            poa: Poa::from_string(match_score, mismatch_score, gap_open_score, reference),
+            poa: BandedPoa::from_string(match_score, mismatch_score, gap_open_score, reference, band_size),
         }
     }
 
@@ -219,15 +219,16 @@ impl Aligner {
 ///
 /// A directed acyclic graph datastructure that represents the topology of a
 /// traceback matrix.
-pub struct Poa {
+pub struct BandedPoa {
     match_score: i32,
     mismatch_score: i32,
     gap_open_score: i32,
+    band_size: i32,
     pub graph: POAGraph,
 }
 
-impl Poa {
-    pub fn from_string(match_score: i32, mismatch_score: i32, gap_open_score: i32, seq: &Vec<u8>) -> Self {
+impl BandedPoa {
+    pub fn from_string(match_score: i32, mismatch_score: i32, gap_open_score: i32, seq: &Vec<u8>, band_size: i32) -> Self {
         let mut graph: Graph<u8, i32, Directed, usize> =
             Graph::with_capacity(seq.len(), seq.len() - 1);
         let mut prev: NodeIndex<usize> = graph.add_node(seq[0]);
@@ -238,7 +239,7 @@ impl Poa {
             prev = node;
         }
         //println!("Reference Graph: {:?}", Dot::with_config(&graph, &[Config::EdgeIndexLabel])); //added
-        Poa { match_score: match_score, mismatch_score: mismatch_score, gap_open_score: gap_open_score, graph }
+        BandedPoa { match_score: match_score, mismatch_score: mismatch_score, gap_open_score: gap_open_score, graph, band_size}
     }
 
     /// A global Needleman-Wunsch aligner on partially ordered graphs.
@@ -247,9 +248,12 @@ impl Poa {
     /// * `query` - the query TextSlice to align against the internal graph member
     pub fn global(&self, query: &Vec<u8>) -> Traceback {
         assert!(self.graph.node_count() != 0);
+        // dimensions of the traceback matrix
         let (m, n) = (self.graph.node_count(), query.len());
         let mut traceback = Traceback::with_capacity(m, n);
         traceback.initialize_scores(self.gap_open_score);
+        //println!("Printing the  empty Initialized matrix");//added
+        //traceback.print(&self.graph, query);//added
         traceback.set(
             0,
             0,
@@ -259,17 +263,34 @@ impl Poa {
             },
         );
         // construct the score matrix (O(n^2) space)
+        //println!("Topological sort of reference graph!!"); //added
         let mut topo = Topo::new(&self.graph);
+        let mut topo_index = 0;
+        let mut prev_max_score_and_query_position: (i32, i32) = (MIN_SCORE, 0);
         while let Some(node) = topo.next(&self.graph) {
             // reference base and index
             let r = self.graph.raw_nodes()[node.index()].weight; // reference base at previous index
+            //println!("Previous Index Reference Node being processed index:{} base:{}", node.index(), r); //added
             let i = node.index() + 1;
             traceback.last = node;
             // iterate over the predecessors of this node
             let prevs: Vec<NodeIndex<usize>> =
                 self.graph.neighbors_directed(node, Incoming).collect();
-            for (j_p, q) in query.iter().enumerate() {
+            //println!("Nodes with directed edges to current node:{:?}", prevs); //added
+            // query base and its index in the DAG (traceback matrix rows)
+            //println!("{}", topo_index);
+            let mut max_score_and_query_position: (i32, i32) = (MIN_SCORE, 0);
+            let mut skip = 0;
+            if prev_max_score_and_query_position.1 > self.band_size * 5 {
+                skip = (prev_max_score_and_query_position.1 - self.band_size * 5) as usize;
+            }
+            for (j_p, q) in query.iter().enumerate().skip(skip) {
                 let j = j_p + 1;
+                if topo_index != 0 {
+                    if (j_p as i32) > (prev_max_score_and_query_position.1 + (self.band_size)){                       
+                        break;
+                    }
+                }
                 // match and deletion scores for the first reference base
                 let max_cell = if prevs.is_empty() {
                     let temp_score;
@@ -289,7 +310,7 @@ impl Poa {
                         op: AlignmentOperation::Match(None),
                     };
                     for prev_node in &prevs {
-                        let i_p: usize = prev_node.index() + 1;
+                        let i_p: usize = prev_node.index() + 1; // index of previous node
                         let temp_score;
                         if r == *q {
                             temp_score = self.match_score;
@@ -314,6 +335,7 @@ impl Poa {
                     }
                     max_cell
                 };
+    
                 let score = max(
                     max_cell,
                     TracebackCell {
@@ -321,10 +343,16 @@ impl Poa {
                         op: AlignmentOperation::Ins(Some(i - 1)),
                     },
                 );
+                if score.score >= max_score_and_query_position.0 {
+                    max_score_and_query_position.0 = score.score;
+                    max_score_and_query_position.1 = j_p as i32;
+                    //println!("position saved {}", j_p);
+                }
                 traceback.set(i, j, score);
             }
+            topo_index += 1;
+            prev_max_score_and_query_position = max_score_and_query_position;
         }
-
         traceback
     }
     
