@@ -5,7 +5,7 @@ use libm::exp;
 use logaddexp::LogAddExp;
 use statrs::function::factorial::binomial;
 
-const ERROR_PROBABILITY: f64 = 0.85;
+const ERROR_PROBABILITY: f64 = 0.80;
 const PRINT_ALL: bool = false;
 const USEPACBIODATA: bool = true;
 const NUM_OF_ITER_FOR_PARALLEL: usize = 10;
@@ -113,7 +113,7 @@ pub fn get_parallel_nodes_with_topology_cut (skip_nodes: Vec<usize>, total_seq: 
     // iterate skip_count until all sequences are found, break on 5
     let mut seq_found_so_far = num_seq_through_target_base;
     let mut bubble_size = 1;
-    while seq_found_so_far < total_seq  && bubble_size < NUM_OF_ITER_FOR_PARALLEL {
+    while (seq_found_so_far < total_seq)  && (bubble_size < NUM_OF_ITER_FOR_PARALLEL) {
         let temp_debug_strings;
         (parallel_nodes, parallel_node_parents, parallel_num_incoming_seq, seq_found_so_far, temp_debug_strings) = move_in_direction_and_find_crossing_nodes (&skip_nodes, total_seq, direction.unwrap(), parallel_nodes, parallel_node_parents, parallel_num_incoming_seq, seq_found_so_far, target_node, bubble_size, &topologically_ordered_nodes, target_node_topological_position, graph);
         debug_strings = [debug_strings, temp_debug_strings].concat();

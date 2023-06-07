@@ -77,9 +77,11 @@ fn pipeline_redo_poa_get_topological_quality_score () {
 
             let (parallel_nodes, parallel_num_incoming_seq, _) = get_parallel_nodes_with_topology_cut (skip_nodes, sequence_number,  calculated_topology[position], target_node_parent, target_node_child, calculated_graph);
             let (calculated_quality_score, _, _, _) = base_quality_score_calculation (sequence_number, parallel_nodes, parallel_num_incoming_seq, calculated_consensus[position], calculated_graph);
+            println!("BASE IN CALCULATED CONSENSUS {}", calculated_consensus[position] as char);
             println!("QUALITY SCORE {} {}", calculated_quality_score, seq_name_qual_and_errorpos.2);
             break;
         }
+        break;
     }
 }
 
