@@ -7,6 +7,7 @@ use petgraph::dot::Dot;
 use rust_htslib::bam::{Read as BamRead, IndexedReader as BamIndexedReader};
 use rust_htslib::bcf::{Reader, Read as BcfRead};
 use rust_htslib::faidx;
+use std::{fs::OpenOptions, io::{prelude::*}, path::Path};
 
 const SEED: u64 = 2;
 const GAP_OPEN: i32 = -2;
@@ -17,6 +18,11 @@ const RANDOM_SEQUENCE_LENGTH: usize = 1000;
 const NUMBER_OF_RANDOM_SEQUENCES: usize = 5;
 const THREE_BASE_CONTEXT_READ_LENGTH: usize = 1000;
 const NUM_OF_ITER_FOR_ZOOMED_GRAPHS: usize = 4;
+
+pub fn write_string_to_file (file_name: impl AsRef<Path>, input_string: String) {
+    let mut file = OpenOptions::new().create(true).append(true).open(file_name).unwrap();
+    writeln!(file, "{}", input_string).expect("result file cannot be written");
+}
 
 pub fn get_zoomed_graph_section (normal_graph: &Graph<u8, i32, Directed, usize>, focus_node: &usize)-> String {
     let mut graph_section= "".to_string();
@@ -71,6 +77,7 @@ pub fn get_zoomed_graph_section (normal_graph: &Graph<u8, i32, Directed, usize>,
     graph_section = format!("digraph {{\n{} }}", graph_section);
     graph_section
 }
+
 
 fn find_neighbouring_indices (num_of_iterations: usize, focus_node: usize, graph: &Graph<u8, i32, Directed, usize> ) -> Vec<usize> {
     let mut indices: Vec<usize> = vec![];
