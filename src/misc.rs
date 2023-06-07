@@ -2,6 +2,8 @@ use crate::alignment::pairwise::pairwise;
 use crate::generator::simple::get_random_sequences_from_generator;
 use crate::alignment::poarustbio::Aligner;
 use crate::alignment::poahomopolymer::Poa;
+use petgraph::{Graph, Directed, graph::NodeIndex};
+use petgraph::dot::Dot;
 use rust_htslib::bam::{Read as BamRead, IndexedReader as BamIndexedReader};
 use rust_htslib::bcf::{Reader, Read as BcfRead};
 use rust_htslib::faidx;
@@ -14,8 +16,94 @@ const MISMATCH: i32 = -2;
 const RANDOM_SEQUENCE_LENGTH: usize = 1000;
 const NUMBER_OF_RANDOM_SEQUENCES: usize = 5;
 const THREE_BASE_CONTEXT_READ_LENGTH: usize = 1000;
-pub const MAX_USIZE: usize = 858_993_459;
+const NUM_OF_ITER_FOR_ZOOMED_GRAPHS: usize = 4;
 
+pub fn get_zoomed_graph_section (normal_graph: &Graph<u8, i32, Directed, usize>, focus_node: &usize)-> String {
+    let mut graph_section= "".to_string();
+    let normal_dot = format!("{:?}", Dot::new(&normal_graph.map(|_, n| (*n) as char, |_, e| *e)));
+    let displaying_nodes: Vec<usize> = find_neighbouring_indices (NUM_OF_ITER_FOR_ZOOMED_GRAPHS, *focus_node, normal_graph);
+    let mut graph_section_nodes: String = "".to_string();
+    let mut graph_section_edges: String = "".to_string();
+    //find the position in the dot file and add to the graph section
+    for node in &displaying_nodes {
+        //get the nodes from the dot file
+        match normal_dot.find(&format!(" {} [", node)) {
+            Some(start) => {
+                let mut char_seq = vec![];
+                let mut end = start;
+                loop {
+                    char_seq.push(normal_dot.chars().nth(end).unwrap());
+                    if normal_dot.chars().nth(end).unwrap() == '\n' {
+                        break;
+                    }
+                    end += 1;
+                }
+                //add from start to end to the graph_section string
+                graph_section_nodes = char_seq.iter().collect::<String>();
+            },
+            None => {}
+        }
+        graph_section = format!("{}{}", graph_section, graph_section_nodes).to_string();
+        graph_section_nodes = "".to_string();
+    }
+    for node in &displaying_nodes {
+        //get the edges from the dot file
+        let edge_entries: Vec<usize> = normal_dot.match_indices(&format!(" {} ->", node)).map(|(i, _)|i).collect();
+        for edge in edge_entries {
+            let mut char_seq = vec![];
+                let mut end = edge;
+                loop {
+                    char_seq.push(normal_dot.chars().nth(end).unwrap());
+                    if normal_dot.chars().nth(end).unwrap() == '\n' {
+                        break;
+                    }
+                    end += 1;
+                }
+                //add from start to end to the graph_section string
+                graph_section_edges = format!("{}{}", graph_section_edges, char_seq.iter().collect::<String>()).to_string();
+        }
+        graph_section = format!("{}{}", graph_section, graph_section_edges).to_string();
+        graph_section_edges = "".to_string();
+    }
+    //modifying the section graph with the highlight
+    graph_section = modify_dot_graph_with_highlight (graph_section, focus_node);
+    //make it a dot graph
+    graph_section = format!("digraph {{\n{} }}", graph_section);
+    graph_section
+}
+
+fn find_neighbouring_indices (num_of_iterations: usize, focus_node: usize, graph: &Graph<u8, i32, Directed, usize> ) -> Vec<usize> {
+    let mut indices: Vec<usize> = vec![];
+    if num_of_iterations <= 0 {
+        return indices;
+    }
+    let mut immediate_neighbours = graph.neighbors_undirected(NodeIndex::new(focus_node));
+    while let Some(neighbour_node) = immediate_neighbours.next() {
+        if !indices.contains(&neighbour_node.index()){
+            indices.push(neighbour_node.index());
+        }
+        let obtained_indices = find_neighbouring_indices(num_of_iterations - 1, neighbour_node.index(), graph);
+        for obtained_index in obtained_indices {
+            if !indices.contains(&obtained_index){
+                indices.push(obtained_index);
+            }
+        }
+    }
+    indices 
+}
+
+fn modify_dot_graph_with_highlight (mut dot: String, focus_node: &usize) -> String {
+    match dot.find(&format!(" {} [", focus_node)) {
+        Some(mut x) => {
+            while dot.chars().nth(x).unwrap() != '[' {
+                x += 1;
+            }
+            dot.replace_range(x + 12..x + 12,"Target node");
+        },
+        None => {}
+    };
+    dot
+}
 
 fn pipeline_quality_score_error_graph () {
     // get the quality scores in the ccs
@@ -61,7 +149,7 @@ fn get_quality_score_count () {
         let chromosone = format!("{}{}", String::from("chr"), index.to_string());
         println!("Reading {}", chromosone);
         let mut position_base = 5000000;
-        let mut prev_93_count = MAX_USIZE; 
+        let mut prev_93_count = usize::MAX; 
         // go from 1mil to 240mil bases in small lengths (skip length)
         loop {
             if position_base % 1000000 == 0 {

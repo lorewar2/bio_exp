@@ -18,7 +18,7 @@ use alignment::pairwise::pairwise;
 use misc::get_error_bases_from_himut_vcf;
 use misc::get_required_start_end_positions_from_read;
 use rust_htslib::bam::{Read as BamRead, IndexedReader as BamIndexedReader};
-
+use misc::get_zoomed_graph_section;
 
 const SEED: u64 = 2;
 const GAP_OPEN: i32 = -2;
@@ -74,14 +74,13 @@ fn pipeline_redo_poa_get_topological_quality_score () {
             let skip_nodes: Vec<usize> = calculated_topology[0 .. position + 1].to_vec();
             let target_node_parent = Some(calculated_topology[position - 1]);
             let target_node_child = Some(calculated_topology[position + 1]);
-
+            
             let (parallel_nodes, parallel_num_incoming_seq, _) = get_parallel_nodes_with_topology_cut (skip_nodes, sequence_number,  calculated_topology[position], target_node_parent, target_node_child, calculated_graph);
             let (calculated_quality_score, _, _, _) = base_quality_score_calculation (sequence_number, parallel_nodes, parallel_num_incoming_seq, calculated_consensus[position], calculated_graph);
             println!("BASE IN CALCULATED CONSENSUS {}", calculated_consensus[position] as char);
             println!("QUALITY SCORE {} {}", calculated_quality_score, seq_name_qual_and_errorpos.2);
-            break;
+            println!("{}", get_zoomed_graph_section(calculated_graph, &calculated_topology[position]));
         }
-        break;
     }
 }
 
