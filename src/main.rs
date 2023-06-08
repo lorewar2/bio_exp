@@ -19,16 +19,15 @@ use misc::get_error_bases_from_himut_vcf;
 use misc::get_required_start_end_positions_from_read;
 use rust_htslib::bam::{Read as BamRead, IndexedReader as BamIndexedReader};
 use misc::get_zoomed_graph_section;
-
-use crate::misc::write_string_to_file;
+use misc::write_string_to_file;
 
 const SEED: u64 = 2;
 const GAP_OPEN: i32 = -2;
 const GAP_EXTEND: i32 = 0;
 const MATCH: i32 = 2;
 const MISMATCH: i32 = -2;
-const SUBREAD_SAM_PATH: &str = "/Users/wmw0016/Documents/mount5/data1/hifi_consensus/try2/";
-const READ_BAM_PATH: &str = "data/merged.bam";
+const DATA_PATH: &str = "/data1/hifi_consensus/try2/";
+const READ_BAM_PATH: &str = "/data1/hifi_consensus/try2/merged.bam";
 fn main() {
     pipeline_redo_poa_get_topological_quality_score();
 }
@@ -37,10 +36,11 @@ fn pipeline_redo_poa_get_topological_quality_score () {
     // get the error locations
     let error_locations = get_error_bases_from_himut_vcf (); //chromosone, location, ref allele, alt allele
     // go through the error locations
-    let mut index = 0;
     for error_location in error_locations {
-        if index < 10000{
-            index += 1;
+        // start after this error location, 
+        let skip_location = 13451297;
+        let skip_chromosone = "chr1";
+        if (error_location.0 == skip_chromosone) && (error_location.1 <= skip_location) {
             continue;
         }
         println!("Error position {}:{} ref allele: {} alt allele: {}", error_location.0, error_location.1, error_location.2, error_location.3);
@@ -78,11 +78,11 @@ fn pipeline_redo_poa_get_topological_quality_score () {
             let target_node_child = Some(calculated_topology[position + 1]);
             
             let (parallel_nodes, parallel_num_incoming_seq, _) = get_parallel_nodes_with_topology_cut (skip_nodes, sequence_number,  calculated_topology[position], target_node_parent, target_node_child, calculated_graph);
-            let (calculated_quality_score, _, _, _) = base_quality_score_calculation (sequence_number, parallel_nodes, parallel_num_incoming_seq, calculated_consensus[position], calculated_graph);
-            let write_string = format!("Error position {}:{} ref allele: {} alt allele: {}\nPacbio base: {} quality: {}\nCalculated base: {} quality: {:.1$}", error_location.0, error_location.1, error_location.2, error_location.3, error_location.3, seq_name_qual_and_errorpos.2, calculated_consensus[position] as char, calculated_quality_score);
-            write_string_to_file("result/quality.txt", write_string);
-            let write_string = format!("Error position {}:{} ref allele: {} alt allele: {}\n {}", error_location.0, error_location.1, error_location.2, error_location.3, get_zoomed_graph_section(calculated_graph, &calculated_topology[position]));
-            write_string_to_file("result/graph.txt", write_string);
+            let (calculated_quality_score, _, parallel_bases, _) = base_quality_score_calculation (sequence_number, parallel_nodes, parallel_num_incoming_seq, calculated_consensus[position], calculated_graph);
+            let write_string = format!("Error position {}:{} ref allele: {} alt allele: {}\nPacbio base: \t{} quality: {}\nCalculated base: \t{} quality: {}\nParallel Bases: ACGT:{:?}\n\n", error_location.0, error_location.1, error_location.2, error_location.3, error_location.3, seq_name_qual_and_errorpos.2, calculated_consensus[position] as char, calculated_quality_score, parallel_bases);
+            write_string_to_file("result/quality.txt", &write_string);
+            let write_string = format!("{}\n{}\n\n", write_string, get_zoomed_graph_section(calculated_graph, &calculated_topology[position]));
+            write_string_to_file("result/graph.txt", &write_string);
         }
     }
 }
@@ -172,7 +172,7 @@ fn get_the_subreads_by_name (full_name: &String) -> Vec<String> {
     let mut split_text_iter = (full_name.split("/")).into_iter();
     let file_name = split_text_iter.next().unwrap();
     let required_id = split_text_iter.next().unwrap().parse::<i64>().unwrap();
-    let path = format!("{}{}{}", SUBREAD_SAM_PATH.to_string(), file_name, ".subreads.sam".to_string());
+    let path = format!("{}{}{}", DATA_PATH.to_string(), file_name, ".subreads.sam".to_string());
     if file_name.eq(&"m64125_201017_124255".to_string()) {
         return subread_vec;
     }

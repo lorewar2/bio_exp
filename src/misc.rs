@@ -19,7 +19,7 @@ const NUMBER_OF_RANDOM_SEQUENCES: usize = 5;
 const THREE_BASE_CONTEXT_READ_LENGTH: usize = 1000;
 const NUM_OF_ITER_FOR_ZOOMED_GRAPHS: usize = 4;
 
-pub fn write_string_to_file (file_name: impl AsRef<Path>, input_string: String) {
+pub fn write_string_to_file (file_name: impl AsRef<Path>, input_string: &String) {
     let mut file = OpenOptions::new().create(true).append(true).open(file_name).unwrap();
     writeln!(file, "{}", input_string).expect("result file cannot be written");
 }
