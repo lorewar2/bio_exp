@@ -38,9 +38,9 @@ fn pipeline_redo_poa_get_topological_quality_score () {
     // go through the error locations
     for error_location in error_locations {
         // start after this error location, 
-        let skip_location = 13451297;
+        let skip_location = 13405643;
         let skip_chromosone = "chr1";
-        if (error_location.0 == skip_chromosone) && (error_location.1 <= skip_location) {
+        if (error_location.0 == skip_chromosone) && (error_location.1 < skip_location) {
             continue;
         }
         println!("Error position {}:{} ref allele: {} alt allele: {}", error_location.0, error_location.1, error_location.2, error_location.3);
