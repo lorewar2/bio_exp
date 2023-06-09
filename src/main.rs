@@ -98,19 +98,19 @@ fn pipeline_redo_poa_get_topological_quality_score (profiler: &ProfilerGuard) {
                     total_quality += temp_score;
                 }
                 println!("BAND SIZE = {}, SCORE = {}", band_size, total_quality);
+                let write_string = format!("loc:{} band:{} quality:{}\n\n", error_location.1, band_size, total_quality);
+                write_string_to_file("result/profiling.txt", &write_string);
                 if let Ok(report) = profiler.report().build() {
-                    let file = File::create(format!("result/flamegraph{}.svg", band_size)).unwrap();
+                    let file = File::create(format!("result/flamegraph_{}_{}.svg", error_location.1, band_size)).unwrap();
                     report.flamegraph(file).unwrap();
                 };
-                band_size = band_size / 2;
+                band_size = band_size / 10;
                 if band_size <= 100 {
                     break;
                 }
             }
-            
             break;
         }
-        break;
     }
 }
 
