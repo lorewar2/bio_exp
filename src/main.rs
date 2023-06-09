@@ -8,6 +8,7 @@ use std::io::prelude::*;
 use std::io::BufReader;
 use std::fs::File;
 use std::io::SeekFrom;
+use pprof;
 
 use petgraph::Directed;
 use petgraph::Graph;
@@ -29,7 +30,13 @@ const MISMATCH: i32 = -2;
 const DATA_PATH: &str = "/data1/hifi_consensus/try2/";
 const READ_BAM_PATH: &str = "/data1/hifi_consensus/try2/merged.bam";
 fn main() {
+    let guard = pprof::ProfilerGuardBuilder::default().frequency(1000).blocklist(&["libc", "libgcc", "pthread", "vdso"]).build().unwrap();
     pipeline_redo_poa_get_topological_quality_score();
+    if let Ok(report) = guard.report().build() {
+        let file = File::create("result/flamegraph.svg").unwrap();
+        report.flamegraph(file).unwrap();
+    };
+    drop(guard);
 }
 
 fn pipeline_redo_poa_get_topological_quality_score () {
@@ -83,7 +90,9 @@ fn pipeline_redo_poa_get_topological_quality_score () {
             write_string_to_file("result/quality.txt", &write_string);
             let write_string = format!("{}\n{}\n\n", write_string, get_zoomed_graph_section(calculated_graph, &calculated_topology[position]));
             write_string_to_file("result/graph.txt", &write_string);
+            break;
         }
+        break;
     }
 }
 
