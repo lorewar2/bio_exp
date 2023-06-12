@@ -3,3 +3,4 @@ pub mod poa;
 pub mod poarustbio;
 pub mod poahomopolymer;
 pub mod poabanded;
+pub mod poabandedsmarter;
