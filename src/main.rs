@@ -4,9 +4,6 @@ mod generator;
 mod misc;
 mod quality;
 //use pprof;
-use crate::generator::simple::get_random_sequences_from_generator;
-use crate::alignment::poabandedsmarter::Aligner;
-use crate::alignment::pairwise::pairwise;
 use crate::misc::pipeline_redo_poa_get_topological_quality_score;
 const SEED: u64 = 2;
 const GAP_OPEN: i32 = -2;
@@ -17,7 +14,7 @@ const MISMATCH: i32 = -2;
 fn main() {
     pipeline_redo_poa_get_topological_quality_score();
     /* 
-    let sequences = get_random_sequences_from_generator(20000, 10, 6);
+    let sequences = get_random_sequences_from_generator(2000, 10, 6);
     let mut sequence_number = 0;
     let mut aligner = Aligner::new(MATCH, MISMATCH, GAP_OPEN, &sequences[0].as_bytes().to_vec(), 100);
     for sequence in &sequences {
@@ -35,6 +32,7 @@ fn main() {
     }
     println!("quality {}", total_quality);
     */
+
 }
 
 

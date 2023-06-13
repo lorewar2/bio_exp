@@ -98,20 +98,20 @@ impl Traceback {
         self.matrix[row].2 = end;
         if start == 0 {
             self.matrix[row].0.push(TracebackCell {
-                score: 0,
+                score: (row as i32) * gap_open,
                 op: AlignmentOperation::Del(None),
             });
         }
         else {
             self.matrix[row].0.push(TracebackCell {
-                score: start as i32 * gap_open,
-                op: AlignmentOperation::Del(None),
+                score: 0,
+                op: AlignmentOperation::Match(None),
             });
         }
-        for j in 1..=size {
+        for _ in 1..=size {
             self.matrix[row].0.push(TracebackCell {
-                score: ((start + j) as i32) * gap_open,
-                op: AlignmentOperation::Ins(None),
+                score: 0,
+                op: AlignmentOperation::Match(None),
             });
         }
     }
@@ -137,10 +137,16 @@ impl Traceback {
             let real_position = j - self.matrix[i].1;
             return &self.matrix[i].0[real_position];
         }
-        else {
+        else if j == 0 {
             return &TracebackCell {
                 score: 0,
                 op: AlignmentOperation::Del(None),
+            };
+        }
+        else {
+            return &TracebackCell {
+                score: 0,
+                op: AlignmentOperation::Match(None),
             };
         }
     }
@@ -251,7 +257,6 @@ impl BandedPoa {
             graph.add_edge(prev, node, 1);
             prev = node;
         }
-        //println!("Reference Graph: {:?}", Dot::with_config(&graph, &[Config::EdgeIndexLabel])); //added
         BandedPoa { match_score: match_score, mismatch_score: mismatch_score, gap_open_score: gap_open_score, graph, band_size}
     }
 
@@ -298,17 +303,14 @@ impl BandedPoa {
                         end = max + self.band_size as usize;
                         band_required_node.remove(x);
                     },
-                    // if not found just skip
-                    None => {
-                        continue;
-                    }
+                    // if not found do nothing
+                    None => {}
                 }
             }
             // reference base and index
             let r = self.graph.raw_nodes()[node.index()].weight; // reference base at previous index
-            //println!("Previous Index Reference Node being processed index:{} base:{}", node.index(), r); //added
             let i = node.index() + 1;
-            traceback.new_row(i, end - start, self.gap_open_score, start, end);
+            traceback.new_row(i, (end - start) + 1, self.gap_open_score, start, end);
             traceback.last = node;
             // iterate over the predecessors of this node
             let prevs: Vec<NodeIndex<usize>> =
@@ -487,17 +489,13 @@ impl BandedPoa {
         let mut next_in_path: Vec<usize> = vec![0; max_index + 1];
         //iterate thorugh the nodes in revere
         for node in topo_indices{
-            //print!("\nstart node: {:?}", self.graph.raw_nodes()[node.index()].weight);
             let mut best_weight_score_edge: (i32, f64, usize) = (-1 , -1.0, 123456789);
-            //let mut outEdges = self.graph.neighbors_directed(node, Outgoing).detach();
             let mut neighbour_nodes = self.graph.neighbors_directed(node, Outgoing);
             while let Some(neighbour_node) = neighbour_nodes.next() {
-                //print!(" end node: {:?}", self.graph.raw_nodes()[neighbour_node.index()].weight);
                 let mut edges = self.graph.edges_connecting(node, neighbour_node);
                 let mut weight: i32 = 0;
                 while let Some(edge) = edges.next() {
                     weight += edge.weight().clone();
-                    //print!(" Edge of weight {}", weight);
                 }
                 let weight_score_edge = (weight, scores[neighbour_node.index()], neighbour_node.index());
                 if weight_score_edge > best_weight_score_edge{

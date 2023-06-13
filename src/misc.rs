@@ -25,6 +25,7 @@ const THREE_BASE_CONTEXT_READ_LENGTH: usize = 1000;
 const NUM_OF_ITER_FOR_ZOOMED_GRAPHS: usize = 4;
 const DATA_PATH: &str = "/data1/hifi_consensus/try2/";
 const READ_BAM_PATH: &str = "/data1/hifi_consensus/try2/merged.bam";
+const BAND_SIZE: i32 = 200;
 
 pub fn pipeline_redo_poa_get_topological_quality_score () {
     // get the error locations
@@ -50,52 +51,52 @@ pub fn pipeline_redo_poa_get_topological_quality_score () {
             }
             // reverse the sub reads if score is low
             sub_reads = check_the_scores_and_change_alignment(sub_reads, &seq_name_qual_and_errorpos.0);
-            
             sub_reads.insert(0, seq_name_qual_and_errorpos.0.clone());
-            // do multiple for profiling
-            let mut band_size = 100;
-            loop {
-                println!("CURRENT BAND SIZE = {}", band_size);
-                // do poa with the read and subreads, get the poa and consensus
-                let mut sequence_number: usize = 0;
-                let mut aligner = Aligner::new(MATCH, MISMATCH, GAP_OPEN, &sub_reads[0].as_bytes().to_vec(), band_size);
-                for sub_read in &sub_reads {
-                    if sequence_number != 0 {
-                        aligner.global(&sub_read.as_bytes().to_vec()).add_to_graph();
-                    }
-                    sequence_number += 1;
-                    println!("Sequence {} processed", sequence_number);
+            println!("CURRENT BAND SIZE = {}", BAND_SIZE);
+            // do poa with the read and subreads, get the poa and consensus
+            let mut sequence_number: usize = 0;
+            let mut aligner = Aligner::new(MATCH, MISMATCH, GAP_OPEN, &sub_reads[0].as_bytes().to_vec(), BAND_SIZE);
+            
+            for sub_read in &sub_reads {
+                if sequence_number != 0 {
+                    aligner.global(&sub_read.as_bytes().to_vec()).add_to_graph();
                 }
-                let (calculated_consensus, calculated_topology) = aligner.poa.consensus(); //just poa
-                let calculated_graph: &Graph<u8, i32, Directed, usize> = aligner.graph();
-                // check if fixed (check the consensus location which is matched to the read error location)
-                let position = get_redone_consensus_error_position(&seq_name_qual_and_errorpos.0, &calculated_consensus, seq_name_qual_and_errorpos.3);
-                // calculate the quality score of the location
-                let skip_nodes: Vec<usize> = calculated_topology[0 .. position + 1].to_vec();
-                let target_node_parent = Some(calculated_topology[position - 1]);
-                let target_node_child = Some(calculated_topology[position + 1]);
-                let (parallel_nodes, parallel_num_incoming_seq, _) = get_parallel_nodes_with_topology_cut (skip_nodes, sequence_number,  calculated_topology[position], target_node_parent, target_node_child, calculated_graph);
-                let (calculated_quality_score, _, parallel_bases, _) = base_quality_score_calculation (sequence_number, parallel_nodes, parallel_num_incoming_seq, calculated_consensus[position], calculated_graph);
-                //let write_string = format!("Error position {}:{} ref allele: {} alt allele: {}\nPacbio base: \t{} quality: {}\nCalculated base: \t{} quality: {}\nParallel Bases: ACGT:{:?}\n\n", error_location.0, error_location.1, error_location.2, error_location.3, error_location.3, seq_name_qual_and_errorpos.2, calculated_consensus[position] as char, calculated_quality_score, parallel_bases);
-                //write_string_to_file("result/quality.txt", &write_string);
-                //let write_string = format!("{}\n{}\n\n", write_string, get_zoomed_graph_section(calculated_graph, &calculated_topology[position]));
-                //write_string_to_file("result/graph.txt", &write_string);
-
-                // quality score calculation
-                let mut total_quality = 0;
-                for sub_read in &sub_reads {
-                    let (_, temp_score) = pairwise(&calculated_consensus, &sub_read.as_bytes().to_vec(), MATCH, MISMATCH, GAP_OPEN, GAP_EXTEND);
-                    total_quality += temp_score;
-                }
-                println!("BAND SIZE = {}, SCORE = {}", band_size, total_quality);
-                let write_string = format!("loc:{} band:{} quality:{}\n\n", error_location.1, band_size, total_quality);
-                write_string_to_file("result/profiling.txt", &write_string);
-                if band_size == 0 {
-                    break;
-                }
-                band_size = 0;
+                sequence_number += 1;
+                println!("Sequence {} processed", sequence_number);
             }
-            break;
+            let (calculated_consensus, calculated_topology) = aligner.poa.consensus(); //just poa
+            let calculated_graph: &Graph<u8, i32, Directed, usize> = aligner.graph();
+            // check if fixed (check the consensus location which is matched to the read error location)
+            let pacbio_error_pos_node_index = seq_name_qual_and_errorpos.3;
+            println!("BASE {} ", seq_name_qual_and_errorpos.0.as_bytes()[pacbio_error_pos_node_index] as char);
+            let position;
+            match calculated_topology.iter().position(|r| *r == seq_name_qual_and_errorpos.3) {
+                Some(x) => {position = x;},
+                None => {position = get_redone_consensus_error_position(&seq_name_qual_and_errorpos.0, &calculated_consensus, seq_name_qual_and_errorpos.3);},
+            }
+            println!("pacbio position {} calculated position {},", seq_name_qual_and_errorpos.3, position);
+            // calculate the quality score of the location
+            let skip_nodes: Vec<usize> = calculated_topology[0 .. position + 1].to_vec();
+            let target_node_parent;
+            let target_node_child;
+            if position == 0 {
+                target_node_parent = None;
+            }
+            else {
+                target_node_parent = Some(calculated_topology[position - 1]);
+            }
+            if (position + 1) >= calculated_consensus.len() {
+                target_node_child = None;
+            }
+            else {
+                target_node_child = Some(calculated_topology[position + 1]);
+            }
+            let (parallel_nodes, parallel_num_incoming_seq, _) = get_parallel_nodes_with_topology_cut (skip_nodes, sequence_number,  calculated_topology[position], target_node_parent, target_node_child, calculated_graph);
+            let (calculated_quality_score, _, parallel_bases, _) = base_quality_score_calculation (sequence_number, parallel_nodes, parallel_num_incoming_seq, calculated_consensus[position], calculated_graph);
+            let write_string = format!("Error position {}:{} ref allele: {} alt allele: {}\nPacbio base: \t{} quality: {}\nCalculated base: \t{} quality: {}\nParallel Bases: ACGT:{:?}\n\n", error_location.0, error_location.1, error_location.2, error_location.3, error_location.3, seq_name_qual_and_errorpos.2, calculated_consensus[position] as char, calculated_quality_score, parallel_bases);
+            write_string_to_file("result/quality.txt", &write_string);
+            let write_string = format!("{}\n{}\n\n", write_string, get_zoomed_graph_section(calculated_graph, &calculated_topology[position]));
+            write_string_to_file("result/graph.txt", &write_string);
         }
     }
 }
