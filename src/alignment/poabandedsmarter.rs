@@ -315,7 +315,7 @@ impl BandedPoa {
             // iterate over the predecessors of this node
             let prevs: Vec<NodeIndex<usize>> =
                 self.graph.neighbors_directed(node, Incoming).collect();
-            let mut max_score_and_query_position: (i32, i32) = (MIN_SCORE, 0);
+            let mut scored_points: Vec<usize> = vec![];
             for (j_p, q) in query.iter().enumerate().skip(start) {
                 let j = j_p + 1;
                 if topo_index != 0 {
@@ -375,10 +375,7 @@ impl BandedPoa {
                         op: AlignmentOperation::Ins(Some(i - 1)),
                     },
                 );
-                if score.score >= max_score_and_query_position.0 {
-                    max_score_and_query_position.0 = score.score;
-                    max_score_and_query_position.1 = j_p as i32;
-                }
+                scored_points.push(j_p);
                 traceback.set(i, j, score);
             }
             topo_index += 1;
@@ -389,10 +386,10 @@ impl BandedPoa {
                     let position_option = band_required_node.iter().position(|r| r.0 == neighbour_node.index());
                     match position_option {
                         Some(x) => {
-                            band_required_node[x].1.push(max_score_and_query_position.1 as usize);
+                            band_required_node[x].1 = [band_required_node[x].1.clone(), scored_points.clone()].concat();
                         },
                         None => {
-                            band_required_node.push((neighbour_node.index(), vec![max_score_and_query_position.1 as usize]));
+                            band_required_node.push((neighbour_node.index(), scored_points.clone()));
                         }
                     }
                 }
