@@ -313,9 +313,9 @@ impl BandedPoa {
             traceback.new_row(i, (end - start) + 1, self.gap_open_score, start, end);
             traceback.last = node;
             // iterate over the predecessors of this node
-            let prevs: Vec<NodeIndex<usize>> =
-                self.graph.neighbors_directed(node, Incoming).collect();
-            let mut scored_points: Vec<usize> = vec![];
+            let prevs: Vec<NodeIndex<usize>> = self.graph.neighbors_directed(node, Incoming).collect();
+            let mut max_scored_point: usize = 0;
+            let mut max_score: i32 = i32::MIN;
             for (j_p, q) in query.iter().enumerate().skip(start) {
                 let j = j_p + 1;
                 if topo_index != 0 {
@@ -375,21 +375,40 @@ impl BandedPoa {
                         op: AlignmentOperation::Ins(Some(i - 1)),
                     },
                 );
-                scored_points.push(j_p);
+                if score.score > max_score {
+                    max_score = score.score;
+                    max_scored_point = j_p;
+                }
                 traceback.set(i, j, score);
             }
             topo_index += 1;
             // find connected nodes from this node, outgoing and save in band required node vec
             let mut neighbour_nodes = self.graph.neighbors_directed(node, Outgoing);
             if self.band_size != 0 {
+                let mut start = 0;
+                let mut end = query.len();
+                if self.band_size as usize > max_scored_point {
+
+                }
+                else {
+                    start = max_scored_point - self.band_size as usize;
+                }
+                if end < max_scored_point + self.band_size as usize {
+                    
+                }
+                else {
+                    end = max_scored_point + self.band_size as usize;
+                }
+
+                let temp_vec: Vec<usize> = (start..end).collect();
                 while let Some(neighbour_node) = neighbour_nodes.next() {
                     let position_option = band_required_node.iter().position(|r| r.0 == neighbour_node.index());
                     match position_option {
                         Some(x) => {
-                            band_required_node[x].1 = [band_required_node[x].1.clone(), scored_points.clone()].concat();
+                            band_required_node[x].1 = [band_required_node[x].1.clone(), temp_vec.clone()].concat();
                         },
                         None => {
-                            band_required_node.push((neighbour_node.index(), scored_points.clone()));
+                            band_required_node.push((neighbour_node.index(), temp_vec.clone()));
                         }
                     }
                 }
