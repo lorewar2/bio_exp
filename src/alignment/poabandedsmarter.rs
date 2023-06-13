@@ -315,6 +315,7 @@ impl BandedPoa {
             // iterate over the predecessors of this node
             let prevs: Vec<NodeIndex<usize>> = self.graph.neighbors_directed(node, Incoming).collect();
             let mut score_position: Vec<(i32, usize)> = vec![];
+            let mut max_score = i32::MIN;
             for (j_p, q) in query.iter().enumerate().skip(start) {
                 let j = j_p + 1;
                 if topo_index != 0 {
@@ -374,14 +375,18 @@ impl BandedPoa {
                         op: AlignmentOperation::Ins(Some(i - 1)),
                     },
                 );
-                score_position.push((score.score, j_p));
+                if score.score > max_score {
+                    max_score = score.score;
+                    score_position.push((score.score, j_p));
+                }
                 traceback.set(i, j, score);
             }
             topo_index += 1;
             // find connected nodes from this node, outgoing and save in band required node vec
             let mut neighbour_nodes = self.graph.neighbors_directed(node, Outgoing);
             if self.band_size != 0 {
-                score_position.sort_by(|a, b| a.1.cmp(&b.1));
+                score_position.sort_by(|a, b| b.0.cmp(&a.0));
+                println!("{:?}", score_position);
                 let mut index = 0;
                 let mut temp_vec = vec![];
                 for temp in score_position {
