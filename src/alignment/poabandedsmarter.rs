@@ -64,7 +64,7 @@ pub struct Traceback {
     // store the last visited node in topological order so that
     // we can index into the end of the alignment when we backtrack
     last: NodeIndex<usize>,
-    matrix: Vec<Vec<TracebackCell>>,
+    matrix: Vec<(Vec<TracebackCell>, usize, usize)>,
 }
 
 impl Traceback {
@@ -74,17 +74,18 @@ impl Traceback {
     ///
     /// * `m` - the number of nodes in the DAG
     /// * `n` - the length of the query sequence
-    fn with_capacity(m: usize, n: usize) -> Self {
-        let matrix = vec![
-            vec![
-                TracebackCell {
-                    score: 0,
-                    op: AlignmentOperation::Match(None)
-                };
-                n + 1
-            ];
-            m + 1
-        ];
+    fn with_capacity(m: usize, n: usize, gap_open: i32) -> Self {
+        let mut matrix: Vec<(Vec<TracebackCell>, usize, usize)> = vec![(vec![], 0, n); m + 1];
+        for j in 0..=n {
+            matrix[0].0.push(TracebackCell {
+                score: (j as i32) * gap_open,
+                op: AlignmentOperation::Ins(None),
+            });
+        }
+        matrix[0].0[0] = TracebackCell {
+            score: 0,
+            op: AlignmentOperation::Match(None),
+        };
         Traceback {
             rows: m,
             cols: n,
@@ -92,30 +93,28 @@ impl Traceback {
             matrix,
         }
     }
-
-    /// Populate the edges of the traceback matrix
-    fn initialize_scores(&mut self, gap_open: i32) {
-        for (i, row) in self
-            .matrix
-            .iter_mut()
-            .enumerate()
-            .take(self.rows + 1)
-            .skip(1)
-        {
-            // TODO: these should be -1 * distance from head node
-            row[0] = TracebackCell {
-                score: (i as i32) * gap_open, // gap_open penalty
+    fn new_row(&mut self, row: usize, size: usize, gap_open: i32, start: usize, end: usize) {
+        self.matrix[row].1 = start;
+        self.matrix[row].2 = end;
+        if start == 0 {
+            self.matrix[row].0.push(TracebackCell {
+                score: 0,
                 op: AlignmentOperation::Del(None),
-            };
+            });
         }
-        for j in 1..=self.cols {
-            self.matrix[0][j] = TracebackCell {
-                score: (j as i32) * gap_open,
+        else {
+            self.matrix[row].0.push(TracebackCell {
+                score: start as i32 * gap_open,
+                op: AlignmentOperation::Del(None),
+            });
+        }
+        for j in 1..=size {
+            self.matrix[row].0.push(TracebackCell {
+                score: ((start + j) as i32) * gap_open,
                 op: AlignmentOperation::Ins(None),
-            };
+            });
         }
     }
-
     fn new() -> Self {
         Traceback {
             rows: 0,
@@ -126,25 +125,38 @@ impl Traceback {
     }
 
     fn set(&mut self, i: usize, j: usize, cell: TracebackCell) {
-        self.matrix[i][j] = cell;
+        // if j is less than start, if j is greater than end, do nothing
+        if !(self.matrix[i].1 > j || self.matrix[i].2 < j) {
+            let real_position = j - self.matrix[i].1;
+            self.matrix[i].0[real_position] = cell;
+        }
     }
 
     fn get(&self, i: usize, j: usize) -> &TracebackCell {
-        &self.matrix[i][j]
+        if !(self.matrix[i].1 > j || self.matrix[i].2 < j) {
+            let real_position = j - self.matrix[i].1;
+            return &self.matrix[i].0[real_position];
+        }
+        else {
+            return &TracebackCell {
+                score: 0,
+                op: AlignmentOperation::Del(None),
+            };
+        }
     }
     pub fn alignment(&self) -> Alignment {
         // optimal AlignmentOperation path
         let mut ops: Vec<AlignmentOperation> = vec![];
-
+        
         // Now backtrack through the matrix to construct an optimal path
         let mut i = self.last.index() + 1;
         let mut j = self.cols;
-
+        
         while i > 0 || j > 0 {
             // push operation and edge corresponding to (one of the) optimal
             // routes
-            ops.push(self.matrix[i][j].op.clone());
-            match self.matrix[i][j].op {
+            ops.push(self.get(i,j).op.clone());
+            match self.get(i,j).op {
                 AlignmentOperation::Match(Some((p, _))) => {
                     i = p + 1;
                     j -= 1;
@@ -168,11 +180,9 @@ impl Traceback {
                 }
             }
         }
-
         ops.reverse();
-
         Alignment {
-            score: self.matrix[self.last.index() + 1][self.cols].score,
+            score: self.get(self.last.index() + 1, self.cols).score,
             operations: ops,
         }
     }
@@ -253,20 +263,8 @@ impl BandedPoa {
         assert!(self.graph.node_count() != 0);
         // dimensions of the traceback matrix
         let (m, n) = (self.graph.node_count(), query.len());
-        let mut traceback = Traceback::with_capacity(m, n);
-        traceback.initialize_scores(self.gap_open_score);
-        //println!("Printing the  empty Initialized matrix");//added
-        //traceback.print(&self.graph, query);//added
-        traceback.set(
-            0,
-            0,
-            TracebackCell {
-                score: 0,
-                op: AlignmentOperation::Match(None),
-            },
-        );
+        let mut traceback = Traceback::with_capacity(m, n, self.gap_open_score);
         // construct the score matrix (O(n^2) space)
-        //println!("Topological sort of reference graph!!"); //added
         let mut topo = Topo::new(&self.graph);
         let mut topo_index = 0;
         // the band required nodes
@@ -306,18 +304,15 @@ impl BandedPoa {
                     }
                 }
             }
-            //println!("BAND SIZE = {}", end - start);
             // reference base and index
             let r = self.graph.raw_nodes()[node.index()].weight; // reference base at previous index
             //println!("Previous Index Reference Node being processed index:{} base:{}", node.index(), r); //added
             let i = node.index() + 1;
+            traceback.new_row(i, end - start, self.gap_open_score, start, end);
             traceback.last = node;
             // iterate over the predecessors of this node
             let prevs: Vec<NodeIndex<usize>> =
                 self.graph.neighbors_directed(node, Incoming).collect();
-            //println!("Nodes with directed edges to current node:{:?}", prevs); //added
-            // query base and its index in the DAG (traceback matrix rows)
-            //println!("{}", topo_index);
             let mut max_score_and_query_position: (i32, i32) = (MIN_SCORE, 0);
             for (j_p, q) in query.iter().enumerate().skip(start) {
                 let j = j_p + 1;

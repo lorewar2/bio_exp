@@ -17,7 +17,7 @@ const MISMATCH: i32 = -2;
 fn main() {
     pipeline_redo_poa_get_topological_quality_score();
     /* 
-    let sequences = get_random_sequences_from_generator(10000, 10, 6);
+    let sequences = get_random_sequences_from_generator(20000, 10, 6);
     let mut sequence_number = 0;
     let mut aligner = Aligner::new(MATCH, MISMATCH, GAP_OPEN, &sequences[0].as_bytes().to_vec(), 100);
     for sequence in &sequences {
