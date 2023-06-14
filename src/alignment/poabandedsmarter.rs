@@ -94,6 +94,7 @@ impl Traceback {
         }
     }
     fn new_row(&mut self, row: usize, size: usize, gap_open: i32, start: usize, end: usize) {
+        println!("row {} start {} end {}", row, start, end);
         self.matrix[row].1 = start;
         self.matrix[row].2 = end;
         if start == 0 {
@@ -104,13 +105,13 @@ impl Traceback {
         }
         else {
             self.matrix[row].0.push(TracebackCell {
-                score: 0,
+                score: i32::MIN,
                 op: AlignmentOperation::Match(None),
             });
         }
         for _ in 1..=size {
             self.matrix[row].0.push(TracebackCell {
-                score: 0,
+                score: i32::MIN,
                 op: AlignmentOperation::Match(None),
             });
         }
@@ -139,14 +140,20 @@ impl Traceback {
         }
         else if j == 0 {
             return &TracebackCell {
-                score: 0,
+                score: i32::MIN,
                 op: AlignmentOperation::Del(None),
+            };
+        }
+        else if j > self.matrix[i].2 {
+            return &TracebackCell {
+                score: i32::MIN,
+                op: AlignmentOperation::Ins(None),
             };
         }
         else {
             return &TracebackCell {
-                score: 0,
-                op: AlignmentOperation::Match(None),
+                score: i32::MIN,
+                op: AlignmentOperation::Del(None),
             };
         }
     }
@@ -157,7 +164,7 @@ impl Traceback {
         // Now backtrack through the matrix to construct an optimal path
         let mut i = self.last.index() + 1;
         let mut j = self.cols;
-        
+        let mut test_vector: Vec<usize> = vec![0; 6];
         while i > 0 || j > 0 {
             // push operation and edge corresponding to (one of the) optimal
             // routes
@@ -166,26 +173,39 @@ impl Traceback {
                 AlignmentOperation::Match(Some((p, _))) => {
                     i = p + 1;
                     j -= 1;
+                    test_vector[0] += 1;
+                    println!("MATCHSOME");
                 }
                 AlignmentOperation::Del(Some((p, _))) => {
                     i = p + 1;
+                    test_vector[1] += 1;
+                    println!("DELSOM");
                 }
                 AlignmentOperation::Ins(Some(p)) => {
                     i = p + 1;
                     j -= 1;
+                    test_vector[2] += 1;
+                    println!("INSSOM");
                 }
                 AlignmentOperation::Match(None) => {
                     i -= 1; // break;
                     j -= 1;
+                    test_vector[3] += 1;
+                    println!("MATCHNON");
                 }
                 AlignmentOperation::Del(None) => {
                     i -= 1; // j -= 1;
+                    test_vector[4] += 1;
+                    println!("DELNON");
                 }
                 AlignmentOperation::Ins(None) => {
                     j -= 1; // i -= 1;
+                    test_vector[5] += 1;
+                    println!("INSNON");
                 }
             }
         }
+        println!("MS DS IS MN DN IN {:?}", test_vector);
         ops.reverse();
         Alignment {
             score: self.get(self.last.index() + 1, self.cols).score,
@@ -310,6 +330,7 @@ impl BandedPoa {
             // reference base and index
             let r = self.graph.raw_nodes()[node.index()].weight; // reference base at previous index
             let i = node.index() + 1;
+            println!("query len {}", query.len());
             traceback.new_row(i, (end - start) + 1, self.gap_open_score, start, end);
             traceback.last = node;
             // iterate over the predecessors of this node
@@ -386,13 +407,12 @@ impl BandedPoa {
             let mut neighbour_nodes = self.graph.neighbors_directed(node, Outgoing);
             if self.band_size != 0 {
                 score_position.sort_by(|a, b| b.0.cmp(&a.0));
-                println!("{:?}", score_position);
                 let mut index = 0;
                 let mut temp_vec = vec![];
                 for temp in score_position {
                     temp_vec.push(temp.1);
                     index += 1;
-                    if index < 10 {
+                    if index > 20 {
                         break;
                     }
                 }
