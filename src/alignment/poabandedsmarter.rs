@@ -153,7 +153,7 @@ impl Traceback {
         else {
             return &TracebackCell {
                 score: MIN_SCORE,
-                op: AlignmentOperation::Del(None),
+                op: AlignmentOperation::Match(None),
             };
         }
     }
