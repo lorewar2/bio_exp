@@ -94,7 +94,7 @@ impl Traceback {
         }
     }
     fn new_row(&mut self, row: usize, size: usize, gap_open: i32, start: usize, end: usize) {
-        println!("row {} start {} end {}", row, start, end);
+        //println!("row {} start {} end {}", row, start, end);
         self.matrix[row].1 = start;
         self.matrix[row].2 = end;
         if start == 0 {
@@ -105,13 +105,13 @@ impl Traceback {
         }
         else {
             self.matrix[row].0.push(TracebackCell {
-                score: i32::MIN,
+                score: MIN_SCORE,
                 op: AlignmentOperation::Match(None),
             });
         }
         for _ in 1..=size {
             self.matrix[row].0.push(TracebackCell {
-                score: i32::MIN,
+                score: MIN_SCORE,
                 op: AlignmentOperation::Match(None),
             });
         }
@@ -140,19 +140,19 @@ impl Traceback {
         }
         else if j == 0 {
             return &TracebackCell {
-                score: i32::MIN,
+                score: MIN_SCORE,
                 op: AlignmentOperation::Del(None),
             };
         }
         else if j > self.matrix[i].2 {
             return &TracebackCell {
-                score: i32::MIN,
+                score: MIN_SCORE,
                 op: AlignmentOperation::Ins(None),
             };
         }
         else {
             return &TracebackCell {
-                score: i32::MIN,
+                score: MIN_SCORE,
                 op: AlignmentOperation::Del(None),
             };
         }
@@ -174,34 +174,34 @@ impl Traceback {
                     i = p + 1;
                     j -= 1;
                     test_vector[0] += 1;
-                    println!("MATCHSOME");
+                    //println!("MATCHSOME");
                 }
                 AlignmentOperation::Del(Some((p, _))) => {
                     i = p + 1;
                     test_vector[1] += 1;
-                    println!("DELSOM");
+                    //println!("DELSOM");
                 }
                 AlignmentOperation::Ins(Some(p)) => {
                     i = p + 1;
                     j -= 1;
                     test_vector[2] += 1;
-                    println!("INSSOM");
+                    //println!("INSSOM");
                 }
                 AlignmentOperation::Match(None) => {
                     i -= 1; // break;
                     j -= 1;
                     test_vector[3] += 1;
-                    println!("MATCHNON");
+                    //println!("MATCHNON");
                 }
                 AlignmentOperation::Del(None) => {
                     i -= 1; // j -= 1;
                     test_vector[4] += 1;
-                    println!("DELNON");
+                    //println!("DELNON");
                 }
                 AlignmentOperation::Ins(None) => {
                     j -= 1; // i -= 1;
                     test_vector[5] += 1;
-                    println!("INSNON");
+                    //println!("INSNON");
                 }
             }
         }
@@ -297,7 +297,7 @@ impl BandedPoa {
         while let Some(node) = topo.next(&self.graph) {
             let mut start = 0;
             let mut end = query.len();
-            if topo_index != 0 && self.band_size != 0 {
+            if (topo_index != 0) && (self.band_size != 0) {
                 let position_option = band_required_node.iter().position(|r| r.0 == node.index());
                 match position_option {
                     // find the node in the band_required_node
@@ -321,6 +321,11 @@ impl BandedPoa {
                             start = 0;
                         }
                         end = max + self.band_size as usize;
+                        if topo_index > m - (m / 10) {
+                            if end < topo_index + 1 {
+                                end = topo_index + 1;
+                            }
+                        }
                         band_required_node.remove(x);
                     },
                     // if not found do nothing
@@ -330,17 +335,17 @@ impl BandedPoa {
             // reference base and index
             let r = self.graph.raw_nodes()[node.index()].weight; // reference base at previous index
             let i = node.index() + 1;
-            println!("query len {}", query.len());
+            //println!("query len {}", query.len());
             traceback.new_row(i, (end - start) + 1, self.gap_open_score, start, end);
             traceback.last = node;
             // iterate over the predecessors of this node
             let prevs: Vec<NodeIndex<usize>> = self.graph.neighbors_directed(node, Incoming).collect();
             let mut score_position: Vec<(i32, usize)> = vec![];
-            let mut max_score = i32::MIN;
+            let mut max_score = MIN_SCORE;
             for (j_p, q) in query.iter().enumerate().skip(start) {
                 let j = j_p + 1;
                 if topo_index != 0 {
-                    if j_p > end {                   
+                    if j_p > end {
                         break;
                     }
                 }
@@ -400,8 +405,10 @@ impl BandedPoa {
                     max_score = score.score;
                     score_position.push((score.score, j_p));
                 }
+                //print!("{} ", score.score);
                 traceback.set(i, j, score);
             }
+            //println!("");
             topo_index += 1;
             // find connected nodes from this node, outgoing and save in band required node vec
             let mut neighbour_nodes = self.graph.neighbors_directed(node, Outgoing);
