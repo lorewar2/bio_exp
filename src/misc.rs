@@ -101,6 +101,7 @@ pub fn pipeline_redo_poa_get_topological_quality_score () {
             write_string_to_file("result/graph.txt", &write_string);
             */
         }
+        break;
     }
 }
 
@@ -117,9 +118,17 @@ fn get_the_subreads_by_name (error_chr: &String, error_pos: usize, full_name: &S
     bam_reader.fetch((error_chr, error_pos as i64, error_pos as i64 + 1)).unwrap();
     'read_loop: for read in bam_reader.records() {
         let readunwrapped = read.unwrap();
-        // get the data
-        let mut read_index = 0;
+        // get the required name
         let read_name = String::from_utf8(readunwrapped.qname().to_vec()).expect("");
+        let mut split_read_name_iter = (full_name.split("/")).into_iter();
+        split_read_name_iter.next().unwrap();
+        let css_id = split_read_name_iter.next().unwrap().parse::<i64>().unwrap();
+        if required_id != css_id {
+            continue;
+        }
+        
+        let mut read_index = 0;
+        
         println!("readname {}", read_name);
         let read_vec = readunwrapped.seq().as_bytes().to_vec();
         let read_string = String::from_utf8(readunwrapped.seq().as_bytes().to_vec()).expect("");
