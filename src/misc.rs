@@ -44,8 +44,10 @@ pub fn pipeline_redo_poa_get_topological_quality_score () {
         for seq_name_qual_and_errorpos in seq_name_qual_and_errorpos_vec {
             println!("Processing ccs file: {}", seq_name_qual_and_errorpos.1);
             // find the subreads of that ccs
-            let mut sub_reads = get_the_subreads_by_name(&seq_name_qual_and_errorpos.1);
+            let mut sub_reads = get_the_subreads_by_name(&error_location.0, error_location.1, &seq_name_qual_and_errorpos.1);
+            break;
             // skip if no subreads, errors and stuff
+            /* 
             if sub_reads.len() == 0 {
                 continue;
             }
@@ -97,8 +99,42 @@ pub fn pipeline_redo_poa_get_topological_quality_score () {
             write_string_to_file("result/quality.txt", &write_string);
             let write_string = format!("{}\n{}\n\n", write_string, get_zoomed_graph_section(calculated_graph, &calculated_topology[position]));
             write_string_to_file("result/graph.txt", &write_string);
+            */
         }
     }
+}
+
+fn get_the_subreads_by_name (error_chr: &String, error_pos: usize, full_name: &String) -> Vec<String> {
+    let mut subread_vec: Vec<String> = vec![];
+    let mut split_text_iter = (full_name.split("/")).into_iter();
+    let file_name = split_text_iter.next().unwrap();
+    let required_id = split_text_iter.next().unwrap().parse::<i64>().unwrap();
+    let path = format!("{}{}{}", DATA_PATH.to_string(), file_name, ".subreads.mapped.bam".to_string());
+    if file_name.eq(&"m64125_201017_124255".to_string()) {
+        return subread_vec;
+    }
+    let mut bam_reader = BamIndexedReader::from_path(path).unwrap();
+    bam_reader.fetch((error_chr, error_pos as i64, error_pos as i64 + 1)).unwrap();
+    'read_loop: for read in bam_reader.records() {
+        let readunwrapped = read.unwrap();
+        // get the data
+        let mut read_index = 0;
+        let read_name = String::from_utf8(readunwrapped.qname().to_vec()).expect("");
+        println!("readname {}", read_name);
+        let read_vec = readunwrapped.seq().as_bytes().to_vec();
+        let read_string = String::from_utf8(readunwrapped.seq().as_bytes().to_vec()).expect("");
+        if readunwrapped.seq_len() < 5 {
+            continue;
+        }
+        // get the location from the cigar processing
+        let mut temp_character_vec: Vec<char> = vec![];
+        // get the read start position
+        let read_start_pos = readunwrapped.pos() as usize;
+        let mut current_ref_pos = read_start_pos;
+        let mut current_read_pos = 0;
+    }
+    
+    subread_vec
 }
 
 fn get_redone_consensus_error_position (pacbio_consensus: &String, calculated_consensus: &Vec<u8>, pacbio_error_position: usize) -> usize {
@@ -181,7 +217,7 @@ fn check_the_scores_and_change_alignment (seqvec: Vec<String>, pacbio_consensus:
     seqvec2
 }
 
-fn get_the_subreads_by_name (full_name: &String) -> Vec<String> {
+fn get_the_subreads_by_name_old (full_name: &String) -> Vec<String> {
     let mut subread_vec: Vec<String> = vec![];
     let mut split_text_iter = (full_name.split("/")).into_iter();
     let file_name = split_text_iter.next().unwrap();

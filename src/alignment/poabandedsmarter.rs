@@ -75,6 +75,7 @@ impl Traceback {
     /// * `m` - the number of nodes in the DAG
     /// * `n` - the length of the query sequence
     fn with_capacity(m: usize, n: usize, gap_open: i32) -> Self {
+        // each row of matrix contain start end position and vec of traceback cells
         let mut matrix: Vec<(Vec<TracebackCell>, usize, usize)> = vec![(vec![], 0, n); m + 1];
         for j in 0..=n {
             matrix[0].0.push(TracebackCell {
@@ -405,7 +406,6 @@ impl BandedPoa {
                     max_score = score.score;
                     score_position.push((score.score, j_p));
                 }
-                //print!("{} ", score.score);
                 traceback.set(i, j, score);
             }
             //println!("");
