@@ -322,6 +322,7 @@ fn get_the_subreads_by_name_old (full_name: &String) -> Vec<String> {
             Ok(x) => {current_id = x;},
             Err(_) => {break;},
         }
+        let subread_loc = temp_split_iter.next().unwrap();
         if current_id != required_id {
             continue_count += 1;
             if continue_count > continue_threshold {
@@ -329,6 +330,7 @@ fn get_the_subreads_by_name_old (full_name: &String) -> Vec<String> {
             }
         }
         else {
+            println!("{}/{}", current_id, subread_loc);
             // write code to extract the sequence and add to subread_vec
             let mut data_split_iter = (buffer.split("\t")).into_iter();
             for _ in 0..9 {data_split_iter.next();}
