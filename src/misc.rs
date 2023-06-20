@@ -45,6 +45,7 @@ pub fn pipeline_redo_poa_get_topological_quality_score () {
             println!("Processing ccs file: {}", seq_name_qual_and_errorpos.1);
             // find the subreads of that ccs
             let mut sub_reads = get_the_subreads_by_name(&error_location.0, error_location.1, &seq_name_qual_and_errorpos.1);
+            get_the_subreads_by_name_old(&seq_name_qual_and_errorpos.1);
             break;
             // skip if no subreads, errors and stuff
             /* 
@@ -101,7 +102,6 @@ pub fn pipeline_redo_poa_get_topological_quality_score () {
             write_string_to_file("result/graph.txt", &write_string);
             */
         }
-        break;
     }
 }
 
@@ -116,17 +116,18 @@ fn get_the_subreads_by_name (error_chr: &String, error_pos: usize, full_name: &S
     }
     let mut bam_reader = BamIndexedReader::from_path(path).unwrap();
     bam_reader.fetch((error_chr, error_pos as i64, error_pos as i64 + 1)).unwrap();
+    let mut index = 0;
     'read_loop: for read in bam_reader.records() {
         let readunwrapped = read.unwrap();
         // get the required name
         let read_name = String::from_utf8(readunwrapped.qname().to_vec()).expect("");
-        let mut split_read_name_iter = (full_name.split("/")).into_iter();
+        let mut split_read_name_iter = (read_name.split("/")).into_iter();
         split_read_name_iter.next().unwrap();
         let css_id = split_read_name_iter.next().unwrap().parse::<i64>().unwrap();
         if required_id != css_id {
             continue;
         }
-        
+
         let mut read_index = 0;
         
         println!("readname {}", read_name);
@@ -141,7 +142,9 @@ fn get_the_subreads_by_name (error_chr: &String, error_pos: usize, full_name: &S
         let read_start_pos = readunwrapped.pos() as usize;
         let mut current_ref_pos = read_start_pos;
         let mut current_read_pos = 0;
+        index += 1;
     }
+    println!("new count = {}", index);
     
     subread_vec
 }
@@ -333,7 +336,7 @@ fn get_the_subreads_by_name_old (full_name: &String) -> Vec<String> {
             count += 1;
         }
     }
-    println!("count = {}", count);
+    println!("old count = {}", count);
     subread_vec
 }
 
