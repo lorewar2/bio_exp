@@ -111,8 +111,9 @@ pub fn read_index_file_for_sam (file_name: &String, read_name: usize) -> usize {
             Ok(x) => {current_id = x;},
             Err(_) => {break;},
         }
-        required_position = temp_split_iter.next().unwrap().parse::<usize>().unwrap();
-        println!("curr: {}", current_id);
+        let required_position_string = temp_split_iter.next().unwrap().replace("\n", "");
+        required_position = required_position_string.parse::<usize>().unwrap();
+        //println!("curr: {}", current_id);
         // jumping 
         if read_name == current_id {
             break;
@@ -210,7 +211,6 @@ pub fn pipeline_redo_poa_get_topological_quality_score () {
             println!("Processing ccs file: {}", seq_name_qual_and_errorpos.1);
             // find the subreads of that ccs
             let mut sub_reads = get_the_subreads_by_name_sam(&seq_name_qual_and_errorpos.1);
-            break;
             // skip if no subreads, errors and stuff
             /* 
             if sub_reads.len() == 0 {
@@ -266,7 +266,6 @@ pub fn pipeline_redo_poa_get_topological_quality_score () {
             write_string_to_file("result/graph.txt", &write_string);
             */
         }
-        break;
     }
 }
 
