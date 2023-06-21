@@ -122,7 +122,7 @@ pub fn make_index_file_for_sam (file_name: &String) -> File {
     reader.seek(SeekFrom::Start(0)).expect("");
     
     // go through the file saving the sequence indices
-    let mut read_name_pos: Vec<(usize, usize)> = vec![]; 
+    let mut write_string: String = "".to_string();
     let mut current_position;
     let mut current_ccs: usize;
     let mut prev_ccs: usize = 0;
@@ -145,18 +145,16 @@ pub fn make_index_file_for_sam (file_name: &String) -> File {
         if current_ccs != prev_ccs {
             prev_ccs = current_ccs;
             current_position = reader.stream_position().unwrap();
-            read_name_pos.push((current_ccs, current_position as usize));
+            write_string = format!("{}\n{}\t{}", write_string, current_ccs, current_position);
             index += 1;
             // display progress and write the current data
             if index % 100000 == 0 {
                 println!("Progress {}%", (current_position * 100) / end_file_pos);
-                let write_string = format!("{:#?}", read_name_pos);
                 write_string_to_file(&write_path, &write_string);
-                read_name_pos = vec![];
+                write_string = "".to_string();
             }
         }
     }
-    let write_string = format!("{:#?}", read_name_pos);
     // write the rest
     write_string_to_file(&write_path, &write_string);
     File::open(&write_path).unwrap()
