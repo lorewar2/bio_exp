@@ -27,6 +27,52 @@ const DATA_PATH: &str = "/data1/hifi_consensus/try2/";
 const READ_BAM_PATH: &str = "/data1/hifi_consensus/try2/merged.bam";
 const BAND_SIZE: i32 = 200;
 
+pub fn make_index_file_for_sam (file_name: &String) {
+    println!("Making index file for {}", file_name);
+    let path = format!("{}", file_name);
+    // get the file name and load it
+    // file stuff init
+    let f = File::open(&path).unwrap();
+    let mut reader = BufReader::new(f);
+    let mut buffer = String::new();
+
+    // get the file length
+    reader.seek(SeekFrom::End(0)).expect("");
+    let end_file_pos = reader.stream_position().unwrap();
+    
+    //go back to start
+    reader.seek(SeekFrom::Start(0)).expect("");
+    
+    // go through the file saving the sequence indices
+    let pos_read_name: Vec<(usize, usize)> = vec![]; 
+    let mut current_ccs: usize;
+    let mut prev_ccs: usize = 0;
+
+    loop {
+        // get the next line if available
+        buffer.clear();
+        match reader.read_line(&mut buffer) {
+            Ok(_) => {},
+            Err(_) => {break;},
+        }
+        // split it to find the id
+        let mut temp_split_iter = (buffer.split("/")).into_iter();
+        temp_split_iter.next();
+        match temp_split_iter.next().unwrap().parse::<usize>() {
+            Ok(x) => {current_ccs = x;},
+            Err(_) => {continue;},
+        }
+        // add to the pos_read_name if different
+        if current_ccs != prev_ccs {
+            prev_ccs = current_ccs;
+            let current_position = reader.stream_position().unwrap();
+            println!("position {} readname {}", current_position, current_ccs);
+        }
+    }
+    // make a index file
+
+}
+
 pub fn pipeline_redo_poa_get_topological_quality_score () {
     // get the error locations
     let error_locations = get_error_bases_from_himut_vcf (); //chromosone, location, ref allele, alt allele
@@ -44,8 +90,7 @@ pub fn pipeline_redo_poa_get_topological_quality_score () {
         for seq_name_qual_and_errorpos in seq_name_qual_and_errorpos_vec {
             println!("Processing ccs file: {}", seq_name_qual_and_errorpos.1);
             // find the subreads of that ccs
-            let mut sub_reads = get_the_subreads_by_name(&error_location.0, error_location.1, &seq_name_qual_and_errorpos.1);
-            get_the_subreads_by_name_old(&seq_name_qual_and_errorpos.1);
+            let mut sub_reads = get_the_subreads_by_name_sam(&seq_name_qual_and_errorpos.1);
             break;
             // skip if no subreads, errors and stuff
             /* 
@@ -105,7 +150,7 @@ pub fn pipeline_redo_poa_get_topological_quality_score () {
     }
 }
 
-fn get_the_subreads_by_name (error_chr: &String, error_pos: usize, full_name: &String) -> Vec<String> {
+fn get_the_subreads_by_name_bam (error_chr: &String, error_pos: usize, full_name: &String) -> Vec<String> {
     let mut subread_vec: Vec<String> = vec![];
     let mut split_text_iter = (full_name.split("/")).into_iter();
     let file_name = split_text_iter.next().unwrap();
@@ -229,7 +274,7 @@ fn check_the_scores_and_change_alignment (seqvec: Vec<String>, pacbio_consensus:
     seqvec2
 }
 
-fn get_the_subreads_by_name_old (full_name: &String) -> Vec<String> {
+fn get_the_subreads_by_name_sam (full_name: &String) -> Vec<String> {
     let mut subread_vec: Vec<String> = vec![];
     let mut split_text_iter = (full_name.split("/")).into_iter();
     let file_name = split_text_iter.next().unwrap();
