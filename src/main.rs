@@ -16,7 +16,7 @@ const MATCH: i32 = 2;
 const MISMATCH: i32 = -2;
 
 fn main() {
-    make_index_file_for_sam (&"/data1/hifi_consensus/try2/m64125_201109_000332.subreads.sam".to_string());
+    make_index_file_for_sam (&"m64125_201109_000332".to_string());
     //pipeline_redo_poa_get_topological_quality_score();
      
     /*let sequences = get_random_sequences_from_generator(2000, 2, 6);

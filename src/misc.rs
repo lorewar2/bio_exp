@@ -27,9 +27,87 @@ const DATA_PATH: &str = "/data1/hifi_consensus/try2/";
 const READ_BAM_PATH: &str = "/data1/hifi_consensus/try2/merged.bam";
 const BAND_SIZE: i32 = 200;
 
-pub fn make_index_file_for_sam (file_name: &String) {
-    println!("Making index file for {}", file_name);
-    let path = format!("{}", file_name);
+fn get_the_subreads_by_name_sam (full_name: &String) -> Vec<String> {
+    let mut subread_vec: Vec<String> = vec![];
+    let mut split_text_iter = (full_name.split("/")).into_iter();
+    let file_name = split_text_iter.next().unwrap();
+    let required_id = split_text_iter.next().unwrap().parse::<i64>().unwrap();
+    let path = format!("{}{}{}", DATA_PATH.to_string(), file_name, ".subreads.sam".to_string());
+    if file_name.eq(&"m64125_201017_124255".to_string()) {
+        return subread_vec;
+    }
+    // file stuff init
+    let f = File::open(&path).unwrap();
+    let mut reader = BufReader::new(f);
+    let mut buffer = String::new();
+
+    
+    reader.seek(SeekFrom::Start(0)).expect("");
+    
+    subread_vec
+}
+
+pub fn read_index_file_for_sam (file_name: &String, read_name: usize) -> usize {
+    // get the file location from index file if no index found make one
+    let index_path = format!("result/{}.cui", file_name);
+    let f;
+    f = match File::open(&index_path) {
+        Ok(x) => {x},
+        Err(_) => {make_index_file_for_sam(&file_name.to_string())},
+    };
+    let mut reader = BufReader::new(f);
+    let mut buffer = String::new();
+    
+    // get the file length
+    reader.seek(SeekFrom::End(0)).expect("");
+    let end_file_pos = reader.stream_position().unwrap();
+    
+    //go back to start
+    reader.seek(SeekFrom::Start(0)).expect("");
+
+    // go through and find index
+    // jump to the middle of the file
+    let mut section_start_file_pos = 0;
+    let mut section_end_file_pos = end_file_pos;
+    let mut current_file_pos = (section_start_file_pos + section_end_file_pos) / 2;
+    let mut required_position = 0;
+    loop {
+        reader.seek(SeekFrom::Start(current_file_pos)).expect("");
+        // get rid of the half line
+        buffer.clear();
+        reader.read_line(&mut buffer).unwrap();
+        // the required line
+        buffer.clear();
+        reader.read_line(&mut buffer).unwrap();
+        // split it to find the id
+        let mut temp_split_iter = (buffer.split("\t")).into_iter();
+        
+        let current_id;
+        match temp_split_iter.next().unwrap().parse::<usize>() {
+            Ok(x) => {current_id = x;},
+            Err(_) => {break;},
+        }
+        required_position = temp_split_iter.next().unwrap().parse::<usize>().unwrap();
+        println!("curr: {}", current_id);
+        // jumping 
+        if read_name == current_id {
+            break;
+        }
+        else if read_name > current_id {
+            section_start_file_pos = current_file_pos;
+        }
+        else {
+            section_end_file_pos = current_file_pos;
+        }
+        current_file_pos = (section_start_file_pos + section_end_file_pos) / 2;
+    }
+    required_position
+}
+
+pub fn make_index_file_for_sam (file_name: &String) -> File {
+    println!("Making index file for {}{}", file_name, ".subreads.sam".to_string());
+    let path = format!("{}{}{}", DATA_PATH.to_string(), file_name, ".subreads.sam".to_string());
+    let write_path = format!("result/{}.cui", file_name);
     // get the file name and load it
     // file stuff init
     let f = File::open(&path).unwrap();
@@ -45,7 +123,7 @@ pub fn make_index_file_for_sam (file_name: &String) {
     
     // go through the file saving the sequence indices
     let mut read_name_pos: Vec<(usize, usize)> = vec![]; 
-    let mut current_position = 0;
+    let mut current_position;
     let mut current_ccs: usize;
     let mut prev_ccs: usize = 0;
     let mut index = 0;
@@ -69,15 +147,19 @@ pub fn make_index_file_for_sam (file_name: &String) {
             current_position = reader.stream_position().unwrap();
             read_name_pos.push((current_ccs, current_position as usize));
             index += 1;
-        }
-        // display progress
-        if index % 1000 == 0 {
-            println!("Progress {}", current_position / end_file_pos);
+            // display progress and write the current data
+            if index % 100000 == 0 {
+                println!("Progress {}%", (current_position * 100) / end_file_pos);
+                let write_string = format!("{:#?}", read_name_pos);
+                write_string_to_file(&write_path, &write_string);
+                read_name_pos = vec![];
+            }
         }
     }
     let write_string = format!("{:#?}", read_name_pos);
-    // make a index file
-    write_string_to_file("result/index.txt", &write_string);
+    // write the rest
+    write_string_to_file(&write_path, &write_string);
+    File::open(&write_path).unwrap()
 }
 
 pub fn pipeline_redo_poa_get_topological_quality_score () {
@@ -158,7 +240,7 @@ pub fn pipeline_redo_poa_get_topological_quality_score () {
 }
 
 fn get_the_subreads_by_name_bam (error_chr: &String, error_pos: usize, full_name: &String) -> Vec<String> {
-    let mut subread_vec: Vec<String> = vec![];
+    let subread_vec: Vec<String> = vec![];
     let mut split_text_iter = (full_name.split("/")).into_iter();
     let file_name = split_text_iter.next().unwrap();
     let required_id = split_text_iter.next().unwrap().parse::<i64>().unwrap();
@@ -169,7 +251,7 @@ fn get_the_subreads_by_name_bam (error_chr: &String, error_pos: usize, full_name
     let mut bam_reader = BamIndexedReader::from_path(path).unwrap();
     bam_reader.fetch((error_chr, error_pos as i64, error_pos as i64 + 1)).unwrap();
     let mut index = 0;
-    'read_loop: for read in bam_reader.records() {
+    for read in bam_reader.records() {
         let readunwrapped = read.unwrap();
         // get the required name
         let read_name = String::from_utf8(readunwrapped.qname().to_vec()).expect("");
@@ -180,20 +262,10 @@ fn get_the_subreads_by_name_bam (error_chr: &String, error_pos: usize, full_name
             continue;
         }
 
-        let mut read_index = 0;
-        
         println!("readname {}", read_name);
-        let read_vec = readunwrapped.seq().as_bytes().to_vec();
-        let read_string = String::from_utf8(readunwrapped.seq().as_bytes().to_vec()).expect("");
         if readunwrapped.seq_len() < 5 {
             continue;
         }
-        // get the location from the cigar processing
-        let mut temp_character_vec: Vec<char> = vec![];
-        // get the read start position
-        let read_start_pos = readunwrapped.pos() as usize;
-        let mut current_ref_pos = read_start_pos;
-        let mut current_read_pos = 0;
         index += 1;
     }
     println!("new count = {}", index);
@@ -279,118 +351,6 @@ fn check_the_scores_and_change_alignment (seqvec: Vec<String>, pacbio_consensus:
         seqvec2 = seqvec;
     }
     seqvec2
-}
-
-fn get_the_subreads_by_name_sam (full_name: &String) -> Vec<String> {
-    let mut subread_vec: Vec<String> = vec![];
-    let mut split_text_iter = (full_name.split("/")).into_iter();
-    let file_name = split_text_iter.next().unwrap();
-    let required_id = split_text_iter.next().unwrap().parse::<i64>().unwrap();
-    let path = format!("{}{}{}", DATA_PATH.to_string(), file_name, ".subreads.sam".to_string());
-    if file_name.eq(&"m64125_201017_124255".to_string()) {
-        return subread_vec;
-    }
-    // file stuff init
-    let f = File::open(&path).unwrap();
-    let mut reader = BufReader::new(f);
-    let mut buffer = String::new();
-
-    // get the file length
-    reader.seek(SeekFrom::End(0)).expect("");
-    let end_file_pos = reader.stream_position().unwrap();
-
-    // jump to the middle of the file
-    let mut section_start_file_pos = 0;
-    let mut section_end_file_pos = end_file_pos;
-    let mut current_file_pos = (section_start_file_pos + section_end_file_pos) / 2;
-    loop {
-        reader.seek(SeekFrom::Start(current_file_pos)).expect("");
-        // get rid of the half line
-        buffer.clear();
-        reader.read_line(&mut buffer).unwrap();
-        // the required line
-        buffer.clear();
-        reader.read_line(&mut buffer).unwrap();
-        // split it to find the id
-        let mut temp_split_iter = (buffer.split("/")).into_iter();
-        temp_split_iter.next();
-        let current_id;
-        match temp_split_iter.next().unwrap().parse::<i64>() {
-            Ok(x) => {current_id = x;},
-            Err(_) => {break;},
-        }
-        //println!("curr: {}", current_id);
-        // jumping 
-        if required_id == current_id {
-            // when the id is found go back until you reach a different id
-            let mut index = 1;
-            loop {
-                if current_file_pos < index * 10000 {
-                    reader.seek(SeekFrom::Start(0)).expect("");
-                    break;
-                }
-                reader.seek(SeekFrom::Start(current_file_pos - index * 100000)).expect("");
-                // get rid of the half line
-                buffer.clear();
-                reader.read_line(&mut buffer).unwrap();
-                // the required line
-                buffer.clear();
-                reader.read_line(&mut buffer).unwrap();
-                // split it to find the id
-                let mut temp_split_iter = (buffer.split("/")).into_iter();
-                temp_split_iter.next();
-                let current_id;
-                match temp_split_iter.next().unwrap().parse::<i64>() {
-                    Ok(x) => {current_id = x;},
-                    Err(_) => {break;},
-                }
-                if current_id != required_id {
-                    break;
-                } 
-                index += 1;
-            }
-            break;
-        }
-        else if required_id > current_id {
-            section_start_file_pos = current_file_pos;
-        }
-        else {
-            section_end_file_pos = current_file_pos;
-        }
-        current_file_pos = (section_start_file_pos + section_end_file_pos) / 2;
-    }
-    // count the number of entries and save the sequences
-    let mut count = 0;
-    let mut continue_count = 0;
-    let continue_threshold = 3;
-    loop {
-        buffer.clear();
-        reader.read_line(&mut buffer).unwrap();
-        // split it to find the id
-        let mut temp_split_iter = (buffer.split("/")).into_iter();
-        temp_split_iter.next();
-        let current_id;
-        match temp_split_iter.next().unwrap().parse::<i64>() {
-            Ok(x) => {current_id = x;},
-            Err(_) => {break;},
-        }
-        if current_id != required_id {
-            continue_count += 1;
-            if continue_count > continue_threshold {
-                break;
-            }
-        }
-        else {
-            // write code to extract the sequence and add to subread_vec
-            let mut data_split_iter = (buffer.split("\t")).into_iter();
-            println!("{}", data_split_iter.next().unwrap());
-            for _ in 0..8 {data_split_iter.next();}
-            subread_vec.push(data_split_iter.next().unwrap().to_string());
-            count += 1;
-        }
-    }
-    println!("old count = {}", count);
-    subread_vec
 }
 
 fn get_corrosponding_seq_name_location_quality_from_bam (error_pos: usize, error_chr: &String, base_change: &char) -> Vec<(String, String, u8, usize)> {
