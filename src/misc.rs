@@ -31,24 +31,48 @@ fn get_the_subreads_by_name_sam (full_name: &String) -> Vec<String> {
     let mut subread_vec: Vec<String> = vec![];
     let mut split_text_iter = (full_name.split("/")).into_iter();
     let file_name = split_text_iter.next().unwrap();
-    let required_id = split_text_iter.next().unwrap().parse::<i64>().unwrap();
+    let required_id = split_text_iter.next().unwrap().parse::<usize>().unwrap();
     let path = format!("{}{}{}", DATA_PATH.to_string(), file_name, ".subreads.sam".to_string());
     if file_name.eq(&"m64125_201017_124255".to_string()) {
         return subread_vec;
     }
+    let file_position = read_index_file_for_sam (&file_name.to_string(), required_id);
     // file stuff init
+    let mut count = 0;
     let f = File::open(&path).unwrap();
     let mut reader = BufReader::new(f);
     let mut buffer = String::new();
-
-    
-    reader.seek(SeekFrom::Start(0)).expect("");
-    
+    reader.seek(SeekFrom::Start(file_position as u64)).expect("");
+    loop {
+        buffer.clear();
+        reader.read_line(&mut buffer).unwrap();
+        // split it to find the id
+        let mut temp_split_iter = (buffer.split("/")).into_iter();
+        temp_split_iter.next();
+        let current_id;
+        match temp_split_iter.next().unwrap().parse::<usize>() {
+            Ok(x) => {current_id = x;},
+            Err(_) => {break;},
+        }
+        if current_id != required_id {
+            break;
+        }
+        else {
+            // write code to extract the sequence and add to subread_vec
+            let mut data_split_iter = (buffer.split("\t")).into_iter();
+            println!("{}", data_split_iter.next().unwrap());
+            for _ in 0..8 {data_split_iter.next();}
+            subread_vec.push(data_split_iter.next().unwrap().to_string());
+            count += 1;
+        }
+    }
+    println!("count = {}", count);
     subread_vec
 }
 
 pub fn read_index_file_for_sam (file_name: &String, read_name: usize) -> usize {
     // get the file location from index file if no index found make one
+    println!("Reading index file {}{}", file_name, ".cui".to_string());
     let index_path = format!("result/{}.cui", file_name);
     let f;
     f = match File::open(&index_path) {
@@ -66,7 +90,7 @@ pub fn read_index_file_for_sam (file_name: &String, read_name: usize) -> usize {
     reader.seek(SeekFrom::Start(0)).expect("");
 
     // go through and find index
-    // jump to the middle of the file
+    // jump to the middle of the file **binary searching**
     let mut section_start_file_pos = 0;
     let mut section_end_file_pos = end_file_pos;
     let mut current_file_pos = (section_start_file_pos + section_end_file_pos) / 2;
@@ -127,6 +151,7 @@ pub fn make_index_file_for_sam (file_name: &String) -> File {
     let mut current_ccs: usize;
     let mut prev_ccs: usize = 0;
     let mut index = 0;
+    let mut break_count = 0;
     loop {
         // get the next line if available
         buffer.clear();
@@ -143,6 +168,7 @@ pub fn make_index_file_for_sam (file_name: &String) -> File {
         }
         // add to the pos_read_name if different
         if current_ccs != prev_ccs {
+            break_count = 0;
             prev_ccs = current_ccs;
             current_position = reader.stream_position().unwrap();
             write_string = format!("{}\n{}\t{}", write_string, current_ccs, current_position);
@@ -152,6 +178,12 @@ pub fn make_index_file_for_sam (file_name: &String) -> File {
                 println!("Progress {}%", (current_position * 100) / end_file_pos);
                 write_string_to_file(&write_path, &write_string);
                 write_string = "".to_string();
+            }
+        }
+        else {
+            break_count += 1;
+            if break_count > 10000 {
+                break;
             }
         }
     }
@@ -234,6 +266,7 @@ pub fn pipeline_redo_poa_get_topological_quality_score () {
             write_string_to_file("result/graph.txt", &write_string);
             */
         }
+        break;
     }
 }
 
