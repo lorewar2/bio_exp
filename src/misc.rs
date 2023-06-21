@@ -59,7 +59,7 @@ pub fn make_index_file_for_sam (file_name: &String) {
         let mut temp_split_iter = (buffer.split("/")).into_iter();
         temp_split_iter.next();
         match temp_split_iter.next() {
-            Some(x) => {current_ccs = x.parse::<usize>().unwrap();},
+            Some(x) => {current_ccs = match x.parse::<usize>() { Ok(val) => {val}, Err(_) => {0}};},
             None => {continue;},
         }
         // add to the pos_read_name if different
