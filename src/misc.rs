@@ -58,9 +58,9 @@ pub fn make_index_file_for_sam (file_name: &String) {
         // split it to find the id
         let mut temp_split_iter = (buffer.split("/")).into_iter();
         temp_split_iter.next();
-        match temp_split_iter.next().unwrap().parse::<usize>() {
-            Ok(x) => {current_ccs = x;},
-            Err(_) => {continue;},
+        match temp_split_iter.next() {
+            Some(x) => {current_ccs = x.parse::<usize>().unwrap();},
+            None => {continue;},
         }
         // add to the pos_read_name if different
         if current_ccs != prev_ccs {
