@@ -44,10 +44,11 @@ pub fn make_index_file_for_sam (file_name: &String) {
     reader.seek(SeekFrom::Start(0)).expect("");
     
     // go through the file saving the sequence indices
-    let pos_read_name: Vec<(usize, usize)> = vec![]; 
+    let mut read_name_pos: Vec<(usize, usize)> = vec![]; 
+    let mut current_position = 0;
     let mut current_ccs: usize;
     let mut prev_ccs: usize = 0;
-
+    let mut index = 0;
     loop {
         // get the next line if available
         buffer.clear();
@@ -65,12 +66,18 @@ pub fn make_index_file_for_sam (file_name: &String) {
         // add to the pos_read_name if different
         if current_ccs != prev_ccs {
             prev_ccs = current_ccs;
-            let current_position = reader.stream_position().unwrap();
-            println!("position {} readname {}", current_position, current_ccs);
+            current_position = reader.stream_position().unwrap();
+            read_name_pos.push((current_ccs, current_position as usize));
+            index += 1;
+        }
+        // display progress
+        if index % 1000 == 0 {
+            println!("Progress {}", current_position / end_file_pos);
         }
     }
+    let write_string = format!("{:#?}", read_name_pos);
     // make a index file
-
+    write_string_to_file("result/index.txt", &write_string);
 }
 
 pub fn pipeline_redo_poa_get_topological_quality_score () {
