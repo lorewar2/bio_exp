@@ -27,22 +27,23 @@ const DATA_PATH: &str = "/data1/hifi_consensus/try2/";
 const READ_BAM_PATH: &str = "/data1/hifi_consensus/try2/merged.bam";
 const BAND_SIZE: i32 = 200;
 
-pub fn pipeline_redo_poa_get_topological_quality_score () {
+pub fn pipeline_redo_poa_get_topological_quality_score (chromosone: &str, start_loc: usize, end_loc: usize, thread_id: usize) {
     // get the error locations
     let error_locations = get_error_bases_from_himut_vcf (); //chromosone, location, ref allele, alt allele
     // go through the error locations
     for error_location in error_locations {
-        // start after this error location, 
-        let skip_location = 13405643;
-        let skip_chromosone = "chr1";
-        if (error_location.0 == skip_chromosone) && (error_location.1 < skip_location) {
+        if (error_location.0 == chromosone) && (error_location.1 < start_loc) {
             continue;
         }
-        println!("Error position {}:{} ref allele: {} alt allele: {}", error_location.0, error_location.1, error_location.2, error_location.3);
+        // only process one chromosone
+        if (error_location.0 != chromosone) && (error_location.1 > end_loc) {
+            break;
+        }
+        println!("THREAD: {} Error position {}:{} ref allele: {} alt allele: {}", thread_id, error_location.0, error_location.1, error_location.2, error_location.3);
         // find the ccs which are in that error
         let seq_name_qual_and_errorpos_vec = get_corrosponding_seq_name_location_quality_from_bam(error_location.1, &error_location.0, &error_location.3);
         for seq_name_qual_and_errorpos in seq_name_qual_and_errorpos_vec {
-            println!("Processing ccs file: {}", seq_name_qual_and_errorpos.1);
+            //println!("Processing ccs file: {}", seq_name_qual_and_errorpos.1);
             // find the subreads of that ccs
             let mut sub_reads = get_the_subreads_by_name_sam(&seq_name_qual_and_errorpos.1);
             // skip if no subreads, errors and stuff
@@ -56,7 +57,7 @@ pub fn pipeline_redo_poa_get_topological_quality_score () {
             //sub_reads = check_the_scores_and_change_alignment(sub_reads, &seq_name_qual_and_errorpos.0);
             
             sub_reads.insert(0, seq_name_qual_and_errorpos.0.clone());
-            println!("CURRENT BAND SIZE = {}", BAND_SIZE);
+            //println!("CURRENT BAND SIZE = {}", BAND_SIZE);
             // do poa with the read and subreads, get the poa and consensus
             let mut sequence_number: usize = 0;
             let mut aligner = Aligner::new(MATCH, MISMATCH, GAP_OPEN, &sub_reads[0].as_bytes().to_vec(), BAND_SIZE);
@@ -66,19 +67,19 @@ pub fn pipeline_redo_poa_get_topological_quality_score () {
                     aligner.global(&sub_read.as_bytes().to_vec()).add_to_graph();
                 }
                 sequence_number += 1;
-                println!("Sequence {} processed", sequence_number);
+                //println!("Sequence {} processed", sequence_number);
             }
             let (calculated_consensus, calculated_topology) = aligner.poa.consensus(); //just poa
             let calculated_graph: &Graph<u8, i32, Directed, usize> = aligner.graph();
             // check if fixed (check the consensus location which is matched to the read error location)
-            let pacbio_error_pos_node_index = seq_name_qual_and_errorpos.3;
-            println!("BASE {} ", seq_name_qual_and_errorpos.0.as_bytes()[pacbio_error_pos_node_index] as char);
+            //let pacbio_error_pos_node_index = seq_name_qual_and_errorpos.3;
+            //println!("BASE {} ", seq_name_qual_and_errorpos.0.as_bytes()[pacbio_error_pos_node_index] as char);
             let position = get_redone_consensus_error_position(&seq_name_qual_and_errorpos.0, &calculated_consensus, seq_name_qual_and_errorpos.3);
             //match calculated_topology.iter().position(|r| *r == seq_name_qual_and_errorpos.3) {
             //    Some(x) => {position = x;},
             //    None => {position = get_redone_consensus_error_position(&seq_name_qual_and_errorpos.0, &calculated_consensus, seq_name_qual_and_errorpos.3);},
             //}
-            println!("pacbio position {} calculated position {},", seq_name_qual_and_errorpos.3, position);
+            //println!("pacbio position {} calculated position {},", seq_name_qual_and_errorpos.3, position);
             // calculate the quality score of the location
             let skip_nodes: Vec<usize> = calculated_topology[0 .. position + 1].to_vec();
             let target_node_parent;
@@ -98,9 +99,11 @@ pub fn pipeline_redo_poa_get_topological_quality_score () {
             let (parallel_nodes, parallel_num_incoming_seq, _) = get_parallel_nodes_with_topology_cut (skip_nodes, sequence_number,  calculated_topology[position], target_node_parent, target_node_child, calculated_graph);
             let (calculated_quality_score, _, parallel_bases, _) = base_quality_score_calculation (sequence_number, parallel_nodes, parallel_num_incoming_seq, calculated_consensus[position], calculated_graph);
             let write_string = format!("Error position {}:{} ref allele: {} alt allele: {}\nPacbio base: \t{} quality: {}\nCalculated base: \t{} quality: {}\nParallel Bases: ACGT:{:?}\n\n", error_location.0, error_location.1, error_location.2, error_location.3, error_location.3, seq_name_qual_and_errorpos.2, calculated_consensus[position] as char, calculated_quality_score, parallel_bases);
-            write_string_to_file("result/quality.txt", &write_string);
+            let write_file = format!("result/quality_{}.txt", thread_id);
+            write_string_to_file(write_file, &write_string);
             let write_string = format!("{}\n{}\n\n", write_string, get_zoomed_graph_section(calculated_graph, &calculated_topology[position]));
-            write_string_to_file("result/graph.txt", &write_string);
+            let write_file = format!("result/graph_{}.txt", thread_id);
+            write_string_to_file(write_file, &write_string);
         }
     }
 }
@@ -183,19 +186,19 @@ fn get_the_subreads_by_name_sam (full_name: &String) -> Vec<String> {
         else {
             // write code to extract the sequence and add to subread_vec
             let mut data_split_iter = (buffer.split("\t")).into_iter();
-            println!("{}", data_split_iter.next().unwrap());
+            //println!("{}", data_split_iter.next().unwrap());
             for _ in 0..8 {data_split_iter.next();}
             subread_vec.push(data_split_iter.next().unwrap().to_string());
             count += 1;
         }
     }
-    println!("count = {}", count);
+    //println!("count = {}", count);
     subread_vec
 }
 
 pub fn read_index_file_for_sam (file_name: &String, read_name: usize) -> usize {
     // get the file location from index file if no index found make one
-    println!("Reading index file {}{}", file_name, ".cui".to_string());
+    //println!("Reading index file {}{}", file_name, ".cui".to_string());
     let index_path = format!("result/{}.cui", file_name);
     let f;
     f = match File::open(&index_path) {
@@ -253,7 +256,7 @@ pub fn read_index_file_for_sam (file_name: &String, read_name: usize) -> usize {
 }
 
 pub fn make_index_file_for_sam (file_name: &String) -> File {
-    println!("Making index file for {}{}", file_name, ".subreads.sam".to_string());
+    //println!("Making index file for {}{}", file_name, ".subreads.sam".to_string());
     let path = format!("{}{}{}", DATA_PATH.to_string(), file_name, ".subreads.sam".to_string());
     let write_path = format!("result/{}.cui", file_name);
     // get the file name and load it
@@ -339,13 +342,13 @@ fn get_the_subreads_by_name_bam (error_chr: &String, error_pos: usize, full_name
             continue;
         }
 
-        println!("readname {}", read_name);
+        //println!("readname {}", read_name);
         if readunwrapped.seq_len() < 5 {
             continue;
         }
         index += 1;
     }
-    println!("new count = {}", index);
+    //println!("new count = {}", index);
     
     subread_vec
 }
@@ -386,7 +389,7 @@ fn get_redone_consensus_error_position (pacbio_consensus: &String, calculated_co
             calc_error_position = calc_index
         }
     }
-    println!("Pacbio error position {} corrosponds to calculated error position {}", pacbio_error_position, calc_error_position);
+    //println!("Pacbio error position {} corrosponds to calculated error position {}", pacbio_error_position, calc_error_position);
     calc_error_position
 }
 
@@ -639,7 +642,7 @@ pub fn get_error_bases_from_himut_vcf () -> Vec<(String, usize, char, char)> {
         let chromosone = split_text_iter.next().unwrap();
         error_locus_vec.push((chromosone.to_string(), record.pos() as usize, allele_vec[0], allele_vec[1]));
     }
-    println!("number of errors = {}", error_locus_vec.len());
+    //println!("number of errors = {}", error_locus_vec.len());
     error_locus_vec
 }
 

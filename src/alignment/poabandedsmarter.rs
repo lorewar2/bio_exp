@@ -206,7 +206,7 @@ impl Traceback {
                 }
             }
         }
-        println!("MS DS IS MN DN IN {:?}", test_vector);
+        //println!("MS DS IS MN DN IN {:?}", test_vector);
         ops.reverse();
         Alignment {
             score: self.get(self.last.index() + 1, self.cols).score,
