@@ -31,7 +31,7 @@ fn main() {
             let start = total_start + one_thread_allocation * i;
             let end = start + one_thread_allocation;
             println!("Thread number {} started, {} from {} to {}..", chromosone, i, start, end);
-            pipeline_redo_poa_get_topological_quality_score();
+            pipeline_redo_poa_get_topological_quality_score(chromosone, start, end, i);
         }));
     }
 

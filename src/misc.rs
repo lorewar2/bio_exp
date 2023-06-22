@@ -27,18 +27,18 @@ const DATA_PATH: &str = "/data1/hifi_consensus/try2/";
 const READ_BAM_PATH: &str = "/data1/hifi_consensus/try2/merged.bam";
 const BAND_SIZE: i32 = 200;
 
-pub fn pipeline_redo_poa_get_topological_quality_score () {
+pub fn pipeline_redo_poa_get_topological_quality_score (chromosone: &str, start: usize, end: usize, thread_id: usize) {
     // get the error locations
     let error_locations = get_error_bases_from_himut_vcf (); //chromosone, location, ref allele, alt allele
     // go through the error locations
     for error_location in error_locations {
-        // start after this error location, 
-        let skip_location = 13405643;
-        let skip_chromosone = "chr1";
-        if (error_location.0 == skip_chromosone) && (error_location.1 < skip_location) {
+        if (error_location.0 == chromosone) && (error_location.1 < start) {
             continue;
         }
-        println!("Error position {}:{} ref allele: {} alt allele: {}", error_location.0, error_location.1, error_location.2, error_location.3);
+        if (error_location.0 != chromosone) && (error_location.1 > end) {
+            break;
+        }
+        println!("Thread ID: {}, Error position {}:{} ref allele: {} alt allele: {}", thread_id, error_location.0, error_location.1, error_location.2, error_location.3);
         // find the ccs which are in that error
         let seq_name_qual_and_errorpos_vec = get_corrosponding_seq_name_location_quality_from_bam(error_location.1, &error_location.0, &error_location.3);
         for seq_name_qual_and_errorpos in seq_name_qual_and_errorpos_vec {
@@ -98,9 +98,11 @@ pub fn pipeline_redo_poa_get_topological_quality_score () {
             let (parallel_nodes, parallel_num_incoming_seq, _) = get_parallel_nodes_with_topology_cut (skip_nodes, sequence_number,  calculated_topology[position], target_node_parent, target_node_child, calculated_graph);
             let (calculated_quality_score, _, parallel_bases, _) = base_quality_score_calculation (sequence_number, parallel_nodes, parallel_num_incoming_seq, calculated_consensus[position], calculated_graph);
             let write_string = format!("Error position {}:{} ref allele: {} alt allele: {}\nPacbio base: \t{} quality: {}\nCalculated base: \t{} quality: {}\nParallel Bases: ACGT:{:?}\n\n", error_location.0, error_location.1, error_location.2, error_location.3, error_location.3, seq_name_qual_and_errorpos.2, calculated_consensus[position] as char, calculated_quality_score, parallel_bases);
-            write_string_to_file("result/quality.txt", &write_string);
+            let write_file = format!("result/quality_{}.txt", thread_id);
+            write_string_to_file(write_file, &write_string);
             let write_string = format!("{}\n{}\n\n", write_string, get_zoomed_graph_section(calculated_graph, &calculated_topology[position]));
-            write_string_to_file("result/graph.txt", &write_string);
+            let write_file = format!("result/graph_{}.txt", thread_id);
+            write_string_to_file(write_file, &write_string);
         }
     }
 }
