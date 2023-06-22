@@ -35,16 +35,16 @@ pub fn pairwise (seq_x: &Vec<u8>, seq_y: &Vec<u8>, match_score: i32, mismatch_sc
     // calculations
     // filling out score matrices and back matrix
     let mut max_scored_position = 0;
-    let mut max_score = MIN_SCORE;
+    let mut max_score;
     for i in 1..seq_x.len() + 1 {
         max_score = MIN_SCORE;
         let start = max_scored_position - BAND_SIZE;
         let end = max_scored_position + BAND_SIZE;
         for j in 1..seq_y.len() + 1 {
-            if j < start && USE_BAND {
+            if j < start && USE_BAND && i > 1 {
                 continue;
             }
-            if j > end && USE_BAND {
+            if j > end && USE_BAND && i > 1{
                 break;
             }
             // fill del matrix 
