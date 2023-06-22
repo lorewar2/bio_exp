@@ -1,5 +1,8 @@
 
 use std::cmp;
+const MIN_SCORE: isize = -858_993_459; // negative infinity; see alignment/pairwise/mod.rs
+const BAND_SIZE: usize = 100;
+const USE_BAND: bool = true;
 
 #[derive(Clone)]
 struct PairwiseMatrixCell {
@@ -31,8 +34,19 @@ pub fn pairwise (seq_x: &Vec<u8>, seq_y: &Vec<u8>, match_score: i32, mismatch_sc
 
     // calculations
     // filling out score matrices and back matrix
+    let mut max_scored_position = 0;
+    let mut max_score = MIN_SCORE;
     for i in 1..seq_x.len() + 1 {
+        max_score = MIN_SCORE;
+        let start = max_scored_position - BAND_SIZE;
+        let end = max_scored_position + BAND_SIZE;
         for j in 1..seq_y.len() + 1 {
+            if j < start && USE_BAND {
+                continue;
+            }
+            if j > end && USE_BAND {
+                break;
+            }
             // fill del matrix 
             // get j - 1 score from same matrix with gap extend
             let temp_del_score = pair_wise_matrix[i][j - 1].del_score + gap_extend_score as isize;
@@ -66,6 +80,10 @@ pub fn pairwise (seq_x: &Vec<u8>, seq_y: &Vec<u8>, match_score: i32, mismatch_sc
             }
             // insert the max
             pair_wise_matrix[i][j].match_score = cmp::max(temp_match_score, cmp::max(temp_ins_score, temp_del_score));
+            if max_score < pair_wise_matrix[i][j].match_score {
+                max_score = pair_wise_matrix[i][j].match_score;
+                max_scored_position = j;
+            }
             if (temp_match_score >= temp_ins_score) && (temp_match_score >= temp_del_score) {
                 // already allocated
             }
