@@ -52,8 +52,8 @@ pub fn pipeline_redo_poa_get_topological_quality_score () {
             }
             // filter out the long reads and rearrange the reads
             sub_reads = reverse_complement_filter_and_rearrange_subreads(&sub_reads);
-            // reverse the sub reads if score is low
-            sub_reads = check_the_scores_and_change_alignment(sub_reads, &seq_name_qual_and_errorpos.0);
+            // reverse the sub reads if score is low, very low probability
+            //sub_reads = check_the_scores_and_change_alignment(sub_reads, &seq_name_qual_and_errorpos.0);
             
             sub_reads.insert(0, seq_name_qual_and_errorpos.0.clone());
             println!("CURRENT BAND SIZE = {}", BAND_SIZE);

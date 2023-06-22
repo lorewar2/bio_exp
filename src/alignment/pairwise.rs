@@ -46,7 +46,7 @@ pub fn pairwise (seq_x: &Vec<u8>, seq_y: &Vec<u8>, match_score: i32, mismatch_sc
         else {
             start = max_scored_position - BAND_SIZE;
         }
-        let end = max_scored_position + BAND_SIZE;
+        end = max_scored_position + BAND_SIZE;
         for j in 1..seq_y.len() + 1 {
             if j < start && USE_BAND && i > 1 {
                 continue;
