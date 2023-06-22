@@ -73,11 +73,11 @@ pub fn pipeline_redo_poa_get_topological_quality_score () {
             // check if fixed (check the consensus location which is matched to the read error location)
             let pacbio_error_pos_node_index = seq_name_qual_and_errorpos.3;
             println!("BASE {} ", seq_name_qual_and_errorpos.0.as_bytes()[pacbio_error_pos_node_index] as char);
-            let position;
-            match calculated_topology.iter().position(|r| *r == seq_name_qual_and_errorpos.3) {
-                Some(x) => {position = x;},
-                None => {position = get_redone_consensus_error_position(&seq_name_qual_and_errorpos.0, &calculated_consensus, seq_name_qual_and_errorpos.3);},
-            }
+            let position = get_redone_consensus_error_position(&seq_name_qual_and_errorpos.0, &calculated_consensus, seq_name_qual_and_errorpos.3);
+            //match calculated_topology.iter().position(|r| *r == seq_name_qual_and_errorpos.3) {
+            //    Some(x) => {position = x;},
+            //    None => {position = get_redone_consensus_error_position(&seq_name_qual_and_errorpos.0, &calculated_consensus, seq_name_qual_and_errorpos.3);},
+            //}
             println!("pacbio position {} calculated position {},", seq_name_qual_and_errorpos.3, position);
             // calculate the quality score of the location
             let skip_nodes: Vec<usize> = calculated_topology[0 .. position + 1].to_vec();
