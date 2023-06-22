@@ -27,18 +27,19 @@ const DATA_PATH: &str = "/data1/hifi_consensus/try2/";
 const READ_BAM_PATH: &str = "/data1/hifi_consensus/try2/merged.bam";
 const BAND_SIZE: i32 = 200;
 
-pub fn pipeline_redo_poa_get_topological_quality_score () {
+pub fn pipeline_redo_poa_get_topological_quality_score (chromosone: &str, start_loc: usize, end_loc: usize, thread_id: usize) {
     // get the error locations
     let error_locations = get_error_bases_from_himut_vcf (); //chromosone, location, ref allele, alt allele
     // go through the error locations
     for error_location in error_locations {
-        // start after this error location, 
-        let skip_location = 13405643;
-        let skip_chromosone = "chr1";
-        if (error_location.0 == skip_chromosone) && (error_location.1 < skip_location) {
+        if (error_location.0 == chromosone) && (error_location.1 < start_loc) {
             continue;
         }
-        println!("Error position {}:{} ref allele: {} alt allele: {}", error_location.0, error_location.1, error_location.2, error_location.3);
+        // only process one chromosone
+        if (error_location.0 != chromosone) && (error_location.1 > end_loc) {
+            break;
+        }
+        println!("THREAD: {} Error position {}:{} ref allele: {} alt allele: {}", thread_id, error_location.0, error_location.1, error_location.2, error_location.3);
         // find the ccs which are in that error
         let seq_name_qual_and_errorpos_vec = get_corrosponding_seq_name_location_quality_from_bam(error_location.1, &error_location.0, &error_location.3);
         for seq_name_qual_and_errorpos in seq_name_qual_and_errorpos_vec {
@@ -183,19 +184,19 @@ fn get_the_subreads_by_name_sam (full_name: &String) -> Vec<String> {
         else {
             // write code to extract the sequence and add to subread_vec
             let mut data_split_iter = (buffer.split("\t")).into_iter();
-            println!("{}", data_split_iter.next().unwrap());
+            //println!("{}", data_split_iter.next().unwrap());
             for _ in 0..8 {data_split_iter.next();}
             subread_vec.push(data_split_iter.next().unwrap().to_string());
             count += 1;
         }
     }
-    println!("count = {}", count);
+    //println!("count = {}", count);
     subread_vec
 }
 
 pub fn read_index_file_for_sam (file_name: &String, read_name: usize) -> usize {
     // get the file location from index file if no index found make one
-    println!("Reading index file {}{}", file_name, ".cui".to_string());
+    //println!("Reading index file {}{}", file_name, ".cui".to_string());
     let index_path = format!("result/{}.cui", file_name);
     let f;
     f = match File::open(&index_path) {
@@ -253,7 +254,7 @@ pub fn read_index_file_for_sam (file_name: &String, read_name: usize) -> usize {
 }
 
 pub fn make_index_file_for_sam (file_name: &String) -> File {
-    println!("Making index file for {}{}", file_name, ".subreads.sam".to_string());
+    //println!("Making index file for {}{}", file_name, ".subreads.sam".to_string());
     let path = format!("{}{}{}", DATA_PATH.to_string(), file_name, ".subreads.sam".to_string());
     let write_path = format!("result/{}.cui", file_name);
     // get the file name and load it
@@ -339,13 +340,13 @@ fn get_the_subreads_by_name_bam (error_chr: &String, error_pos: usize, full_name
             continue;
         }
 
-        println!("readname {}", read_name);
+        //println!("readname {}", read_name);
         if readunwrapped.seq_len() < 5 {
             continue;
         }
         index += 1;
     }
-    println!("new count = {}", index);
+    //println!("new count = {}", index);
     
     subread_vec
 }
@@ -386,7 +387,7 @@ fn get_redone_consensus_error_position (pacbio_consensus: &String, calculated_co
             calc_error_position = calc_index
         }
     }
-    println!("Pacbio error position {} corrosponds to calculated error position {}", pacbio_error_position, calc_error_position);
+    //println!("Pacbio error position {} corrosponds to calculated error position {}", pacbio_error_position, calc_error_position);
     calc_error_position
 }
 
@@ -639,7 +640,7 @@ pub fn get_error_bases_from_himut_vcf () -> Vec<(String, usize, char, char)> {
         let chromosone = split_text_iter.next().unwrap();
         error_locus_vec.push((chromosone.to_string(), record.pos() as usize, allele_vec[0], allele_vec[1]));
     }
-    println!("number of errors = {}", error_locus_vec.len());
+    //println!("number of errors = {}", error_locus_vec.len());
     error_locus_vec
 }
 
