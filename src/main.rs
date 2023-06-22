@@ -8,7 +8,6 @@ use crate::misc::pipeline_redo_poa_get_topological_quality_score;
 //use crate::alignment::poabandedsmarter::Aligner;
 //use crate::generator::simple::get_random_sequences_from_generator;
 //use crate::alignment::pairwise::pairwise;
-use crate::misc::make_index_file_for_sam;
 const SEED: u64 = 2;
 const GAP_OPEN: i32 = -2;
 const GAP_EXTEND: i32 = 0;
