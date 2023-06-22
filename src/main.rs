@@ -14,7 +14,7 @@ const GAP_OPEN: i32 = -2;
 const GAP_EXTEND: i32 = 0;
 const MATCH: i32 = 2;
 const MISMATCH: i32 = -2;
-const NTHREADS: usize = 20;
+const NTHREADS: usize = 1;
 
 fn main() {
     // Make a vector to hold the children which are spawned.
@@ -31,7 +31,7 @@ fn main() {
             let start = total_start + one_thread_allocation * i;
             let end = start + one_thread_allocation;
             println!("Thread number {} started, {} from {} to {}..", chromosone, i, start, end);
-            pipeline_redo_poa_get_topological_quality_score(chromosone, start, end, i);
+            pipeline_redo_poa_get_topological_quality_score();
         }));
     }
 
