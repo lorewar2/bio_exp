@@ -1,8 +1,8 @@
 
 use std::cmp;
 const MIN_SCORE: isize = -858_993_459; // negative infinity; see alignment/pairwise/mod.rs
-const BAND_SIZE: usize = 100;
-const USE_BAND: bool = true;
+const BAND_SIZE: usize = 1000;
+const USE_BAND: bool = false;
 
 #[derive(Clone)]
 struct PairwiseMatrixCell {

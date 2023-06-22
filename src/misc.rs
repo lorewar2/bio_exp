@@ -54,7 +54,7 @@ pub fn pipeline_redo_poa_get_topological_quality_score () {
             sub_reads = reverse_complement_filter_and_rearrange_subreads(&sub_reads);
             // reverse the sub reads if score is low
             sub_reads = check_the_scores_and_change_alignment(sub_reads, &seq_name_qual_and_errorpos.0);
-            /* 
+            
             sub_reads.insert(0, seq_name_qual_and_errorpos.0.clone());
             println!("CURRENT BAND SIZE = {}", BAND_SIZE);
             // do poa with the read and subreads, get the poa and consensus
@@ -101,7 +101,6 @@ pub fn pipeline_redo_poa_get_topological_quality_score () {
             write_string_to_file("result/quality.txt", &write_string);
             let write_string = format!("{}\n{}\n\n", write_string, get_zoomed_graph_section(calculated_graph, &calculated_topology[position]));
             write_string_to_file("result/graph.txt", &write_string);
-            */
         }
     }
 }
@@ -401,10 +400,10 @@ fn check_the_scores_and_change_alignment (seqvec: Vec<String>, pacbio_consensus:
         println!("score: {}", score);
         if score < 1000 {
             invert = true;
-            //break;
+            break;
         }
-        else if index > 3 {
-            //break;
+        else if index > 1 {
+            break;
         }
         index += 1;
     }
