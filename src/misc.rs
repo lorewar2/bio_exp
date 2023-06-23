@@ -13,6 +13,7 @@ use std::{fs::OpenOptions, io::{prelude::*}, path::Path};
 use std::io::BufReader;
 use std::fs::File;
 use std::io::SeekFrom;
+use std::time::Instant;
 
 const SEED: u64 = 2;
 const GAP_OPEN: i32 = -2;
@@ -25,12 +26,14 @@ const THREE_BASE_CONTEXT_READ_LENGTH: usize = 1000;
 const NUM_OF_ITER_FOR_ZOOMED_GRAPHS: usize = 4;
 const DATA_PATH: &str = "/data1/hifi_consensus/try2/";
 const READ_BAM_PATH: &str = "/data1/hifi_consensus/try2/merged.bam";
-const BAND_SIZE: i32 = 200;
+const BAND_SIZE: i32 = 100;
 
 pub fn pipeline_redo_poa_get_topological_quality_score (chromosone: &str, start: usize, end: usize, thread_id: usize) {
     // get the error locations
     let error_locations = get_error_bases_from_himut_vcf (); //chromosone, location, ref allele, alt allele
     // go through the error locations
+    let mut index = 0;
+    let time_instant = Instant::now();
     for error_location in error_locations {
         if (error_location.0 == chromosone) && (error_location.1 < start) {
             continue;
@@ -103,6 +106,8 @@ pub fn pipeline_redo_poa_get_topological_quality_score (chromosone: &str, start:
             let write_string = format!("{}\n{}\n\n", write_string, get_zoomed_graph_section(calculated_graph, &calculated_topology[position]));
             let write_file = format!("result/graph_{}.txt", thread_id);
             write_string_to_file(write_file, &write_string);
+            index += 1;
+            println!("Thread {} task done, total time:{:?} total tasks:{}", thread_id, time_instant.elapsed() ,index);
         }
     }
 }
