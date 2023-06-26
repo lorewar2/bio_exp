@@ -32,8 +32,10 @@ const READ_BAM_PATH: &str = "/data1/hifi_consensus/try2/merged.bam";
 const INTERMEDIATE_PATH: &str = "result/intermediate";
 const BAND_SIZE: i32 = 100;
 
-pub fn pipeline_process_all_ccs_file_poa (chromosone: &str, start: usize, end: usize) {
+pub fn pipeline_process_all_ccs_file_poa (chromosone: &str, start: usize, end: usize, thread_id: usize) {
+    let mut index_thread = 0;
     for process_location in start..end {
+        println!("Thread {} Chr {} Loc {}, tasks_done {}", thread_id, chromosone, process_location, index_thread);
         // get the string and the name
         let seq_name_qual_and_errorpos_vec = get_corrosponding_seq_name_location_quality_from_bam(process_location, &chromosone.to_string(), &'X');
         for seq_name_qual_and_errorpos in seq_name_qual_and_errorpos_vec {
@@ -73,12 +75,12 @@ pub fn pipeline_process_all_ccs_file_poa (chromosone: &str, start: usize, end: u
             for byte in sub_reads[0].as_bytes() {
                 let character = *byte as char;
                 let calculated_index = calculated_indices[index];
-                let write_string = format!("{} {} {:?}", character, quality_output.0[calculated_index], quality_output.1[calculated_index]);
+                let write_string = format!("{} {} {:?}", character, quality_output.0[calculated_index] as usize, quality_output.1[calculated_index]);
                 let write_file = format!("{}/{}", INTERMEDIATE_PATH, &seq_name_qual_and_errorpos.1);
                 write_string_to_file(&write_file, &write_string);
                 index += 1;
             }
-            break;
+            index_thread += 1;
         }
     }
 }
