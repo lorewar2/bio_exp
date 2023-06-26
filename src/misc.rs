@@ -4,6 +4,7 @@ use crate::generator::simple::get_random_sequences_from_generator;
 use crate::alignment::poahomopolymer::Poa;
 use crate::quality::topology_cut::base_quality_score_calculation;
 use crate::quality::topology_cut::get_parallel_nodes_with_topology_cut;
+use crate::quality::topology_cut::get_consensus_quality_scores;
 use petgraph::{Graph, Directed, graph::NodeIndex};
 use petgraph::dot::Dot;
 use rust_htslib::bam::{Read as BamRead, IndexedReader as BamIndexedReader};
@@ -14,6 +15,7 @@ use std::io::BufReader;
 use std::fs::File;
 use std::io::SeekFrom;
 use std::time::Instant;
+use std::fs::read_dir;
 
 const SEED: u64 = 2;
 const GAP_OPEN: i32 = -2;
@@ -26,7 +28,101 @@ const THREE_BASE_CONTEXT_READ_LENGTH: usize = 1000;
 const NUM_OF_ITER_FOR_ZOOMED_GRAPHS: usize = 4;
 const DATA_PATH: &str = "/data1/hifi_consensus/try2/";
 const READ_BAM_PATH: &str = "/data1/hifi_consensus/try2/merged.bam";
+const INTERMEDIATE_PATH: &str = "result/intermediate";
 const BAND_SIZE: i32 = 100;
+
+pub fn pipeline_process_all_ccs_file_poa (chromosone: &str, start: usize, end: usize) {
+    for process_location in start..end {
+        // get the string and the name
+        let seq_name_qual_and_errorpos_vec = get_corrosponding_seq_name_location_quality_from_bam(process_location, &chromosone.to_string(), &'X');
+        for seq_name_qual_and_errorpos in seq_name_qual_and_errorpos_vec {
+            println!("Processing ccs file: {}", seq_name_qual_and_errorpos.1);
+            // check if the file is already available
+            if check_file_availability(&seq_name_qual_and_errorpos.1, INTERMEDIATE_PATH) {
+                println!("File Available, skipping");
+                continue;
+            }
+            // if not available do poa and make a file
+            // find the subreads of that ccs
+            let mut sub_reads = get_the_subreads_by_name_sam(&seq_name_qual_and_errorpos.1);
+            // skip if no subreads, errors and stuff
+            if sub_reads.len() == 0 {
+                continue;
+            }
+            // filter out the long reads and rearrange the reads
+            sub_reads = reverse_complement_filter_and_rearrange_subreads(&sub_reads);
+            sub_reads.insert(0, seq_name_qual_and_errorpos.0.clone());
+            // do poa with the read and subreads, get the poa and consensus
+            let mut sequence_number: usize = 0;
+            let mut aligner = Aligner::new(MATCH, MISMATCH, GAP_OPEN, &sub_reads[0].as_bytes().to_vec(), BAND_SIZE);
+            
+            for sub_read in &sub_reads {
+                if sequence_number != 0 {
+                    aligner.global(&sub_read.as_bytes().to_vec()).add_to_graph();
+                }
+                sequence_number += 1;
+                println!("Sequence {} processed", sequence_number);
+            }
+            let (calculated_consensus, calculated_topology) = aligner.poa.consensus(); //just poa
+            let calculated_graph: &Graph<u8, i32, Directed, usize> = aligner.graph();
+            let quality_output = get_consensus_quality_scores(sequence_number, &calculated_consensus, &calculated_topology, calculated_graph);
+            // match the calculated consensus to the original consensus and get the required indices
+            let calculated_indices = get_redone_consensus_matched_positions(&sub_reads[0], &calculated_consensus);
+            let mut index = 0;
+            for byte in sub_reads[0].as_bytes() {
+                let character = *byte as char;
+                let calculated_index = calculated_indices[index];
+                let write_string = format!("{} {} {:?}", character, quality_output.0[calculated_index], quality_output.2[calculated_index]);
+                let write_file = format!("{}/{}", INTERMEDIATE_PATH, &seq_name_qual_and_errorpos.1);
+                write_string_to_file(write_file, &write_string);
+                index += 1;
+            }
+            break;
+        }
+    }
+}
+
+fn check_file_availability (file_name: &str, search_path: &str) -> bool {
+    let mut file_available = false;
+    let paths = read_dir(search_path).unwrap();
+    for path in paths {
+        let temp = path.unwrap().file_name().to_string_lossy().to_string();
+        match temp.find(file_name) {
+            Some(_) => {
+                file_available = true;
+            },
+            None => {}
+        };
+    }
+    file_available
+}
+
+fn get_redone_consensus_matched_positions (pacbio_consensus: &String, calculated_consensus: &Vec<u8>) -> Vec<usize> {
+    let mut consensus_matched_indices: Vec<usize> = vec![];
+    let pacbio_consensus_vec: Vec<u8> = pacbio_consensus.bytes().collect();
+    let (alignment, _) = pairwise(&calculated_consensus, &pacbio_consensus_vec, MATCH, MISMATCH, GAP_OPEN, GAP_EXTEND);
+    let mut calc_index = 0;
+    for op in alignment {
+        match op as char {
+            'm' => {
+                consensus_matched_indices.push(calc_index);
+                calc_index += 1;
+            },
+            's' => {
+                calc_index += 1;
+                consensus_matched_indices.push(0);
+            },
+            'd' => {
+                consensus_matched_indices.push(0);
+            },
+            'i' => {
+                calc_index += 1;
+            },
+            _ => {},
+        }
+    }
+    consensus_matched_indices
+}
 
 pub fn pipeline_redo_poa_get_topological_quality_score (chromosone: &str, start: usize, end: usize, thread_id: usize) {
     // get the error locations
@@ -468,7 +564,10 @@ fn get_corrosponding_seq_name_location_quality_from_bam (error_pos: usize, error
                     if (current_ref_pos + temp_int >= error_pos)
                         && (current_ref_pos <= error_pos + 1) {
                         (read_index, _) = get_required_start_end_positions_from_read (temp_int, current_ref_pos, current_read_pos, error_pos, 1);
-                        if &(read_vec[read_index] as char) == base_change {
+                        if &(read_vec[read_index] as char) == base_change && ('X' != *base_change) {
+                            break;
+                        }
+                        else if 'X' == *base_change {
                             break;
                         }
                         else {

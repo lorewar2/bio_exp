@@ -4,7 +4,8 @@ mod generator;
 mod misc;
 mod quality;
 //use pprof;
-use crate::misc::pipeline_redo_poa_get_topological_quality_score;
+//use crate::misc::pipeline_redo_poa_get_topological_quality_score;
+use crate::misc::pipeline_process_all_ccs_file_poa;
 use std::thread;
 //use crate::alignment::poabandedsmarter::Aligner;
 //use crate::generator::simple::get_random_sequences_from_generator;
@@ -31,7 +32,7 @@ fn main() {
             let start = total_start + one_thread_allocation * i;
             let end = start + one_thread_allocation;
             println!("Thread number {} started, {} from {} to {}..", chromosone, i, start, end);
-            pipeline_redo_poa_get_topological_quality_score(chromosone, start, end, i);
+            //pipeline_redo_poa_get_topological_quality_score(chromosone, start, end, i);
         }));
     }
 
@@ -39,6 +40,7 @@ fn main() {
         // Wait for the thread to finish. Returns a result.
         let _ = child.join();
     }
+    pipeline_process_all_ccs_file_poa ("chr21", 1000000, 40000000);
     //
      
     /*let sequences = get_random_sequences_from_generator(2000, 2, 6);
