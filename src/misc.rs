@@ -73,7 +73,7 @@ pub fn pipeline_process_all_ccs_file_poa (chromosone: &str, start: usize, end: u
             for byte in sub_reads[0].as_bytes() {
                 let character = *byte as char;
                 let calculated_index = calculated_indices[index];
-                let write_string = format!("{} {} {:?}", character, quality_output.0[calculated_index], quality_output.2[calculated_index]);
+                let write_string = format!("{} {} {:?}", character, quality_output.0[calculated_index], quality_output.1[calculated_index]);
                 let write_file = format!("{}/{}", INTERMEDIATE_PATH, &seq_name_qual_and_errorpos.1);
                 write_string_to_file(&write_file, &write_string);
                 index += 1;

@@ -10,14 +10,12 @@ const PRINT_ALL: bool = false;
 const USEPACBIODATA: bool = true;
 const NUM_OF_ITER_FOR_PARALLEL: usize = 10;
 
-pub fn get_consensus_quality_scores(seq_num: usize, consensus: &Vec<u8>, topology: &Vec<usize>, graph: &Graph<u8, i32, Directed, usize>) -> (Vec<f64>, Vec<bool>, Vec<Vec<usize>>, Vec<String>) {
+pub fn get_consensus_quality_scores(seq_num: usize, consensus: &Vec<u8>, topology: &Vec<usize>, graph: &Graph<u8, i32, Directed, usize>) -> (Vec<f64>, Vec<Vec<usize>>) {
     let mut quality_scores: Vec<f64> = vec![];
-    let mut validity: Vec<bool> = vec![];
     let mut base_count_vec: Vec<Vec<usize>> = vec![];
-    let mut debug_strings: Vec<String> = vec![];
-    let mut temp_string: String;
     //run all the consensus through get indices
     for i in 0..consensus.len() {
+        println!("{} / {}", i, consensus.len());
         // skip the indices which are in the passed consensus
         let skip_nodes: Vec<usize> = topology[0 .. i + 1].to_vec();
         // new method using topology cut
@@ -29,18 +27,12 @@ pub fn get_consensus_quality_scores(seq_num: usize, consensus: &Vec<u8>, topolog
         if i != consensus.len() - 1 {
             target_node_child = Some(topology[i + 1]);
         }
-        temp_string = format!("BASE NODE: {} ({})", consensus[i] as char, topology[i]);
-        //println!("{}", temp_string);
-        debug_strings.push(temp_string.clone());
-        let (parallel_nodes, parallel_num_incoming_seq, temp_debug_strings) = get_parallel_nodes_with_topology_cut (skip_nodes, seq_num,  topology[i], target_node_parent, target_node_child, graph);
-        debug_strings = [debug_strings, temp_debug_strings].concat();
-        let (temp_quality_score, temp_count_mismatch, temp_base_counts, temp_debug_strings) = base_quality_score_calculation (seq_num, parallel_nodes, parallel_num_incoming_seq, consensus[i], graph);
-        debug_strings = [debug_strings, temp_debug_strings].concat();
+        let (parallel_nodes, parallel_num_incoming_seq, _) = get_parallel_nodes_with_topology_cut (skip_nodes, seq_num,  topology[i], target_node_parent, target_node_child, graph);
+        let (temp_quality_score, _, temp_base_counts, _) = base_quality_score_calculation (seq_num, parallel_nodes, parallel_num_incoming_seq, consensus[i], graph);
         quality_scores.push(temp_quality_score);
-        validity.push(temp_count_mismatch);
         base_count_vec.push(temp_base_counts);
     }
-    (quality_scores, validity, base_count_vec, debug_strings)
+    (quality_scores, base_count_vec)
 }
 
 pub fn get_parallel_nodes_with_topology_cut (skip_nodes: Vec<usize>, total_seq: usize, target_node: usize, target_node_parent: Option<usize>, target_node_child: Option<usize>, graph: &Graph<u8, i32, Directed, usize>) -> (Vec<usize>, Vec<usize>, Vec<String>) {
