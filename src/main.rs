@@ -18,7 +18,7 @@ const MISMATCH: i32 = -2;
 const NTHREADS: usize = 18;
 
 fn main() {
-    // Make a vector to hold the children which are spawned.
+    // Make a vector to hold thfe children which are spawned.
     let mut children = vec![];
     let chromosone = "chr1";
     let total_start = 10_000_000;
@@ -40,7 +40,7 @@ fn main() {
         // Wait for the thread to finish. Returns a result.
         let _ = child.join();
     }
-    pipeline_process_all_ccs_file_poa ("chr21", 1000000, 40000000);
+    pipeline_process_all_ccs_file_poa ("chr21", 13_000_000, 40_000_000);
     //
      
     /*let sequences = get_random_sequences_from_generator(2000, 2, 6);

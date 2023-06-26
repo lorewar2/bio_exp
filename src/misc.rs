@@ -10,12 +10,13 @@ use petgraph::dot::Dot;
 use rust_htslib::bam::{Read as BamRead, IndexedReader as BamIndexedReader};
 use rust_htslib::bcf::{Reader, Read as BcfRead};
 use rust_htslib::faidx;
-use std::{fs::OpenOptions, io::{prelude::*}, path::Path};
+use std::{fs::OpenOptions, io::{prelude::*}};
 use std::io::BufReader;
 use std::fs::File;
 use std::io::SeekFrom;
 use std::time::Instant;
 use std::fs::read_dir;
+use std::fs::create_dir_all;
 
 const SEED: u64 = 2;
 const GAP_OPEN: i32 = -2;
@@ -74,7 +75,7 @@ pub fn pipeline_process_all_ccs_file_poa (chromosone: &str, start: usize, end: u
                 let calculated_index = calculated_indices[index];
                 let write_string = format!("{} {} {:?}", character, quality_output.0[calculated_index], quality_output.2[calculated_index]);
                 let write_file = format!("{}/{}", INTERMEDIATE_PATH, &seq_name_qual_and_errorpos.1);
-                write_string_to_file(write_file, &write_string);
+                write_string_to_file(&write_file, &write_string);
                 index += 1;
             }
             break;
@@ -198,10 +199,10 @@ pub fn pipeline_redo_poa_get_topological_quality_score (chromosone: &str, start:
             let (calculated_quality_score, _, parallel_bases, _) = base_quality_score_calculation (sequence_number, parallel_nodes, parallel_num_incoming_seq, calculated_consensus[position], calculated_graph);
             let write_string = format!("Error position {}:{} ref allele: {} alt allele: {}\nPacbio base: \t{} quality: {}\nCalculated base: \t{} quality: {}\nParallel Bases: ACGT:{:?}\n\n", error_location.0, error_location.1, error_location.2, error_location.3, error_location.3, seq_name_qual_and_errorpos.2, calculated_consensus[position] as char, calculated_quality_score, parallel_bases);
             let write_file = format!("result/quality_{}.txt", thread_id);
-            write_string_to_file(write_file, &write_string);
+            write_string_to_file(&write_file, &write_string);
             let write_string = format!("{}\n{}\n\n", write_string, get_zoomed_graph_section(calculated_graph, &calculated_topology[position]));
             let write_file = format!("result/graph_{}.txt", thread_id);
-            write_string_to_file(write_file, &write_string);
+            write_string_to_file(&write_file, &write_string);
             index += 1;
             println!("Thread {} task done, total time:{:?} total tasks:{}", thread_id, time_instant.elapsed() ,index);
         }
@@ -625,7 +626,10 @@ fn get_corrosponding_seq_name_location_quality_from_bam (error_pos: usize, error
     seq_name_qual_and_errorpos
 }
 
-pub fn write_string_to_file (file_name: impl AsRef<Path>, input_string: &String) {
+pub fn write_string_to_file (file_name: &String, input_string: &String) {
+    let path = std::path::Path::new(&file_name);
+    let prefix = path.parent().unwrap();
+    create_dir_all(prefix).unwrap();
     let mut file = OpenOptions::new().create(true).append(true).open(file_name).unwrap();
     writeln!(file, "{}", input_string).expect("result file cannot be written");
 }

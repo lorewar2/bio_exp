@@ -30,7 +30,7 @@ pub fn get_consensus_quality_scores(seq_num: usize, consensus: &Vec<u8>, topolog
             target_node_child = Some(topology[i + 1]);
         }
         temp_string = format!("BASE NODE: {} ({})", consensus[i] as char, topology[i]);
-        println!("{}", temp_string);
+        //println!("{}", temp_string);
         debug_strings.push(temp_string.clone());
         let (parallel_nodes, parallel_num_incoming_seq, temp_debug_strings) = get_parallel_nodes_with_topology_cut (skip_nodes, seq_num,  topology[i], target_node_parent, target_node_child, graph);
         debug_strings = [debug_strings, temp_debug_strings].concat();
@@ -358,12 +358,12 @@ pub fn base_quality_score_calculation (mut total_seq: usize, indices_of_parallel
     match count_mismatch {
         true => {
             let temp_string = format!("base counts A:{} C:{} G:{} T:{} MISMATCHHHH!!!!!!!!!!!!!!!!!!!!! \n", base_a_count, base_c_count, base_g_count, base_t_count);
-            println!("{}", temp_string);
+            //println!("{}", temp_string);
             debug_strings.push(temp_string.clone());
         },
         false => {
             let temp_string = format!("base counts A:{} C:{} G:{} T:{}\n", base_a_count, base_c_count, base_g_count, base_t_count);
-            println!("{}", temp_string);
+            //println!("{}", temp_string);
             debug_strings.push(temp_string.clone());
         }
     }
