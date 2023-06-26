@@ -15,7 +15,9 @@ pub fn get_consensus_quality_scores(seq_num: usize, consensus: &Vec<u8>, topolog
     let mut base_count_vec: Vec<Vec<usize>> = vec![];
     //run all the consensus through get indices
     for i in 0..consensus.len() {
-        println!("{} / {}", i, consensus.len());
+        if i % 2000 == 0 {
+            println!("progress {}%({} / {})", (i * 100) / consensus.len() ,i, consensus.len());
+        }
         // skip the indices which are in the passed consensus
         let skip_nodes: Vec<usize> = topology[0 .. i + 1].to_vec();
         // new method using topology cut

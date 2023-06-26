@@ -85,15 +85,12 @@ pub fn pipeline_process_all_ccs_file_poa (chromosone: &str, start: usize, end: u
 
 fn check_file_availability (file_name: &str, search_path: &str) -> bool {
     let mut file_available = false;
-    let paths = read_dir(search_path).unwrap();
-    for path in paths {
-        let temp = path.unwrap().file_name().to_string_lossy().to_string();
-        match temp.find(file_name) {
-            Some(_) => {
-                file_available = true;
-            },
-            None => {}
-        };
+    let temp_path_string = format!("{}/{}", search_path, file_name);
+    let path = std::path::Path::new(&temp_path_string);
+    let prefix = path.parent().unwrap();
+    match read_dir(prefix) {
+        Ok(_) => {file_available = true;},
+        Err(_) => {},
     }
     file_available
 }
