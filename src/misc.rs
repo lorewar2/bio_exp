@@ -59,7 +59,6 @@ pub fn pipeline_process_all_ccs_file_poa (chromosone: &str, start: usize, end: u
                 println!("Thread {}: File Available, skipping", thread_id);
                 continue;
             }
-            all_skipped = false;
             // if not available do poa and make a file
             // find the subreads of that ccs
             let mut sub_reads = get_the_subreads_by_name_sam(&seq_name_qual_and_errorpos.1);
@@ -67,6 +66,7 @@ pub fn pipeline_process_all_ccs_file_poa (chromosone: &str, start: usize, end: u
             if sub_reads.len() == 0 {
                 continue;
             }
+            all_skipped = false;
             // filter out the long reads and rearrange the reads
             sub_reads = reverse_complement_filter_and_rearrange_subreads(&sub_reads);
             sub_reads.insert(0, seq_name_qual_and_errorpos.0.clone());
@@ -99,6 +99,10 @@ pub fn pipeline_process_all_ccs_file_poa (chromosone: &str, start: usize, end: u
             // try to clean the memory 
             drop(quality_output);
             drop(sub_reads);
+            drop(calculated_consensus);
+            drop(calculated_graph);
+            drop(calculated_topology);
+            drop(calculated_indices);
             drop(aligner);
         }
         if all_skipped {
@@ -317,6 +321,8 @@ fn get_the_subreads_by_name_sam (full_name: &String) -> Vec<String> {
         }
     }
     println!("count = {}", count);
+    drop(reader);
+    drop(buffer);
     subread_vec
 }
 
@@ -646,6 +652,7 @@ fn get_corrosponding_seq_name_location_quality_from_bam (error_pos: usize, error
         }
         seq_name_qual_and_errorpos.push((read_string.clone(), read_name.clone(), readunwrapped.qual()[read_index], read_index));
     }
+    drop(bam_reader);
     seq_name_qual_and_errorpos
 }
 
