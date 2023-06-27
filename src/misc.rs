@@ -50,7 +50,7 @@ pub fn pipeline_process_all_ccs_file_poa (chromosone: &str, start: usize, end: u
         }
         println!("Thread {}: Chr {} Loc {}, tasks_done {}", thread_id, chromosone, process_location, index_thread);
         // get the string and the name
-        let seq_name_qual_and_errorpos_vec = get_corrosponding_seq_name_location_quality_from_bam(process_location, &chromosone.to_string(), &'X');
+        let mut seq_name_qual_and_errorpos_vec = get_corrosponding_seq_name_location_quality_from_bam(process_location, &chromosone.to_string(), &'X');
         let mut all_skipped = true;
         for seq_name_qual_and_errorpos in &seq_name_qual_and_errorpos_vec {
             println!("Thread {}: Processing ccs file: {}", thread_id, seq_name_qual_and_errorpos.1);
@@ -96,19 +96,20 @@ pub fn pipeline_process_all_ccs_file_poa (chromosone: &str, start: usize, end: u
                 index += 1;
             }
             index_thread += 1;
-            // try to clean the memory 
+            // try to clean the memory
             drop(quality_output);
             drop(sub_reads);
             drop(calculated_consensus);
             drop(calculated_graph);
             drop(calculated_topology);
             drop(calculated_indices);
-            drop(aligner);
+            drop(aligner.poa);
         }
         if all_skipped {
             skip_thousand = true;
         }
         // try to clean the memory 
+        seq_name_qual_and_errorpos_vec.clear();
         drop(seq_name_qual_and_errorpos_vec);
     }
 }
@@ -173,7 +174,6 @@ pub fn pipeline_redo_poa_get_topological_quality_score (chromosone: &str, start:
             // find the subreads of that ccs
             let mut sub_reads = get_the_subreads_by_name_sam(&seq_name_qual_and_errorpos.1);
             // skip if no subreads, errors and stuff
-             
             if sub_reads.len() == 0 {
                 continue;
             }
@@ -240,7 +240,7 @@ fn reverse_complement_filter_and_rearrange_subreads (original_subreads: &Vec<Str
     let mut seqvec: Vec<String> = vec![];
     //reverse complement every other line
     let mut index = 0;
-    for seq in original_subreads{
+    for seq in original_subreads {
         if index % 2 != 0 {
             let mut tempseq: Vec<char> = vec![];
             let iterator = seq.chars().rev().into_iter();

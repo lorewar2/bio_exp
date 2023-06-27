@@ -1,8 +1,8 @@
 
 
 #![allow(dead_code)]
-#[global_allocator]
-static ALLOC: dhat::Alloc = dhat::Alloc;
+//#[global_allocator]
+//static ALLOC: dhat::Alloc = dhat::Alloc;
 mod alignment;
 mod generator;
 mod misc;
@@ -23,7 +23,7 @@ const NTHREADS: usize = 1;
 
 fn main() {
     // Make a vector to hold thfe children which are spawneddd.
-    let _profiler = dhat::Profiler::new_heap();
+    //let _profiler = dhat::Profiler::new_heap();
     let mut children = vec![];
     let chromosone = "chr21";
     let total_start = 13492246;
