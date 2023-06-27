@@ -34,17 +34,32 @@ const BAND_SIZE: i32 = 100;
 
 pub fn pipeline_process_all_ccs_file_poa (chromosone: &str, start: usize, end: usize, thread_id: usize) {
     let mut index_thread = 0;
+    let mut skip_thousand = false;
+    let mut skip_index = 0;
     for process_location in start..end {
-        println!("Thread {} Chr {} Loc {}, tasks_done {}", thread_id, chromosone, process_location, index_thread);
-        // get the string and the name
-        let seq_name_qual_and_errorpos_vec = get_corrosponding_seq_name_location_quality_from_bam(process_location, &chromosone.to_string(), &'X');
-        for seq_name_qual_and_errorpos in seq_name_qual_and_errorpos_vec {
-            println!("Processing ccs file: {}", seq_name_qual_and_errorpos.1);
-            // check if the file is already available
-            if check_file_availability(&seq_name_qual_and_errorpos.1, INTERMEDIATE_PATH) {
-                println!("File Available, skipping");
+        // skip thousand when same found
+        if skip_thousand {
+            skip_index += 1;
+            if skip_index > 2000 {
+                skip_thousand = false;
+                skip_index = 0;
+            }
+            else {
                 continue;
             }
+        }
+        println!("Thread {}: Chr {} Loc {}, tasks_done {}", thread_id, chromosone, process_location, index_thread);
+        // get the string and the name
+        let seq_name_qual_and_errorpos_vec = get_corrosponding_seq_name_location_quality_from_bam(process_location, &chromosone.to_string(), &'X');
+        let mut all_skipped = true;
+        for seq_name_qual_and_errorpos in seq_name_qual_and_errorpos_vec {
+            println!("Thread {}: Processing ccs file: {}", thread_id, seq_name_qual_and_errorpos.1);
+            // check if the file is already available
+            if check_file_availability(&seq_name_qual_and_errorpos.1, INTERMEDIATE_PATH) {
+                println!("Thread {}: File Available, skipping", thread_id);
+                continue;
+            }
+            all_skipped = false;
             // if not available do poa and make a file
             // find the subreads of that ccs
             let mut sub_reads = get_the_subreads_by_name_sam(&seq_name_qual_and_errorpos.1);
@@ -64,7 +79,7 @@ pub fn pipeline_process_all_ccs_file_poa (chromosone: &str, start: usize, end: u
                     aligner.global(&sub_read.as_bytes().to_vec()).add_to_graph();
                 }
                 sequence_number += 1;
-                println!("Sequence {} processed", sequence_number);
+                println!("Thread {}: Sequence {} processed", thread_id, sequence_number);
             }
             let (calculated_consensus, calculated_topology) = aligner.poa.consensus(); //just poa
             let calculated_graph: &Graph<u8, i32, Directed, usize> = aligner.graph();
@@ -81,6 +96,9 @@ pub fn pipeline_process_all_ccs_file_poa (chromosone: &str, start: usize, end: u
                 index += 1;
             }
             index_thread += 1;
+        }
+        if all_skipped {
+            skip_thousand = true;
         }
     }
 }

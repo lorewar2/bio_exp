@@ -21,7 +21,7 @@ fn main() {
     // Make a vector to hold thfe children which are spawned.
     let mut children = vec![];
     let chromosone = "chr21";
-    let total_start = 3_000_000;
+    let total_start = 13_000_000;
     let total_end = 40_000_000;
     let one_thread_allocation = (total_end - total_start) / NTHREADS;
     for i in 0..NTHREADS {
