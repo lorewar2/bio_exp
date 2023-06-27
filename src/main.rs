@@ -19,7 +19,7 @@ const GAP_OPEN: i32 = -2;
 const GAP_EXTEND: i32 = 0;
 const MATCH: i32 = 2;
 const MISMATCH: i32 = -2;
-const NTHREADS: usize = 16;
+const NTHREADS: usize = 1;
 
 fn main() {
     // Make a vector to hold thfe children which are spawned.
