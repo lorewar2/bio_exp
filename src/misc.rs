@@ -276,7 +276,7 @@ fn reverse_complement_filter_and_rearrange_subreads (original_subreads: &Vec<Str
     for _ in drop_index..seqvec.len() {
         seqvec.pop();
     }
-    // rearrange the seq vector median first and rest according median size difference
+    // rearrange the seq vector median first and rest according mediand size difference
     seqvec.sort_by(|a, b| ((a.len() as f32 - median_size).abs()).partial_cmp(&(b.len() as f32 - median_size).abs()).unwrap());
     seqvec
 }
