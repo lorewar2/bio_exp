@@ -32,6 +32,63 @@ const READ_BAM_PATH: &str = "/data1/hifi_consensus/try2/merged.bam";
 const INTERMEDIATE_PATH: &str = "result/intermediate";
 const BAND_SIZE: i32 = 100;
 
+pub fn get_quality_score_count_topology_cut () {
+    let continue_threshold = 10000;
+    let mut continue_count = 0;
+    let mut quality_score_count: Vec<usize> = vec![0; 94];
+    let chromosone = format!("{}{}", String::from("chr"), 21);
+    let mut position_base = 5000000;
+    let mut prev_93_count = usize::MAX; 
+    'bigloop: loop {
+        if position_base % 1000 == 0 {
+            println!("Position {}", position_base);
+        }
+        // get the required info from sam
+        let seq_name_qual_and_errorpos_vec = get_corrosponding_seq_name_location_quality_from_bam(position_base, &chromosone.to_string(), &'X');
+        for seq_name_qual_and_errorpos in &seq_name_qual_and_errorpos_vec {
+            // check if the file is already available
+            if check_file_availability(&seq_name_qual_and_errorpos.1, INTERMEDIATE_PATH) {
+                let available_file_path = format!("{}/{}", INTERMEDIATE_PATH, seq_name_qual_and_errorpos.1);
+                let temp_quality_score = get_quality_scores_from_file(&available_file_path, seq_name_qual_and_errorpos.3);
+                quality_score_count[temp_quality_score.0 as usize] += 1;
+            }
+            else {
+                if quality_score_count[10] == prev_93_count {
+                    continue_count += 1;
+                    if continue_count >= continue_threshold {
+                        break 'bigloop;
+                    }
+                }
+                else {
+                    continue_count = 0;
+                }
+            }
+        }
+        prev_93_count = quality_score_count[10];
+        position_base += 1;
+    }
+    println!("{:#?}", quality_score_count);
+}
+
+pub fn get_quality_scores_from_file(file_path: &String, required_pos: usize) -> (u8, u8) {
+    let mut temp_quality_vec: (u8, u8) = (0, 0);
+    // open the file
+    let f = File::open(&file_path).unwrap();
+    let mut reader = BufReader::new(f);
+    let mut buffer = String::new();
+    let mut current_pos = 0;
+    loop {
+        buffer.clear();
+        reader.read_line(&mut buffer).unwrap();
+        if current_pos == required_pos {
+            println!("buffer: {}", buffer);
+            break;
+        }
+        current_pos += 1;
+    }
+    temp_quality_vec
+}
+
 pub fn pipeline_process_all_ccs_file_poa (chromosone: &str, start: usize, end: usize, thread_id: usize) {
     let mut index_thread = 0;
     let mut skip_thousand = false;

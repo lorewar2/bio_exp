@@ -11,6 +11,7 @@ mod quality;
 //use crate::misc::pipeline_redo_poa_get_topological_quality_score;
 use crate::misc::pipeline_process_all_ccs_file_poa;
 use std::thread;
+use crate::misc::get_quality_score_count_topology_cut;
 //use crate::alignment::poabandedsmarter::Aligner;
 //use crate::generator::simple::get_random_sequences_from_generator;
 //use crate::alignment::pairwise::pairwise;
@@ -22,8 +23,10 @@ const MISMATCH: i32 = -2;
 const NTHREADS: usize = 1;
 
 fn main() {
+    get_quality_score_count_topology_cut();
     // Make a vector to hold thfe children which are spawneddd.
     //let _profiler = dhat::Profiler::new_heap();
+    /* 
     let mut children = vec![];
     let chromosone = "chr21";
     let total_start = 13_000_000;
@@ -46,7 +49,7 @@ fn main() {
         // Wait for the thread to finish. Returns a result.
         let _ = child.join();
     }
-    
+    */
     //
      
     /*let sequences = get_random_sequences_from_generator(2000, 2, 6);
