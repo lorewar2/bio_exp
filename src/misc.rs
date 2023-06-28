@@ -32,16 +32,13 @@ const READ_BAM_PATH: &str = "/data1/hifi_consensus/try2/merged.bam";
 const INTERMEDIATE_PATH: &str = "result/intermediate";
 const BAND_SIZE: i32 = 100;
 
-pub fn get_quality_score_count_topology_cut () {
-    let continue_threshold = 10000;
-    let mut continue_count = 0;
+pub fn get_quality_score_count_topology_cut (start: usize, end: usize, thread_id: usize) {
     let mut quality_score_count: Vec<usize> = vec![0; 94];
     let chromosone = format!("{}{}", String::from("chr"), 21);
-    let mut position_base = 13_000_000;
-    let mut prev_93_count = usize::MAX; 
+    let mut position_base = start; 
     'bigloop: loop {
         if position_base % 1000 == 0 {
-            println!("Position {}", position_base);
+            println!("Thread ID: {} Position {}", thread_id, position_base);
         }
         // get the required info from sam
         let seq_name_qual_and_errorpos_vec = get_corrosponding_seq_name_location_quality_from_bam(position_base, &chromosone.to_string(), &'X');
@@ -52,18 +49,19 @@ pub fn get_quality_score_count_topology_cut () {
                 let temp_quality_score = get_quality_scores_from_file(&available_file_path, seq_name_qual_and_errorpos.3);
                 quality_score_count[temp_quality_score.0 as usize] += 1;
             }
-            if position_base > 40_000_000 {
-                break;
+            if position_base > end {
+                break 'bigloop;
             }
         }
-        prev_93_count = quality_score_count[10];
         position_base += 1;
     }
-    println!("{:#?}", quality_score_count);
+    let write_file = format!("result/{}_totalcount.txt", thread_id);
+    let write_string = format!("{:#?}", quality_score_count);
+    write_string_to_file(&write_file, &write_string);
 }
 
 pub fn get_quality_scores_from_file(file_path: &String, required_pos: usize) -> (u8, u8) {
-    let mut temp_quality_vec: (u8, u8) = (0, 0);
+    let temp_quality_vec: (u8, u8);
     // open the file
     let f = File::open(&file_path).unwrap();
     let mut reader = BufReader::new(f);

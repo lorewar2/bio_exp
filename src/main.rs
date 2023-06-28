@@ -20,17 +20,17 @@ const GAP_OPEN: i32 = -2;
 const GAP_EXTEND: i32 = 0;
 const MATCH: i32 = 2;
 const MISMATCH: i32 = -2;
-const NTHREADS: usize = 1;
+const NTHREADS: usize = 100;
 
 fn main() {
-    get_quality_score_count_topology_cut();
+    
     // Make a vector to hold thfe children which are spawneddd.
     //let _profiler = dhat::Profiler::new_heap();
-    /* 
+    
     let mut children = vec![];
     let chromosone = "chr21";
     let total_start = 13_000_000;
-    let total_end = 40_000_000;
+    let total_end = 14_000_000;
     let one_thread_allocation = (total_end - total_start) / NTHREADS;
     for i in 0..NTHREADS {
         // calculate my start and end locations
@@ -40,7 +40,8 @@ fn main() {
             let start = total_start + one_thread_allocation * i;
             let end = start + one_thread_allocation;
             println!("Thread number {} started, {} from {} to {}..", chromosone, i, start, end);
-            pipeline_process_all_ccs_file_poa (chromosone, start, end, i);
+            //pipeline_process_all_ccs_file_poa (chromosone, start, end, i);
+            get_quality_score_count_topology_cut(start, end, i);
             //pipeline_redo_poa_get_topological_quality_score(chromosone, start, end, i);
         }));
     }
@@ -49,7 +50,6 @@ fn main() {
         // Wait for the thread to finish. Returns a result.
         let _ = child.join();
     }
-    */
     //
      
     /*let sequences = get_random_sequences_from_generator(2000, 2, 6);
