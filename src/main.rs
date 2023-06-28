@@ -26,8 +26,8 @@ fn main() {
     //let _profiler = dhat::Profiler::new_heap();
     let mut children = vec![];
     let chromosone = "chr21";
-    let total_start = 13492246;
-    let total_end = 13492250;
+    let total_start = 13_000_000;
+    let total_end = 40_000_000;
     let one_thread_allocation = (total_end - total_start) / NTHREADS;
     for i in 0..NTHREADS {
         // calculate my start and end locations
