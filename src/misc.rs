@@ -37,7 +37,7 @@ pub fn get_quality_score_count_topology_cut () {
     let mut continue_count = 0;
     let mut quality_score_count: Vec<usize> = vec![0; 94];
     let chromosone = format!("{}{}", String::from("chr"), 21);
-    let mut position_base = 5000000;
+    let mut position_base = 13_000_000;
     let mut prev_93_count = usize::MAX; 
     'bigloop: loop {
         if position_base % 1000 == 0 {
@@ -81,7 +81,11 @@ pub fn get_quality_scores_from_file(file_path: &String, required_pos: usize) -> 
         buffer.clear();
         reader.read_line(&mut buffer).unwrap();
         if current_pos == required_pos {
-            println!("buffer: {}", buffer);
+            let mut split_text_iter = (buffer.split(" ")).into_iter();
+            let base = split_text_iter.next().unwrap().parse::<u8>().unwrap();
+            let quality = split_text_iter.next().unwrap().parse::<u8>().unwrap();
+            println!("{} {}", base, quality);
+            temp_quality_vec = (base, quality);
             break;
         }
         current_pos += 1;
