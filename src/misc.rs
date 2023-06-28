@@ -32,6 +32,38 @@ const READ_BAM_PATH: &str = "/data1/hifi_consensus/try2/merged.bam";
 const INTERMEDIATE_PATH: &str = "result/intermediate";
 const BAND_SIZE: i32 = 100;
 
+pub fn get_quality_score_count_topology_cut_errors (start: usize, end: usize, thread_id: usize) {
+    let mut quality_score_count: Vec<usize> = vec![0; 94];
+    let chromosone = format!("{}{}", String::from("chr"), 21);
+    let error_locations = get_error_bases_from_himut_vcf (); //chromosone, location, ref allele, alt allele
+    // go through the error locations
+    let mut index = 0;
+    for error_location in error_locations {
+        if (error_location.1 < start) || !(error_location.0.eq(&chromosone)) {
+            continue;
+        }
+        if (error_location.1 > end) && (error_location.0.eq(&chromosone)) {
+            break;
+        }
+        index += 1;
+        /*let seq_name_qual_and_errorpos_vec = get_corrosponding_seq_name_location_quality_from_bam(error_location.1, &chromosone.to_string(), &'X');
+        for seq_name_qual_and_errorpos in &seq_name_qual_and_errorpos_vec {
+            // check if the file is already available
+            if check_file_availability(&seq_name_qual_and_errorpos.1, INTERMEDIATE_PATH) {
+                let available_file_path = format!("{}/{}", INTERMEDIATE_PATH, seq_name_qual_and_errorpos.1);
+                let temp_quality_score = get_quality_scores_from_file(&available_file_path, seq_name_qual_and_errorpos.3);
+                if error_location.3 == temp_quality_score.1 as char {
+                    quality_score_count[temp_quality_score.0 as usize] += 1;
+                }
+            }
+        }*/
+    }
+    println!("count {}", index);
+    let write_file = format!("result/{}_errorcount.txt", thread_id);
+    let write_string = format!("{:#?}", quality_score_count);
+    write_string_to_file(&write_file, &write_string);
+}
+
 pub fn get_quality_score_count_topology_cut (start: usize, end: usize, thread_id: usize) {
     let mut quality_score_count: Vec<usize> = vec![0; 94];
     let chromosone = format!("{}{}", String::from("chr"), 21);
