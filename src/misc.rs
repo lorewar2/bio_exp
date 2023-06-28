@@ -52,16 +52,8 @@ pub fn get_quality_score_count_topology_cut () {
                 let temp_quality_score = get_quality_scores_from_file(&available_file_path, seq_name_qual_and_errorpos.3);
                 quality_score_count[temp_quality_score.0 as usize] += 1;
             }
-            else {
-                if quality_score_count[10] == prev_93_count {
-                    continue_count += 1;
-                    if continue_count >= continue_threshold {
-                        break 'bigloop;
-                    }
-                }
-                else {
-                    continue_count = 0;
-                }
+            if position_base > 40_000_000 {
+                break;
             }
         }
         prev_93_count = quality_score_count[10];
@@ -82,7 +74,7 @@ pub fn get_quality_scores_from_file(file_path: &String, required_pos: usize) -> 
         reader.read_line(&mut buffer).unwrap();
         if current_pos == required_pos {
             let mut split_text_iter = (buffer.split(" ")).into_iter();
-            let base = split_text_iter.next().unwrap().parse::<u8>().unwrap();
+            let base = split_text_iter.next().unwrap().as_bytes()[0];
             let quality = split_text_iter.next().unwrap().parse::<u8>().unwrap();
             println!("{} {}", base, quality);
             temp_quality_vec = (base, quality);
