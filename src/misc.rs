@@ -93,7 +93,7 @@ pub fn get_quality_score_count_topology_cut (start: usize, end: usize, thread_id
 }
 
 pub fn get_quality_scores_from_file(file_path: &String, required_pos: usize) -> (u8, u8) {
-    let temp_quality_vec: (u8, u8);
+    let mut temp_quality_vec: (u8, u8) = (0, 0);
     // open the file
     let f = File::open(&file_path).unwrap();
     let mut reader = BufReader::new(f);
@@ -104,7 +104,11 @@ pub fn get_quality_scores_from_file(file_path: &String, required_pos: usize) -> 
         reader.read_line(&mut buffer).unwrap();
         if current_pos == required_pos {
             let mut split_text_iter = (buffer.split(" ")).into_iter();
-            let base = split_text_iter.next().unwrap().as_bytes()[0];
+            let mut base = 65;
+            match split_text_iter.next() {
+                Some(x) => {if x.as_bytes().len() > 0 {base = x.as_bytes()[0];} else {break;}},
+                None => {break;},
+            }
             let quality = split_text_iter.next().unwrap().parse::<u8>().unwrap();
             //println!("{} {}", base, quality);
             temp_quality_vec = (base, quality);
