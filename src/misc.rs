@@ -25,7 +25,7 @@ const MATCH: i32 = 2;
 const MISMATCH: i32 = -2;
 const RANDOM_SEQUENCE_LENGTH: usize = 1000;
 const NUMBER_OF_RANDOM_SEQUENCES: usize = 5;
-const THREE_BASE_CONTEXT_READ_LENGTH: usize = 3;
+const THREE_BASE_CONTEXT_READ_LENGTH: usize = 2;
 const NUM_OF_ITER_FOR_ZOOMED_GRAPHS: usize = 4;
 const DATA_PATH: &str = "/data1/hifi_consensus/try2/";
 const READ_BAM_PATH: &str = "/data1/hifi_consensus/try2/merged.bam";
@@ -45,10 +45,13 @@ pub fn get_data_for_ml (start: usize, end: usize, thread_id: usize) {
         error_index += 1;
     }
     'bigloop: loop {
+        if position_base % 1000 == 0 {
+            println!("Thread ID: {} Position {}", thread_id, position_base);
+        }
         let seq_name_qual_and_errorpos_vec = get_corrosponding_seq_name_location_quality_from_bam(position_base, &chromosone.to_string(), &'X');
         for seq_name_qual_and_errorpos in &seq_name_qual_and_errorpos_vec {
             // get the three base context
-            let mut fai_reader = faidx::Reader::from_path(&"data/GRCh38.fa").unwrap();
+            let mut fai_reader = faidx::Reader::from_path(&"/data1/GiaB_benchmark/GRCh38.fa").unwrap();
             let threebase_context = read_fai_file(position_base - 1, &chromosone, &mut fai_reader);
 
             let mut error = false;
@@ -71,8 +74,10 @@ pub fn get_data_for_ml (start: usize, end: usize, thread_id: usize) {
             else {
                 continue;
             }
-            // print the line 
-            println!("{}: {} {} {} {} {}",thread_id, base, threebase_context, quality, parallel_stuff, error);
+            // write data
+            let write_string = format!("{} {} {} {} {}", error, threebase_context, base, quality, parallel_stuff);
+            let write_file = format!("result/{}_mldata.txt", thread_id);
+            write_string_to_file(&write_file, &write_string);
         }
         if error_locations[error_index].1 == position_base {
             error_index += 1;
