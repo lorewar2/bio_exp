@@ -52,8 +52,8 @@ pub fn get_quality_score_count_topology_cut_errors (start: usize, end: usize, th
             if check_file_availability(&seq_name_qual_and_errorpos.1, INTERMEDIATE_PATH) {
                 let available_file_path = format!("{}/{}", INTERMEDIATE_PATH, seq_name_qual_and_errorpos.1);
                 let temp_quality_score = get_quality_scores_from_file(&available_file_path, seq_name_qual_and_errorpos.3);
-                if error_location.3 == temp_quality_score.1 as char {
-                    quality_score_count[temp_quality_score.0 as usize] += 1;
+                if error_location.3 == temp_quality_score.0 as char {
+                    quality_score_count[temp_quality_score.1 as usize] += 1;
                 }
             }
         }*/
@@ -79,7 +79,7 @@ pub fn get_quality_score_count_topology_cut (start: usize, end: usize, thread_id
             if check_file_availability(&seq_name_qual_and_errorpos.1, INTERMEDIATE_PATH) {
                 let available_file_path = format!("{}/{}", INTERMEDIATE_PATH, seq_name_qual_and_errorpos.1);
                 let temp_quality_score = get_quality_scores_from_file(&available_file_path, seq_name_qual_and_errorpos.3);
-                quality_score_count[temp_quality_score.0 as usize] += 1;
+                quality_score_count[temp_quality_score.1 as usize] += 1;
             }
             if position_base > end {
                 break 'bigloop;
@@ -106,7 +106,7 @@ pub fn get_quality_scores_from_file(file_path: &String, required_pos: usize) -> 
             let mut split_text_iter = (buffer.split(" ")).into_iter();
             let base = split_text_iter.next().unwrap().as_bytes()[0];
             let quality = split_text_iter.next().unwrap().parse::<u8>().unwrap();
-            println!("{} {}", base, quality);
+            //println!("{} {}", base, quality);
             temp_quality_vec = (base, quality);
             break;
         }

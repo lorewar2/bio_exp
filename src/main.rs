@@ -11,7 +11,7 @@ mod quality;
 //use crate::misc::pipeline_redo_poa_get_topological_quality_score;
 //use crate::misc::pipeline_process_all_ccs_file_poa;
 use std::thread;
-use crate::misc::get_quality_score_count_topology_cut_errors;
+use crate::misc::get_quality_score_count_topology_cut;
 //use crate::alignment::poabandedsmarter::Aligner;
 //use crate::generator::simple::get_random_sequences_from_generator;
 //use crate::alignment::pairwise::pairwise;
@@ -20,7 +20,7 @@ const GAP_OPEN: i32 = -2;
 const GAP_EXTEND: i32 = 0;
 const MATCH: i32 = 2;
 const MISMATCH: i32 = -2;
-const NTHREADS: usize = 10;
+const NTHREADS: usize = 100;
 
 fn main() {
     
@@ -41,7 +41,7 @@ fn main() {
             let end = start + one_thread_allocation;
             println!("Thread number {} started, {} from {} to {}..", chromosone, i, start, end);
             //pipeline_process_all_ccs_file_poa (chromosone, start, end, i);
-            get_quality_score_count_topology_cut_errors(start, end, i);
+            get_quality_score_count_topology_cut(start, end, i);
             //pipeline_redo_poa_get_topological_quality_score(chromosone, start, end, i);
         }));
     }
