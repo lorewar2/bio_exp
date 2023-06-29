@@ -11,7 +11,8 @@ mod quality;
 //use crate::misc::pipeline_redo_poa_get_topological_quality_score;
 //use crate::misc::pipeline_process_all_ccs_file_poa;
 use std::thread;
-use crate::misc::get_quality_score_count_topology_cut;
+//use crate::misc::get_quality_score_count_topology_cut;
+use crate::misc::get_data_for_ml;
 //use crate::alignment::poabandedsmarter::Aligner;
 //use crate::generator::simple::get_random_sequences_from_generator;
 //use crate::alignment::pairwise::pairwise;
@@ -20,7 +21,7 @@ const GAP_OPEN: i32 = -2;
 const GAP_EXTEND: i32 = 0;
 const MATCH: i32 = 2;
 const MISMATCH: i32 = -2;
-const NTHREADS: usize = 100;
+const NTHREADS: usize = 1;
 
 fn main() {
     
@@ -30,7 +31,7 @@ fn main() {
     let mut children = vec![];
     let chromosone = "chr21";
     let total_start = 13_000_000;
-    let total_end = 14_000_000;
+    let total_end = 40_000_000;
     let one_thread_allocation = (total_end - total_start) / NTHREADS;
     for i in 0..NTHREADS {
         // calculate my start and end locations
@@ -41,7 +42,8 @@ fn main() {
             let end = start + one_thread_allocation;
             println!("Thread number {} started, {} from {} to {}..", chromosone, i, start, end);
             //pipeline_process_all_ccs_file_poa (chromosone, start, end, i);
-            get_quality_score_count_topology_cut(start, end, i);
+            //get_quality_score_count_topology_cut(start, end, i);
+            get_data_for_ml (start, end, i);
             //pipeline_redo_poa_get_topological_quality_score(chromosone, start, end, i);
         }));
     }

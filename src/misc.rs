@@ -25,12 +25,67 @@ const MATCH: i32 = 2;
 const MISMATCH: i32 = -2;
 const RANDOM_SEQUENCE_LENGTH: usize = 1000;
 const NUMBER_OF_RANDOM_SEQUENCES: usize = 5;
-const THREE_BASE_CONTEXT_READ_LENGTH: usize = 1000;
+const THREE_BASE_CONTEXT_READ_LENGTH: usize = 3;
 const NUM_OF_ITER_FOR_ZOOMED_GRAPHS: usize = 4;
 const DATA_PATH: &str = "/data1/hifi_consensus/try2/";
 const READ_BAM_PATH: &str = "/data1/hifi_consensus/try2/merged.bam";
 const INTERMEDIATE_PATH: &str = "result/intermediate";
 const BAND_SIZE: i32 = 100;
+
+pub fn get_data_for_ml (start: usize, end: usize, thread_id: usize) {
+    let chromosone = format!("{}{}", String::from("chr"), 21);
+    let mut position_base = start;
+    let mut error_index = 0;
+    let error_locations = get_error_bases_from_himut_vcf (); //chromosone, location, ref allele, alt allele
+    // get the error index of required chromosone
+    loop {
+        if error_locations[error_index].0.eq(&chromosone) && error_locations[error_index].1 > start {
+            break;
+        }
+        error_index += 1;
+    }
+    'bigloop: loop {
+        let seq_name_qual_and_errorpos_vec = get_corrosponding_seq_name_location_quality_from_bam(position_base, &chromosone.to_string(), &'X');
+        for seq_name_qual_and_errorpos in &seq_name_qual_and_errorpos_vec {
+            // get the three base context
+            let mut fai_reader = faidx::Reader::from_path(&"data/GRCh38.fa").unwrap();
+            let threebase_context = read_fai_file(position_base - 1, &chromosone, &mut fai_reader);
+
+            let mut error = false;
+            // error is here
+            if error_locations[error_index].1 == position_base {
+                if seq_name_qual_and_errorpos.0.as_bytes()[seq_name_qual_and_errorpos.3] == error_locations[error_index].3 as u8 {
+                    error = true;
+                }
+            }
+            let base = seq_name_qual_and_errorpos.0.as_bytes()[seq_name_qual_and_errorpos.3] as char;
+            let quality = seq_name_qual_and_errorpos.2;
+
+            let parallel_stuff;
+            // check if the file is already available
+            if check_file_availability(&seq_name_qual_and_errorpos.1, INTERMEDIATE_PATH) {
+                let available_file_path = format!("{}/{}", INTERMEDIATE_PATH, seq_name_qual_and_errorpos.1);
+                let temp_quality_score = get_quality_scores_from_file(&available_file_path, seq_name_qual_and_errorpos.3);
+                parallel_stuff = temp_quality_score.2;
+            }
+            else {
+                continue;
+            }
+            // print the line 
+            println!("{}: {} {} {} {} {}",thread_id, base, threebase_context, quality, parallel_stuff, error);
+        }
+        if error_locations[error_index].1 == position_base {
+            error_index += 1;
+        }
+        
+        // get the ccs at the location
+        position_base += 1;
+        if position_base > end {
+            break 'bigloop;
+        }
+    }
+
+}
 
 pub fn get_quality_score_count_topology_cut_errors (start: usize, end: usize, thread_id: usize) {
     let mut quality_score_count: Vec<usize> = vec![0; 94];
@@ -46,7 +101,7 @@ pub fn get_quality_score_count_topology_cut_errors (start: usize, end: usize, th
             break;
         }
         index += 1;
-        /*let seq_name_qual_and_errorpos_vec = get_corrosponding_seq_name_location_quality_from_bam(error_location.1, &chromosone.to_string(), &'X');
+        let seq_name_qual_and_errorpos_vec = get_corrosponding_seq_name_location_quality_from_bam(error_location.1, &chromosone.to_string(), &'X');
         for seq_name_qual_and_errorpos in &seq_name_qual_and_errorpos_vec {
             // check if the file is already available
             if check_file_availability(&seq_name_qual_and_errorpos.1, INTERMEDIATE_PATH) {
@@ -56,7 +111,7 @@ pub fn get_quality_score_count_topology_cut_errors (start: usize, end: usize, th
                     quality_score_count[temp_quality_score.1 as usize] += 1;
                 }
             }
-        }*/
+        }
     }
     println!("count {}", index);
     let write_file = format!("result/{}_errorcount.txt", thread_id);
@@ -65,7 +120,7 @@ pub fn get_quality_score_count_topology_cut_errors (start: usize, end: usize, th
 }
 
 pub fn get_quality_score_count_topology_cut (start: usize, end: usize, thread_id: usize) {
-    let mut quality_score_count: Vec<usize> = vec![0; 94];
+    let mut quality_score_count: Vec<usize> = vec![0; 200];
     let chromosone = format!("{}{}", String::from("chr"), 21);
     let mut position_base = start; 
     'bigloop: loop {
@@ -92,8 +147,8 @@ pub fn get_quality_score_count_topology_cut (start: usize, end: usize, thread_id
     write_string_to_file(&write_file, &write_string);
 }
 
-pub fn get_quality_scores_from_file(file_path: &String, required_pos: usize) -> (u8, u8) {
-    let mut temp_quality_vec: (u8, u8) = (0, 0);
+pub fn get_quality_scores_from_file(file_path: &String, required_pos: usize) -> (u8, u8, String) {
+    let mut temp_quality_vec: (u8, u8, String) = (0, 0, "".to_string());
     // open the file
     let f = File::open(&file_path).unwrap();
     let mut reader = BufReader::new(f);
@@ -104,14 +159,23 @@ pub fn get_quality_scores_from_file(file_path: &String, required_pos: usize) -> 
         reader.read_line(&mut buffer).unwrap();
         if current_pos == required_pos {
             let mut split_text_iter = (buffer.split(" ")).into_iter();
-            let mut base = 65;
+            let base;
             match split_text_iter.next() {
                 Some(x) => {if x.as_bytes().len() > 0 {base = x.as_bytes()[0];} else {break;}},
                 None => {break;},
             }
-            let quality = split_text_iter.next().unwrap().parse::<u8>().unwrap();
+            let temp;
+            match split_text_iter.next() {
+                Some(x) => {temp = x.parse::<u8>();},
+                None => {break;}
+            }
+            let quality;
+            match temp {
+                Ok(x) => {quality = x;},
+                Err(_) => {break;}
+            }
             //println!("{} {}", base, quality);
-            temp_quality_vec = (base, quality);
+            temp_quality_vec = (base, quality, buffer);
             break;
         }
         current_pos += 1;
