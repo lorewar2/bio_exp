@@ -225,6 +225,9 @@ pub fn pipeline_process_all_ccs_file_poa (chromosone: &str, start: usize, end: u
             all_skipped = false;
             // filter out the long reads and rearrange the reads
             sub_reads = reverse_complement_filter_and_rearrange_subreads(&sub_reads);
+            // reverse if score is too low
+            sub_reads = check_the_scores_and_change_alignment(sub_reads, &seq_name_qual_and_errorpos.0);
+
             sub_reads.insert(0, seq_name_qual_and_errorpos.0.clone());
             // do poa with the read and subreads, get the poa and consensus
             let mut sequence_number: usize = 0;
@@ -236,7 +239,7 @@ pub fn pipeline_process_all_ccs_file_poa (chromosone: &str, start: usize, end: u
                 }
                 sequence_number += 1;
                 println!("Thread {}: Sequence {} processed", thread_id, sequence_number);
-                if sequence_number > 12 {
+                if sequence_number > 10 {
                     break;
                 }
             }
@@ -679,7 +682,7 @@ fn check_the_scores_and_change_alignment (seqvec: Vec<String>, pacbio_consensus:
     for seq in &seqvec {
         let (_, score) = pairwise(&pacbio_consensus.as_bytes().to_vec(), &seq.as_bytes().to_vec(), MATCH, MISMATCH, GAP_OPEN, GAP_EXTEND);
         println!("score: {}", score);
-        if score < 1000 {
+        if score < 2000 {
             invert = true;
             break;
         }
