@@ -32,6 +32,76 @@ const READ_BAM_PATH: &str = "/data1/hifi_consensus/try2/merged.bam";
 const INTERMEDIATE_PATH: &str = "result/intermediate";
 const BAND_SIZE: i32 = 100;
 
+pub fn get_quality_score_count_confident () {
+    // read the bed file find the confident regions
+    get_confident_locations_from_file ();
+
+    /* 
+    let skip_length = 3000;
+    let continue_threshold = 10000;
+    let mut continue_count = 0;
+    let mut quality_score_count: Vec<usize> = vec![0; 94];
+    // read the merged mapped sorted bam file
+    let path = &"data/merged.bam";
+    let mut bam_reader = BamIndexedReader::from_path(path).unwrap();
+    // go from chr1 to chr21
+    for index in 1..22 {
+        let chromosone = format!("{}{}", String::from("chr"), index.to_string());
+        println!("Reading {}", chromosone);
+        let mut position_base = 5000000;
+        let mut prev_93_count = usize::MAX; 
+        // go from 1mil to 240mil bases in small lengths (skip length)
+        loop {
+            if position_base % 1000000 == 0 {
+                println!("Position {}", position_base);
+            }
+            // iterate through by counting the quality scores.
+            let temp_quality_scores = get_quality_scores_and_base_at_location (position_base, skip_length, &chromosone, &mut bam_reader);
+            for quality_score in temp_quality_scores {
+                quality_score_count[quality_score.0 as usize] += 1;
+            }
+            //println!("{:?}", quality_score_count);
+            if quality_score_count[93] == prev_93_count {
+                continue_count += 1;
+                if continue_count >= continue_threshold {
+                    break;
+                }
+            }
+            else {
+                continue_count = 0;
+            }
+            prev_93_count = quality_score_count[93];
+            position_base += skip_length;
+        }
+    }
+    println!("{:#?}", quality_score_count);
+    */
+}
+
+fn get_confident_locations_from_file () -> Vec<(usize, usize)> {
+    let mut location_vec: Vec<(usize, usize)> = vec![];
+    let file_path = "./data/include.bed";
+    let f = File::open(&file_path).unwrap();
+    let mut reader = BufReader::new(f);
+    let mut buffer = String::new();
+    let mut current_pos = 0;
+    loop {
+        buffer.clear();
+        match reader.read_line(&mut buffer) {
+            Ok(_) => {
+                println!("{}", buffer);
+                let mut split_text_iter = (buffer.split("\t")).into_iter();
+                split_text_iter.next();
+                let start = split_text_iter.next().unwrap();
+                let end = split_text_iter.next().unwrap();
+                println!("{} {}", start, end);
+            },
+            Err(_) => {break;},
+        };
+        current_pos += 1;
+    }
+    location_vec
+}
 pub fn get_data_for_ml (start: usize, end: usize, thread_id: usize) {
     let chromosone = format!("{}{}", String::from("chr"), 21);
     let mut position_base = start;
@@ -903,15 +973,6 @@ fn modify_dot_graph_with_highlight (mut dot: String, focus_node: &usize) -> Stri
     dot
 }
 
-fn pipeline_quality_score_error_graph () {
-    // get the quality scores in the ccs
-    get_quality_score_count ();
-    // get the errors from himut vcf (no somatic mutations in this file)
-    let error_locations = get_error_bases_from_himut_vcf();
-    // get the quality scores of error positions
-    get_error_quality_score_count (error_locations);
-}
-
 pub fn get_error_bases_from_himut_vcf () -> Vec<(String, usize, char, char)> {
     let mut error_locus_vec: Vec<(String, usize, char, char)> = vec![]; //chromosone, position, ref, alt
     let path = &"data/somatic.vcf";
@@ -932,47 +993,6 @@ pub fn get_error_bases_from_himut_vcf () -> Vec<(String, usize, char, char)> {
     }
     println!("number of errors = {}", error_locus_vec.len());
     error_locus_vec
-}
-
-fn get_quality_score_count () {
-    let skip_length = 3000;
-    let continue_threshold = 10000;
-    let mut continue_count = 0;
-    let mut quality_score_count: Vec<usize> = vec![0; 94];
-    // read the merged mapped sorted bam file
-    let path = &"data/merged.bam";
-    let mut bam_reader = BamIndexedReader::from_path(path).unwrap();
-    // go from chr1 to chr21
-    for index in 1..22 {
-        let chromosone = format!("{}{}", String::from("chr"), index.to_string());
-        println!("Reading {}", chromosone);
-        let mut position_base = 5000000;
-        let mut prev_93_count = usize::MAX; 
-        // go from 1mil to 240mil bases in small lengths (skip length)
-        loop {
-            if position_base % 1000000 == 0 {
-                println!("Position {}", position_base);
-            }
-            // iterate through by counting the quality scores.
-            let temp_quality_scores = get_quality_scores_and_base_at_location (position_base, skip_length, &chromosone, &mut bam_reader);
-            for quality_score in temp_quality_scores {
-                quality_score_count[quality_score.0 as usize] += 1;
-            }
-            //println!("{:?}", quality_score_count);
-            if quality_score_count[93] == prev_93_count {
-                continue_count += 1;
-                if continue_count >= continue_threshold {
-                    break;
-                }
-            }
-            else {
-                continue_count = 0;
-            }
-            prev_93_count = quality_score_count[93];
-            position_base += skip_length;
-        }
-    }
-    println!("{:#?}", quality_score_count);
 }
 
 fn get_error_quality_score_count (error_locus_vec: Vec<(String, usize, char, char)>) {
