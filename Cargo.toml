@@ -5,13 +5,6 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-[profile.release]
-debug = 1
-
-[features]
-dhat-heap = []    # if you are doing heap profiling
-
-
 [dependencies]
 rand = ">=0.7.3, < 0.9"
 petgraph = ">=0.4, <0.7"
@@ -19,8 +12,6 @@ logaddexp = "0.1.1"
 libm = "0.1.4"
 statrs = ">= 0.11, < 0.17"
 rust-htslib = "*"
-pprof = { version = "0.11", features = ["flamegraph"] }
-dhat = "*"
 
 
 

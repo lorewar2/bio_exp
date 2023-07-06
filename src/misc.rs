@@ -40,9 +40,29 @@ pub fn get_quality_score_count_confident_error () {
     let confident_locations = get_confident_locations_from_file ();
     for confident_location in &confident_locations {
         for error_location in &error_locations {
-            let error_chromosone_num = &error_location.0[2..];
-            let confident_chromosone_num = &confident_location.0[2..];
-            println!("{} {}", error_chromosone_num, confident_chromosone_num);
+            let error_chromosone_num = error_location.0[3..].parse::<usize>().unwrap();
+            let confident_chromosone_num = confident_location.0[3..].parse::<usize>().unwrap();
+            if error_chromosone_num > confident_chromosone_num {
+                break;
+            }
+            else if error_chromosone_num < confident_chromosone_num {
+                continue;
+            }
+            else {
+                // condition that the error and confident have same chr number
+                if confident_location.2 < error_location.1 {
+                    // error location has passed confident location
+                    break;
+                }
+                if confident_location.1 > error_location.1 {
+                    // error location is behind the location
+                    continue;
+                }
+                if confident_location.1 < error_location.1 && confident_location.2 > error_location.1 {
+                    // within range
+                    println!("chr{} == chr{}: {} < {} < {}", error_chromosone_num, confident_chromosone_num, confident_location.1, error_location.1, confident_location.2);
+                }
+            }
         }
         //println!("{:?}", confident_location);
         //let path = READ_BAM_PATH;
