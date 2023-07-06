@@ -33,6 +33,28 @@ const INTERMEDIATE_PATH: &str = "result/intermediate";
 const CONFIDENT_PATH: &str = "/data1/GiaB_benchmark/HG001_GRCh38_1_22_v4.2.1_benchmark.bed";
 const BAND_SIZE: i32 = 100;
 
+pub fn get_quality_score_count_confident_error () {
+    let mut quality_score_count: Vec<usize> = vec![0; 94];
+    // get the error locations
+    let error_locations = get_error_bases_from_himut_vcf (); //chromosone, location, ref allele, alt allele
+    let confident_locations = get_confident_locations_from_file ();
+    for confident_location in &confident_locations {
+        for error_location in &error_locations {
+            let error_chromosone_num = &error_location.0[2..];
+            let confident_chromosone_num = &confident_location.0[2..];
+            println!("{} {}", error_chromosone_num, confident_chromosone_num);
+        }
+        //println!("{:?}", confident_location);
+        //let path = READ_BAM_PATH;
+        //let mut bam_reader = BamIndexedReader::from_path(path).unwrap();
+        //let temp_quality_scores = get_quality_scores_and_base_at_location (confident_location.1, confident_location.2 - confident_location.1, &confident_location.0, &mut bam_reader);
+        //for quality_score in temp_quality_scores {
+        //    quality_score_count[quality_score.0 as usize] += 1;
+        //}
+    }
+    println!("{:?}", quality_score_count);
+}
+
 pub fn get_quality_score_count_confident () {
     let mut quality_score_count: Vec<usize> = vec![0; 94];
     // read the bed file find the confident regions
@@ -45,7 +67,6 @@ pub fn get_quality_score_count_confident () {
         for quality_score in temp_quality_scores {
             quality_score_count[quality_score.0 as usize] += 1;
         }
-        break;
     }
     println!("{:?}", quality_score_count);
 }
@@ -87,6 +108,7 @@ fn get_confident_locations_from_file () -> Vec<(String, usize, usize)> {
     }
     location_vec
 }
+
 pub fn get_data_for_ml (start: usize, end: usize, thread_id: usize) {
     let chromosone = format!("{}{}", String::from("chr"), 21);
     let mut position_base = start;

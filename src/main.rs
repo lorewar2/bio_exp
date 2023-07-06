@@ -11,7 +11,7 @@ mod quality;
 //use crate::misc::pipeline_redo_poa_get_topological_quality_score;
 //use crate::misc::pipeline_process_all_ccs_file_poa;
 //use std::thread;
-use crate::misc::get_quality_score_count_confident;
+use crate::misc::get_quality_score_count_confident_error;
 //use crate::misc::get_quality_score_count_topology_cut;
 //use crate::misc::get_data_for_ml;
 //use crate::alignment::poabandedsmarter::Aligner;
@@ -25,7 +25,7 @@ const MISMATCH: i32 = -2;
 const NTHREADS: usize = 8;
 
 fn main() {
-    get_quality_score_count_confident ();
+    get_quality_score_count_confident_error ();
     // Make a vector to hold thfe children which are spawneddd.
     //let _profiler = dhat::Profiler::new_heap();
     /* 
