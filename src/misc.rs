@@ -40,7 +40,12 @@ pub fn get_quality_score_count_confident_error () {
     let confident_locations = get_confident_locations_from_file ();
     for confident_location in &confident_locations {
         for error_location in &error_locations {
-            let error_chromosone_num = error_location.0[3..].parse::<usize>().unwrap();
+            let error_chromosone_result = error_location.0[3..].parse::<usize>();
+            let error_chromosone_num;
+            match error_chromosone_result {
+                Ok(x) => {error_chromosone_num = x;},
+                Err(_) => {println!("{}", &error_location.0[3..]); break;},
+            }
             let confident_chromosone_num = confident_location.0[3..].parse::<usize>().unwrap();
             if error_chromosone_num > confident_chromosone_num {
                 break;
