@@ -44,7 +44,7 @@ pub fn get_quality_score_count_confident_error () {
             let error_chromosone_num;
             match error_chromosone_result {
                 Ok(x) => {error_chromosone_num = x;},
-                Err(_) => {println!("{}", &error_location.0[3..]); break;},
+                Err(_) => {continue;},
             }
             let confident_chromosone_num = confident_location.0[3..].parse::<usize>().unwrap();
             if error_chromosone_num > confident_chromosone_num {
@@ -65,17 +65,18 @@ pub fn get_quality_score_count_confident_error () {
                 }
                 if confident_location.1 < error_location.1 && confident_location.2 > error_location.1 {
                     // within range
-                    println!("chr{} == chr{}: {} < {} < {}", error_chromosone_num, confident_chromosone_num, confident_location.1, error_location.1, confident_location.2);
+                    let path = READ_BAM_PATH;
+                    let mut bam_reader = BamIndexedReader::from_path(path).unwrap();
+                    let temp_quality_scores = get_quality_scores_and_base_at_location (error_location.1, 1, &error_location.0, &mut bam_reader);
+                    for quality_score in temp_quality_scores {
+                        if quality_score.1 as char == error_location.3 {
+                            quality_score_count[quality_score.0 as usize] += 1;
+                            println!("chr{}: {} < {} < {}, {} -> {} ({})", confident_chromosone_num, confident_location.1, error_location.1, confident_location.2, error_location.2, quality_score.1 as char, quality_score.0);
+                        }
+                    }
                 }
             }
         }
-        //println!("{:?}", confident_location);
-        //let path = READ_BAM_PATH;
-        //let mut bam_reader = BamIndexedReader::from_path(path).unwrap();
-        //let temp_quality_scores = get_quality_scores_and_base_at_location (confident_location.1, confident_location.2 - confident_location.1, &confident_location.0, &mut bam_reader);
-        //for quality_score in temp_quality_scores {
-        //    quality_score_count[quality_score.0 as usize] += 1;
-        //}
     }
     println!("{:?}", quality_score_count);
 }
