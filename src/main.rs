@@ -7,6 +7,7 @@ mod alignment;
 mod generator;
 mod misc;
 mod quality;
+use std::{fs::File, io};
 //use pprof;
 //use crate::misc::pipeline_redo_poa_get_topological_quality_score;
 //use crate::misc::pipeline_process_all_ccs_file_poa;
@@ -25,7 +26,14 @@ const MISMATCH: i32 = -2;
 const NTHREADS: usize = 8;
 
 fn main() {
-    get_quality_score_count_confident_error ();
+    let mut output = File::create("result/ml_file").unwrap();
+    let inputs = vec!["data/0_mldata.txt", "data/1_mldata.txt", "data/2_mldata.txt", "data/3_mldata.txt", "data/4_mldata.txt", "data/5_mldata.txt", "data/6_mldata.txt", "data/7_mldata.txt", "data/8_mldata.txt"];
+    for i in inputs {
+        let mut input = File::open(i).unwrap();
+        io::copy(&mut input, &mut output).unwrap();
+    }
+    println!("done");
+    //get_quality_score_count_confident_error ();
     // Make a vector to hold thfe children which are spawneddd.
     //let _profiler = dhat::Profiler::new_heap();
     /* 
