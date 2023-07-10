@@ -81,11 +81,15 @@ pub fn get_quality_score_count_confident_error () {
     println!("{:?}", quality_score_count);
 }
 
-pub fn get_quality_score_count_confident () {
+pub fn get_quality_score_count_confident (thread_id: usize) {
     let mut quality_score_count: Vec<usize> = vec![0; 94];
     // read the bed file find the confident regions
     let confident_locations = get_confident_locations_from_file ();
+    let chr_to_process = format!("chr{}", thread_id + 1);
     for confident_location in confident_locations {
+        if confident_location.0 != chr_to_process {
+            continue;
+        }
         println!("{:?}", confident_location);
         let path = READ_BAM_PATH;
         let mut bam_reader = BamIndexedReader::from_path(path).unwrap();
@@ -95,6 +99,9 @@ pub fn get_quality_score_count_confident () {
         }
     }
     println!("{:?}", quality_score_count);
+    let write_file = format!("result/{}_confidentquality.txt", thread_id);
+    let write_string = format!("{:?}", quality_score_count);
+    write_string_to_file(&write_file, &write_string);
 }
 
 fn get_confident_locations_from_file () -> Vec<(String, usize, usize)> {
