@@ -362,7 +362,7 @@ pub fn pipeline_process_all_ccs_file_poa (chromosone: &str, start: usize, end: u
             for byte in sub_reads[0].as_bytes() {
                 let character = *byte as char;
                 let calculated_index = calculated_indices[index];
-                let write_string = format!("{} {} {:?}", character, quality_output.0[calculated_index] as usize, quality_output.1[calculated_index]);
+                let write_string = format!("{} {} {} {:?}", character, quality_output.0[calculated_index] as usize, (sub_reads.len() - 1) ,quality_output.1[calculated_index]);
                 let write_file = format!("{}/{}", INTERMEDIATE_PATH, &seq_name_qual_and_errorpos.1);
                 write_string_to_file(&write_file, &write_string);
                 index += 1;
@@ -522,20 +522,22 @@ fn reverse_complement_filter_and_rearrange_subreads (original_subreads: &Vec<Str
         index += 1;
     }
     //get rid of the last incomplete reading
-    seqvec.pop();
+    //seqvec.pop();
     //sort the vector by size
     seqvec.sort_by_key(|seq| seq.len());
     //drop the sequences which are > 1.8x median size
-    let mut drop_index = seqvec.len();
     let median_size: f32 = seqvec[(seqvec.len() / 2) - 1].len() as f32;
-    for index in (seqvec.len() / 2)..(seqvec.len() - 1) {
-        if seqvec[index].len() as f32 > (median_size * 1.5) {
-            drop_index = index;
-            break;
+    if seqvec.len() > 5 {
+        let mut drop_index = seqvec.len();
+        for index in (seqvec.len() / 2)..(seqvec.len() - 1) {
+            if seqvec[index].len() as f32 > (median_size * 1.5) {
+                drop_index = index;
+                break;
+            }
         }
-    }
-    for _ in drop_index..seqvec.len() {
-        seqvec.pop();
+        for _ in drop_index..seqvec.len() {
+            seqvec.pop();
+        }
     }
     // rearrange the seq vector median first and rest according mediand size difference
     seqvec.sort_by(|a, b| ((a.len() as f32 - median_size).abs()).partial_cmp(&(b.len() as f32 - median_size).abs()).unwrap());
