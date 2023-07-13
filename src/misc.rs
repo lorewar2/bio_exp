@@ -143,7 +143,7 @@ fn get_confident_locations_from_file () -> Vec<(String, usize, usize)> {
 }
 
 pub fn get_data_for_ml (start: usize, end: usize, thread_id: usize) {
-    let chromosone = format!("{}{}", String::from("chr"), 21);
+    let chromosone = format!("{}{}", String::from("chr"), 1);
     let mut position_base = start;
     let mut error_index = 0;
     let error_locations = get_error_bases_from_himut_vcf (); //chromosone, location, ref allele, alt allele

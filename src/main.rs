@@ -11,9 +11,9 @@ mod quality;
 //use crate::misc::pipeline_redo_poa_get_topological_quality_score;
 //use crate::misc::pipeline_process_all_ccs_file_poa;
 use std::thread;
-use crate::misc::get_quality_score_count_confident;
+//use crate::misc::get_quality_score_count_confident;
 //use crate::misc::get_quality_score_count_topology_cut;
-//use crate::misc::get_data_for_ml;
+use crate::misc::get_data_for_ml;
 //use crate::alignment::poabandedsmarter::Aligner;
 //use crate::generator::simple::get_random_sequences_from_generator;
 //use crate::alignment::pairwise::pairwise;
@@ -22,13 +22,11 @@ const GAP_OPEN: i32 = -2;
 const GAP_EXTEND: i32 = 0;
 const MATCH: i32 = 2;
 const MISMATCH: i32 = -2;
-const NTHREADS: usize = 21;
+const NTHREADS: usize = 16;
 
 fn main() {
-    
     // Make a vector to hold thfe children which are spawneddd.
     //let _profiler = dhat::Profiler::new_heap();
-    
     let mut children = vec![];
     let chromosone = "chr1";
     let total_start = 10_000_000;
@@ -44,9 +42,9 @@ fn main() {
             println!("Thread number {} started, {} from {} to {}..", chromosone, i, start, end);
             //pipeline_process_all_ccs_file_poa (chromosone, start, end, i);
             //get_quality_score_count_topology_cut(start, end, i);
-            //get_data_for_ml (start, end, i);
+            get_data_for_ml (start, end, i);
             //pipeline_redo_poa_get_topological_quality_score(chromosone, start, end, i);
-            get_quality_score_count_confident(i);
+            //get_quality_score_count_confident(i);
         }));
     }
 
