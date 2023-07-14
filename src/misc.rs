@@ -32,6 +32,7 @@ const READ_BAM_PATH: &str = "/data1/hifi_consensus/try2/merged.bam";
 const INTERMEDIATE_PATH: &str = "result/intermediate";
 const CONFIDENT_PATH: &str = "/data1/GiaB_benchmark/HG001_GRCh38_1_22_v4.2.1_benchmark.bed";
 const BAND_SIZE: i32 = 2000;
+const MAX_NODES_IN_POA: usize = 50000;
 
 pub fn get_quality_score_count_confident_error () {
     let mut quality_score_count: Vec<usize> = vec![0; 94];
@@ -318,7 +319,7 @@ pub fn pipeline_process_all_ccs_file_poa (chromosone: &str, start: usize, end: u
         // get the string and the name
         let seq_name_qual_and_errorpos_vec = get_corrosponding_seq_name_location_quality_from_bam(process_location, &chromosone.to_string(), &'X');
         let mut all_skipped = true;
-        for seq_name_qual_and_errorpos in &seq_name_qual_and_errorpos_vec {
+        'bigloop: for seq_name_qual_and_errorpos in &seq_name_qual_and_errorpos_vec {
             println!("Thread {}: Processing ccs file: {}", thread_id, seq_name_qual_and_errorpos.1);
             // check if the file is already available
             if check_file_availability(&seq_name_qual_and_errorpos.1, INTERMEDIATE_PATH) {
@@ -347,7 +348,11 @@ pub fn pipeline_process_all_ccs_file_poa (chromosone: &str, start: usize, end: u
                 if sequence_number != 0 {
                     aligner.global(&sub_read.as_bytes().to_vec()).add_to_graph();
                 }
-                println!("NUM OF NODES {}", aligner.graph().node_count());
+                let node_num = aligner.graph().node_count();
+                if node_num > MAX_NODES_IN_POA {
+                    println!("NUM OF NODES {} TOO BIG, SKIPPING", node_num);
+                    continue 'bigloop;
+                }
                 sequence_number += 1;
                 println!("Thread {}: Sequence {} processed", thread_id, sequence_number);
                 if sequence_number > 10 {
