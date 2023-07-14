@@ -31,7 +31,7 @@ const DATA_PATH: &str = "/data1/hifi_consensus/try2/";
 const READ_BAM_PATH: &str = "/data1/hifi_consensus/try2/merged.bam";
 const INTERMEDIATE_PATH: &str = "result/intermediate";
 const CONFIDENT_PATH: &str = "/data1/GiaB_benchmark/HG001_GRCh38_1_22_v4.2.1_benchmark.bed";
-const BAND_SIZE: i32 = 100;
+const BAND_SIZE: i32 = 2000;
 
 pub fn get_quality_score_count_confident_error () {
     let mut quality_score_count: Vec<usize> = vec![0; 94];
@@ -347,6 +347,7 @@ pub fn pipeline_process_all_ccs_file_poa (chromosone: &str, start: usize, end: u
                 if sequence_number != 0 {
                     aligner.global(&sub_read.as_bytes().to_vec()).add_to_graph();
                 }
+                println!("NUM OF NODES {}", aligner.graph().node_count());
                 sequence_number += 1;
                 println!("Thread {}: Sequence {} processed", thread_id, sequence_number);
                 if sequence_number > 10 {
