@@ -303,11 +303,11 @@ pub fn pipeline_process_all_ccs_file_poa (chromosone: &str, start: usize, end: u
     let mut index_thread = 0;
     let mut skip_thousand = false;
     let mut skip_index = 0;
-    for process_location in start..end {
+    'bigloop: for process_location in start..end {
         // skip thousand when same found
         if skip_thousand {
             skip_index += 1;
-            if skip_index > 2000 {
+            if skip_index > 10000 {
                 skip_thousand = false;
                 skip_index = 0;
             }
@@ -319,7 +319,7 @@ pub fn pipeline_process_all_ccs_file_poa (chromosone: &str, start: usize, end: u
         // get the string and the name
         let seq_name_qual_and_errorpos_vec = get_corrosponding_seq_name_location_quality_from_bam(process_location, &chromosone.to_string(), &'X');
         let mut all_skipped = true;
-        'bigloop: for seq_name_qual_and_errorpos in &seq_name_qual_and_errorpos_vec {
+        for seq_name_qual_and_errorpos in &seq_name_qual_and_errorpos_vec {
             println!("Thread {}: Processing ccs file: {}", thread_id, seq_name_qual_and_errorpos.1);
             // check if the file is already available
             if check_file_availability(&seq_name_qual_and_errorpos.1, INTERMEDIATE_PATH) {
@@ -351,6 +351,7 @@ pub fn pipeline_process_all_ccs_file_poa (chromosone: &str, start: usize, end: u
                 let node_num = aligner.graph().node_count();
                 if node_num > MAX_NODES_IN_POA {
                     println!("NUM OF NODES {} TOO BIG, SKIPPING", node_num);
+                    skip_thousand = true;
                     continue 'bigloop;
                 }
                 sequence_number += 1;
