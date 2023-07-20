@@ -10,13 +10,12 @@ mod quality;
 //use pprof;
 //use crate::misc::pipeline_redo_poa_get_topological_quality_score;
 //use crate::misc::pipeline_process_all_ccs_file_poa;
-use std::thread;
-use std::{fs::File, io};
+//use std::thread;
 //use crate::misc::get_quality_score_count_confident;
 //use crate::misc::get_quality_score_count_topology_cut;
 //use crate::misc::get_data_for_ml;
 //use crate::alignment::poabandedsmarter::Aligner;
-//use crate::generator::simple::get_random_sequences_from_generator;
+use crate::misc::test_graphs;
 //use crate::alignment::pairwise::pairwise;
 const SEED: u64 = 2;
 const GAP_OPEN: i32 = -2;
@@ -25,19 +24,12 @@ const MATCH: i32 = 2;
 const MISMATCH: i32 = -2;
 const NTHREADS: usize = 10;
 
-fn concancate_files () {
-    let mut output = File::create("result/ml_file").unwrap();
-    let inputs = vec!["data/0_mldata.txt", "data/1_mldata.txt", "data/2_mldata.txt", "data/3_mldata.txt", "data/4_mldata.txt", "data/5_mldata.txt", "data/6_mldata.txt", "data/7_mldata.txt", "data/9_mldata.txt", "data/10_mldata.txt", "data/12_mldata.txt", "data/14_mldata.txt"];
-    for i in inputs {
-        let mut input = File::open(i).unwrap();
-        io::copy(&mut input, &mut output).unwrap();
-    }
-    println!("done");
-}
+
 fn main() {
-    concancate_files();
+    test_graphs();
     // Make a vector to hold thfe children which are spawneddd.
     //let _profiler = dhat::Profiler::new_heap();
+    /* 
     let mut children = vec![];
     let chromosone = "chr1";
     let total_start = 10_000_000;
@@ -63,6 +55,7 @@ fn main() {
         // Wait for the thread to finish. Returns a result.
         let _ = child.join();
     }
+    */
     //
     /*let sequences = get_random_sequences_from_generator(2000, 2, 6);
     let mut sequence_number = 0;

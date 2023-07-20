@@ -17,13 +17,15 @@ use std::io::SeekFrom;
 use std::time::Instant;
 use std::fs::read_dir;
 use std::fs::create_dir_all;
+use std::{io};
+use std::fs::read_to_string;
 
 const SEED: u64 = 2;
 const GAP_OPEN: i32 = -2;
 const GAP_EXTEND: i32 = 0;
 const MATCH: i32 = 2;
 const MISMATCH: i32 = -2;
-const RANDOM_SEQUENCE_LENGTH: usize = 1000;
+const RANDOM_SEQUENCE_LENGTH: usize = 20000;
 const NUMBER_OF_RANDOM_SEQUENCES: usize = 5;
 const THREE_BASE_CONTEXT_READ_LENGTH: usize = 2;
 const NUM_OF_ITER_FOR_ZOOMED_GRAPHS: usize = 4;
@@ -33,6 +35,100 @@ const INTERMEDIATE_PATH: &str = "result/intermediate";
 const CONFIDENT_PATH: &str = "/data1/GiaB_benchmark/HG001_GRCh38_1_22_v4.2.1_benchmark.bed";
 const BAND_SIZE: i32 = 2000;
 const MAX_NODES_IN_POA: usize = 50000;
+
+pub fn test_graphs() {
+    let seqvec = get_random_sequences_from_generator(RANDOM_SEQUENCE_LENGTH, NUMBER_OF_RANDOM_SEQUENCES, SEED);
+    println!("Processing seq 1");
+    let mut aligner = Aligner::new(MATCH, MISMATCH, GAP_OPEN, &seqvec[0].as_bytes().to_vec(), 200);
+    let mut index = 0;
+    for seq in &seqvec {
+        if index != 0 {
+            println!("Processing seq {}", index + 1);
+            aligner.global(&seq.as_bytes().to_vec()).add_to_graph();
+        }
+        index += 1;
+    }
+    let test_graph = aligner.graph();
+    save_the_graph(test_graph, "test.txt".to_string());
+    load_the_graph("test.txt".to_string());
+}
+
+pub fn save_the_graph (graph: &Graph<u8, i32, Directed, usize>, file_name: String) {
+    // check if file is available
+    if check_file_availability(&file_name, INTERMEDIATE_PATH) == false {
+        let write_string = format!("{}\n{:?}", graph.node_count(), Dot::new(&graph.map(|_, n| (*n) as char, |_, e| *e)));
+        let write_path = format!("{}/{}", INTERMEDIATE_PATH, file_name);
+        write_string_to_file(&write_path, &write_string);
+    }
+}
+
+pub fn load_the_graph (file_name: String) -> Graph<u8, i32, Directed, usize> {
+    let mut node_edge_list: Vec<(char, Vec<(usize, usize)>)> = vec![];
+    let mut node_capacity = 0;
+    let mut edge_capacity = 0;
+    // check if available, populate node_edge_list from file
+    if check_file_availability(&file_name, INTERMEDIATE_PATH) == true {
+        // read the file
+        let mut index = 0;
+        let read_path = format!("{}/{}", INTERMEDIATE_PATH, file_name);
+        for line in read_to_string(read_path).unwrap().lines() {
+            //println!("{}", line);
+            let line_parts: Vec<&str> = line.split(" ").collect();
+            // create the node edge list with capacity
+            if index == 0 {
+                if line_parts.len() == 1 {
+                    node_capacity = line_parts[0].parse::<usize>().unwrap();
+                    node_edge_list = vec![('X', vec![]); node_capacity];
+                }
+            }
+            // put the values in node edge list
+            else {
+                if line_parts.len() == 10 {
+                    let start_node = line_parts[4].parse::<usize>().unwrap();
+                    let chars: Vec<char> = line_parts[8].chars().collect();
+                    node_edge_list[start_node].0 = chars[2];
+                }
+                if line_parts.len() == 12 {
+                    let start_node = line_parts[4].parse::<usize>().unwrap();
+                    let end_node = line_parts[6].parse::<usize>().unwrap();
+                    let chars: Vec<char> = line_parts[10].chars().collect();
+                    let edge_weight = chars[1].to_string().parse::<usize>().unwrap();
+                    node_edge_list[start_node].1.push((end_node, edge_weight));
+                    edge_capacity += 1;
+                }
+
+            }
+            index += 1;
+        }
+    }
+    // make the graph from the vector
+    let mut graph: Graph<u8, i32, Directed, usize> = Graph::with_capacity(node_capacity, edge_capacity);
+    
+    // add the nodes first
+    for node_edge in &node_edge_list {
+        graph.add_node(node_edge.0 as u8);
+    }
+    // add the edges
+    for (idx, node_edge) in node_edge_list.iter().enumerate() {
+        for edge in &node_edge.1 {
+            graph.add_edge(NodeIndex::new(idx), NodeIndex::new(edge.0), edge.1 as i32);
+        }
+    }
+    //graph.add_node(weight);
+    // show graph 
+    //println!("{}", Dot::new(&graph.map(|_, n| (*n) as char, |_, e| *e)));
+    graph
+}
+
+fn concancate_files () {
+    let mut output = File::create("result/ml_file").unwrap();
+    let inputs = vec!["data/0_mldata.txt", "data/1_mldata.txt", "data/2_mldata.txt", "data/3_mldata.txt", "data/4_mldata.txt", "data/5_mldata.txt", "data/6_mldata.txt", "data/7_mldata.txt", "data/9_mldata.txt", "data/10_mldata.txt", "data/12_mldata.txt"];
+    for i in inputs {
+        let mut input = File::open(i).unwrap();
+        io::copy(&mut input, &mut output).unwrap();
+    }
+    println!("done");
+}
 
 pub fn get_quality_score_count_confident_error () {
     let mut quality_score_count: Vec<usize> = vec![0; 94];
@@ -383,14 +479,13 @@ pub fn pipeline_process_all_ccs_file_poa (chromosone: &str, start: usize, end: u
 }
 
 fn check_file_availability (file_name: &str, search_path: &str) -> bool {
-    let mut file_available = false;
     let temp_path_string = format!("{}/{}", search_path, file_name);
     let path = std::path::Path::new(&temp_path_string);
     let prefix = path.parent().unwrap();
-    match read_dir(prefix) {
-        Ok(_) => {file_available = true;},
-        Err(_) => {},
-    }
+    let file_available = match read_dir(prefix) {
+        Ok(_) => {true},
+        Err(_) => {false},
+    };
     file_available
 }
 

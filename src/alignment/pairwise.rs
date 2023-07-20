@@ -36,8 +36,8 @@ pub fn pairwise (seq_x: &Vec<u8>, seq_y: &Vec<u8>, match_score: i32, mismatch_sc
     // filling out score matrices and back matrix
     let mut max_scored_position = 0;
     let mut max_score;
-    let mut start = 0;
-    let mut end = seq_y.len() + 1;
+    let mut start;
+    let mut end;
     for i in 1..seq_x.len() + 1 {
         max_score = MIN_SCORE;
         if max_scored_position < BAND_SIZE {
