@@ -1,8 +1,6 @@
 
 use std::cmp;
 const MIN_SCORE: isize = -858_993_459; // negative infinity; see alignment/pairwise/mod.rs
-const BAND_SIZE: usize = 1000;
-const USE_BAND: bool = false;
 
 #[derive(Clone)]
 struct PairwiseMatrixCell {
@@ -12,12 +10,12 @@ struct PairwiseMatrixCell {
     back: char,
 }
 
-pub fn pairwise (seq_x: &Vec<u8>, seq_y: &Vec<u8>, match_score: i32, mismatch_score: i32, gap_open_score: i32, gap_extend_score: i32) -> (Vec<u8>, isize) {
+pub fn pairwise (seq_x: &Vec<u8>, seq_y: &Vec<u8>, match_score: i32, mismatch_score: i32, gap_open_score: i32, gap_extend_score: i32, band_size: usize) -> (Vec<u8>, isize) {
     // variables to save results
     let mut align_vec: Vec<u8> = Vec::new();
 
     // make one matrix 
-    let mut pair_wise_matrix: Vec<Vec<PairwiseMatrixCell>> = vec![vec![PairwiseMatrixCell { match_score: (0), del_score: (0), ins_score: (0), back: ('0') }; seq_y.len() + 1]; seq_x.len() + 1];
+    let mut pair_wise_matrix: Vec<Vec<PairwiseMatrixCell>> = vec![vec![PairwiseMatrixCell { match_score: (0), del_score: (0), ins_score: (0), back: ('d') }; seq_y.len() + 1]; seq_x.len() + 1];
 
     // fill out the first row and colomn
     let temp_value = gap_open_score as isize + gap_extend_score as isize;
@@ -31,27 +29,37 @@ pub fn pairwise (seq_x: &Vec<u8>, seq_y: &Vec<u8>, match_score: i32, mismatch_sc
         let temp_value = pair_wise_matrix[i - 1][0].ins_score + gap_extend_score as isize;
         pair_wise_matrix[i][0] = PairwiseMatrixCell { match_score: (temp_value), del_score: (temp_value), ins_score: (temp_value), back: ('i') };
     }
-
     // calculations
     // filling out score matrices and back matrix
     let mut max_scored_position = 0;
     let mut max_score;
-    let mut start;
-    let mut end;
+    let mut start = 0;
+    let mut end= seq_x.len();
     for i in 1..seq_x.len() + 1 {
         max_score = MIN_SCORE;
-        if max_scored_position < BAND_SIZE {
-            start = 0;
+        if band_size > 0 {
+            if max_scored_position < band_size {
+                start = 0;
+            }
+            else {
+                start = max_scored_position - band_size;
+            }
+            end = max_scored_position + band_size;
+            // start at 0 initially
+            if i < 20 {
+                start = 0;
+            }
+            // end at end at end :D
+            if i > seq_x.len() - 20 {
+                end = seq_x.len();
+            }
         }
-        else {
-            start = max_scored_position - BAND_SIZE;
-        }
-        end = max_scored_position + BAND_SIZE;
+        
         for j in 1..seq_y.len() + 1 {
-            if j < start && USE_BAND && i > 1 {
+            if j < start && (band_size > 0) && i > 1 {
                 continue;
             }
-            if j > end && USE_BAND && i > 1{
+            if j > end && (band_size > 0) && i > 1{
                 break;
             }
             // fill del matrix 
@@ -107,6 +115,7 @@ pub fn pairwise (seq_x: &Vec<u8>, seq_y: &Vec<u8>, match_score: i32, mismatch_sc
     let mut j = seq_y.len();
     let score = pair_wise_matrix[i][j].match_score;
     let mut break_on_next = false;
+
     loop {
         match pair_wise_matrix[i][j].back {
             'i' => {

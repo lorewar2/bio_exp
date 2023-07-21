@@ -15,7 +15,7 @@ mod quality;
 //use crate::misc::get_quality_score_count_topology_cut;
 //use crate::misc::get_data_for_ml;
 //use crate::alignment::poabandedsmarter::Aligner;
-use crate::misc::test_graphs;
+use crate::misc::test_banded_pairwise;
 //use crate::alignment::pairwise::pairwise;
 const SEED: u64 = 2;
 const GAP_OPEN: i32 = -2;
@@ -26,7 +26,7 @@ const NTHREADS: usize = 10;
 
 
 fn main() {
-    test_graphs();
+    test_banded_pairwise();
     // Make a vector to hold thfe children which are spawneddd.
     //let _profiler = dhat::Profiler::new_heap();
     /* 
