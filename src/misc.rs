@@ -33,8 +33,9 @@ const DATA_PATH: &str = "/data1/hifi_consensus/try2/";
 const READ_BAM_PATH: &str = "/data1/hifi_consensus/try2/merged.bam";
 const INTERMEDIATE_PATH: &str = "result/intermediate";
 const CONFIDENT_PATH: &str = "/data1/GiaB_benchmark/HG001_GRCh38_1_22_v4.2.1_benchmark.bed";
-const BAND_SIZE: i32 = 2000;
+const BAND_SIZE: i32 = 1000;
 const MAX_NODES_IN_POA: usize = 62_000;
+const REVERSE_SCORE: isize = 20_000;
 
 pub fn pipeline_save_the_graphs (chromosone: &str, start: usize, end: usize, thread_id: usize) {
     let mut big_file_skip_count = 0;
@@ -53,12 +54,12 @@ pub fn pipeline_save_the_graphs (chromosone: &str, start: usize, end: usize, thr
                 continue;
             }
         }
-        println!("Thread {}: Chr {} Loc {}, tasks_done {} skipped {}", thread_id, chromosone, process_location, index_thread, big_file_skip_count);
+        println!("NEW LOCATION, Thread {}: Chr {} Loc {}, tasks_done {} skipped {}", thread_id, chromosone, process_location, index_thread, big_file_skip_count);
         // get the string and the name
         let seq_name_qual_and_errorpos_vec = get_corrosponding_seq_name_location_quality_from_bam(process_location, &chromosone.to_string(), &'X');
         let mut all_skipped = true;
         for seq_name_qual_and_errorpos in &seq_name_qual_and_errorpos_vec {
-            println!("Thread {}: Processing ccs file: {}", thread_id, seq_name_qual_and_errorpos.1);
+            println!("Thread {}: Chr {} Loc {} Processing ccs file: {}", thread_id, chromosone, process_location, seq_name_qual_and_errorpos.1);
             // check if the graph is already available
             let check_file = format!("{}_graph.txt", &seq_name_qual_and_errorpos.1);
             if check_file_availability(&check_file, INTERMEDIATE_PATH) {
@@ -983,7 +984,7 @@ fn check_the_scores_and_change_alignment (seqvec: Vec<String>, pacbio_consensus:
     for seq in &seqvec {
         let (_, score) = pairwise(&pacbio_consensus.as_bytes().to_vec(), &seq.as_bytes().to_vec(), MATCH, MISMATCH, GAP_OPEN, GAP_EXTEND, 0);
         println!("score: {}", score);
-        if score < 20000 {
+        if score < REVERSE_SCORE {
             invert = true;
             break;
         }
@@ -1012,8 +1013,8 @@ fn check_the_scores_and_change_alignment (seqvec: Vec<String>, pacbio_consensus:
         for seq in &seqvec2 {
             let (_, score) = pairwise(&pacbio_consensus.as_bytes().to_vec(), &seq.as_bytes().to_vec(), MATCH, MISMATCH, GAP_OPEN, GAP_EXTEND, 0);
             println!("score: {}", score);
-            if score < 20000 {
-                break;
+            if score < REVERSE_SCORE {
+                return vec![];
             }
             else if index > 1 {
                 break;
