@@ -36,6 +36,16 @@ const CONFIDENT_PATH: &str = "/data1/GiaB_benchmark/HG001_GRCh38_1_22_v4.2.1_ben
 const BAND_SIZE: i32 = 2000;
 const MAX_NODES_IN_POA: usize = 50000;
 
+pub fn concancate_files () {
+    let mut output = File::create("result/chr21_ml_file").unwrap();
+    let inputs = vec!["data/0_chr21mldata.txt", "data/1_chr21mldata.txt", "data/7_chr21mldata.txt", "data/10_chr21mldata.txt", "data/12_chr21mldata.txt", "data/16_chr21mldata.txt", "data/17_chr21mldata.txt", "data/18_chr21mldata.txt", "data/19_chr21mldata.txt"];
+    for i in inputs {
+        let mut input = File::open(i).unwrap();
+        io::copy(&mut input, &mut output).unwrap();
+    }
+    println!("done");
+}
+
 pub fn test_banded_pairwise () {
     let seqvec = get_random_sequences_from_generator(RANDOM_SEQUENCE_LENGTH, NUMBER_OF_RANDOM_SEQUENCES, SEED);
     let sequence1: Vec<u8> = seqvec[0].bytes().collect();
@@ -126,16 +136,6 @@ fn load_the_graph (file_name: String) -> Graph<u8, i32, Directed, usize> {
     // show graph 
     //println!("{}", Dot::new(&graph.map(|_, n| (*n) as char, |_, e| *e)));
     graph
-}
-
-fn concancate_files () {
-    let mut output = File::create("result/ml_file").unwrap();
-    let inputs = vec!["data/0_mldata.txt", "data/1_mldata.txt", "data/2_mldata.txt", "data/3_mldata.txt", "data/4_mldata.txt", "data/5_mldata.txt", "data/6_mldata.txt", "data/7_mldata.txt", "data/9_mldata.txt", "data/10_mldata.txt", "data/12_mldata.txt"];
-    for i in inputs {
-        let mut input = File::open(i).unwrap();
-        io::copy(&mut input, &mut output).unwrap();
-    }
-    println!("done");
 }
 
 pub fn get_quality_score_count_confident_error () {
