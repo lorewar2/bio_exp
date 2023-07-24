@@ -34,7 +34,87 @@ const READ_BAM_PATH: &str = "/data1/hifi_consensus/try2/merged.bam";
 const INTERMEDIATE_PATH: &str = "result/intermediate";
 const CONFIDENT_PATH: &str = "/data1/GiaB_benchmark/HG001_GRCh38_1_22_v4.2.1_benchmark.bed";
 const BAND_SIZE: i32 = 2000;
-const MAX_NODES_IN_POA: usize = 50000;
+const MAX_NODES_IN_POA: usize = 62_000;
+
+pub fn pipeline_save_the_graphs (chromosone: &str, start: usize, end: usize, thread_id: usize) {
+    let mut big_file_skip_count = 0;
+    let mut index_thread = 0;
+    let mut skip_thousand = false;
+    let mut skip_index = 0;
+    'bigloop: for process_location in start..end {
+        // skip thousand when same found
+        if skip_thousand {
+            skip_index += 1;
+            if skip_index > 10000 {
+                skip_thousand = false;
+                skip_index = 0;
+            }
+            else {
+                continue;
+            }
+        }
+        println!("Thread {}: Chr {} Loc {}, tasks_done {} skipped {}", thread_id, chromosone, process_location, index_thread, big_file_skip_count);
+        // get the string and the name
+        let seq_name_qual_and_errorpos_vec = get_corrosponding_seq_name_location_quality_from_bam(process_location, &chromosone.to_string(), &'X');
+        let mut all_skipped = true;
+        for seq_name_qual_and_errorpos in &seq_name_qual_and_errorpos_vec {
+            println!("Thread {}: Processing ccs file: {}", thread_id, seq_name_qual_and_errorpos.1);
+            // check if the graph is already available
+            let check_file = format!("{}_graph.txt", &seq_name_qual_and_errorpos.1);
+            if check_file_availability(&check_file, INTERMEDIATE_PATH) {
+                println!("Thread {}: File Available, skipping", thread_id);
+                continue;
+            }
+            // if not available do poa and make a file
+            // find the subreads of that ccs
+            let mut sub_reads = get_the_subreads_by_name_sam(&seq_name_qual_and_errorpos.1);
+            // skip if no subreads, errors and stuff
+            if sub_reads.len() == 0 {
+                continue;
+            }
+            all_skipped = false;
+            // filter out the long reads and rearrange the reads
+            sub_reads = reverse_complement_filter_and_rearrange_subreads(&sub_reads);
+            // reverse if score is too low
+            sub_reads = check_the_scores_and_change_alignment(sub_reads, &seq_name_qual_and_errorpos.0);
+
+            sub_reads.insert(0, seq_name_qual_and_errorpos.0.clone());
+            // do poa with the read and subreads, get the poa and consensus
+            let mut sequence_number: usize = 0;
+            let mut aligner = Aligner::new(MATCH, MISMATCH, GAP_OPEN, &sub_reads[0].as_bytes().to_vec(), BAND_SIZE);
+            
+            for sub_read in &sub_reads {
+                if sequence_number != 0 {
+                    aligner.global(&sub_read.as_bytes().to_vec()).add_to_graph();
+                }
+                let node_num = aligner.graph().node_count();
+                if node_num > MAX_NODES_IN_POA {
+                    println!("NUM OF NODES {} TOO BIG, SKIPPING", node_num);
+                    big_file_skip_count += 1;
+                    skip_thousand = true;
+                    continue 'bigloop;
+                }
+                sequence_number += 1;
+                println!("Thread {}: Sequence {} processed", thread_id, sequence_number);
+                if sequence_number > 10 {
+                    break;
+                }
+            }
+            let calculated_graph: &Graph<u8, i32, Directed, usize> = aligner.graph();
+            save_the_graph(calculated_graph, &seq_name_qual_and_errorpos.1);
+            index_thread += 1;
+        }
+        if all_skipped {
+            skip_thousand = true;
+        }
+    }
+}
+
+fn save_the_graph (graph: &Graph<u8, i32, Directed, usize>, file_name: &String) {
+    let write_string = format!("{}\n{:?}", graph.node_count(), Dot::new(&graph.map(|_, n| (*n) as char, |_, e| *e)));
+    let write_path = format!("{}/{}_graph.txt", INTERMEDIATE_PATH, file_name);
+    write_string_to_file(&write_path, &write_string);
+}
 
 pub fn concancate_files () {
     let mut output = File::create("result/chr21_ml_file").unwrap();
@@ -67,17 +147,8 @@ pub fn test_graphs() {
         index += 1;
     }
     let test_graph = aligner.graph();
-    save_the_graph(test_graph, "test.txt".to_string());
+    save_the_graph(test_graph, &"test.txt".to_string());
     load_the_graph("test.txt".to_string());
-}
-
-fn save_the_graph (graph: &Graph<u8, i32, Directed, usize>, file_name: String) {
-    // check if file is available
-    if check_file_availability(&file_name, INTERMEDIATE_PATH) == false {
-        let write_string = format!("{}\n{:?}", graph.node_count(), Dot::new(&graph.map(|_, n| (*n) as char, |_, e| *e)));
-        let write_path = format!("{}/{}", INTERMEDIATE_PATH, file_name);
-        write_string_to_file(&write_path, &write_string);
-    }
 }
 
 fn load_the_graph (file_name: String) -> Graph<u8, i32, Directed, usize> {
@@ -114,7 +185,6 @@ fn load_the_graph (file_name: String) -> Graph<u8, i32, Directed, usize> {
                     node_edge_list[start_node].1.push((end_node, edge_weight));
                     edge_capacity += 1;
                 }
-
             }
             index += 1;
         }
@@ -490,8 +560,17 @@ fn check_file_availability (file_name: &str, search_path: &str) -> bool {
     let temp_path_string = format!("{}/{}", search_path, file_name);
     let path = std::path::Path::new(&temp_path_string);
     let prefix = path.parent().unwrap();
+    // check if dir is avaiable
     let file_available = match read_dir(prefix) {
-        Ok(_) => {true},
+        Ok(_) => {
+            // check if file is available
+            if path.exists() {
+                true
+            }
+            else {
+                false
+            }
+        },
         Err(_) => {false},
     };
     file_available
