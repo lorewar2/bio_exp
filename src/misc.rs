@@ -1009,7 +1009,7 @@ fn check_the_scores_and_change_alignment (seqvec: Vec<String>, pacbio_consensus:
             }
             seqvec2.push(tempseq.iter().cloned().collect::<String>());
         }
-        for seq in &seqvec {
+        for seq in &seqvec2 {
             let (_, score) = pairwise(&pacbio_consensus.as_bytes().to_vec(), &seq.as_bytes().to_vec(), MATCH, MISMATCH, GAP_OPEN, GAP_EXTEND, 0);
             println!("score: {}", score);
             if score < 20000 {
