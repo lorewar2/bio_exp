@@ -72,18 +72,18 @@ pub fn pipeline_load_graph_get_topological_parallel_bases (chromosone: &str, sta
             let (calculated_consensus, calculated_topology) = get_consensus_from_graph(&calculated_graph); //just poa
             let quality_output = get_consensus_quality_scores(sub_reads.len(), &calculated_consensus, &calculated_topology, &calculated_graph);
             // match the calculated consensus to the original consensus and get the required indices
-            let calculated_indices = get_redone_consensus_matched_positions(&seq_name_qual_and_errorpos.0, &calculated_consensus);
+            let id_vec = get_redone_consensus_matched_positions(&seq_name_qual_and_errorpos.0, &calculated_consensus);
             
-            let mut index = 0;
-            // for byte in seq_name_qual_and_errorpos.0.as_bytes() {
-            //     let character = *byte as char;
-            //     let calculated_index = calculated_indices[index];
-            //     println!("{} {} {:?}", calculated_consensus[calculated_index] as char, character, quality_output.1[calculated_index]);
-            //     let write_string = format!("{} {} {} {:?}", character, quality_output.0[calculated_index] as usize, (sub_reads.len() - 1) ,quality_output.1[calculated_index]);
-            //     let write_file = format!("{}/{}", INTERMEDIATE_PATH, &seq_name_qual_and_errorpos.1);
-            //     //write_string_to_file(&write_file, &write_string);
-            //     index += 1;
-            // }
+            let pacbio = seq_name_qual_and_errorpos.0.as_bytes().to_vec();
+            for id in id_vec {
+                let pacbio_character = pacbio[id.0];
+                let calculated_character = calculated_consensus[id.1];
+                let quality = quality_output.1[id.1].clone();
+                println!("{} {} {:?}", calculated_character as char, pacbio_character as char, quality);
+                //let write_string = format!("{} {} {} {:?}", character, quality_output.0[calculated_index] as usize, (sub_reads.len() - 1) ,quality_output.1[calculated_index]);
+                //let write_file = format!("{}/{}", INTERMEDIATE_PATH, &seq_name_qual_and_errorpos.1);
+                //write_string_to_file(&write_file, &write_string);
+            }
             index_thread += 1;
         }
     }
@@ -657,7 +657,7 @@ pub fn pipeline_process_all_ccs_file_poa (chromosone: &str, start: usize, end: u
             for byte in sub_reads[0].as_bytes() {
                 let character = *byte as char;
                 let calculated_index = calculated_indices[index];
-                let write_string = format!("{} {} {} {:?}", character, quality_output.0[calculated_index] as usize, (sub_reads.len() - 1) ,quality_output.1[calculated_index]);
+                let write_string = format!("{} {} {} {:?}", character, quality_output.0[calculated_index.0] as usize, (sub_reads.len() - 1) ,quality_output.1[calculated_index.0]);
                 let write_file = format!("{}/{}", INTERMEDIATE_PATH, &seq_name_qual_and_errorpos.1);
                 write_string_to_file(&write_file, &write_string);
                 index += 1;
@@ -690,8 +690,8 @@ fn check_file_availability (file_name: &str, search_path: &str) -> bool {
     file_available
 }
 
-fn get_redone_consensus_matched_positions (pacbio_consensus: &String, calculated_consensus: &Vec<u8>) -> Vec<usize> {
-    let mut consensus_matched_indices: Vec<usize> = vec![];
+fn get_redone_consensus_matched_positions (pacbio_consensus: &String, calculated_consensus: &Vec<u8>) -> Vec<(usize, usize)> {
+    let mut consensus_matched_indices: Vec<(usize, usize)> = vec![];
     let pacbio_consensus_vec: Vec<u8> = pacbio_consensus.bytes().collect();
     let (alignment, temp_score) = pairwise(&calculated_consensus, &pacbio_consensus_vec, MATCH, MISMATCH, GAP_OPEN, GAP_EXTEND, 0);
     let mut calc_index = 0;
@@ -703,7 +703,7 @@ fn get_redone_consensus_matched_positions (pacbio_consensus: &String, calculated
     for op in alignment {
         match op as char {
             'm' => {
-                consensus_matched_indices.push(calc_index);
+                consensus_matched_indices.push((pacbio_index, calc_index));
                 calc_index += 1;
                 pacbio_index += 1;
                 matches += 1;
@@ -711,12 +711,10 @@ fn get_redone_consensus_matched_positions (pacbio_consensus: &String, calculated
             's' => {
                 calc_index += 1;
                 pacbio_index += 1;
-                consensus_matched_indices.push(0);
                 subs += 1;
             },
             'd' => {
                 pacbio_index += 1;
-                consensus_matched_indices.push(0);
                 deleteions += 1;
             },
             'i' => {
