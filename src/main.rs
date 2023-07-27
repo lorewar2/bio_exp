@@ -6,7 +6,7 @@ mod generator;
 mod misc;
 mod quality;
 use std::thread;
-use crate::misc::pipeline_save_the_graphs;
+use crate::misc::pipeline_load_graph_get_topological_parallel_bases;
 
 const SEED: u64 = 2;
 const GAP_OPEN: i32 = -2;
@@ -30,7 +30,7 @@ fn main() {
             let start = total_start + one_thread_allocation * i;
             let end = start + one_thread_allocation;
             println!("Thread number {} started, {} from {} to {}..", chromosone, i, start, end);
-            pipeline_save_the_graphs(chromosone, start, end, i);
+            pipeline_load_graph_get_topological_parallel_bases(chromosone, start, end, i);
         }));
     }
     for child in children {

@@ -7,6 +7,8 @@ use crate::quality::topology_cut::get_parallel_nodes_with_topology_cut;
 use crate::quality::topology_cut::get_consensus_quality_scores;
 use petgraph::{Graph, Directed, graph::NodeIndex};
 use petgraph::dot::Dot;
+use petgraph::visit::Topo;
+use petgraph::Direction::Outgoing;
 use rust_htslib::bam::{Read as BamRead, IndexedReader as BamIndexedReader};
 use rust_htslib::bcf::{Reader, Read as BcfRead};
 use rust_htslib::faidx;
@@ -36,6 +38,172 @@ const CONFIDENT_PATH: &str = "/data1/GiaB_benchmark/HG001_GRCh38_1_22_v4.2.1_ben
 const BAND_SIZE: i32 = 1000;
 const MAX_NODES_IN_POA: usize = 62_000;
 const REVERSE_SCORE: isize = 20_000;
+
+pub fn pipeline_load_graph_get_topological_parallel_bases (chromosone: &str, start: usize, end: usize, thread_id: usize) {
+    let mut index_thread = 0;
+    for process_location in start..end {
+        println!("Thread {}: Chr {} Loc {}, tasks_done {}", thread_id, chromosone, process_location, index_thread);
+        // get the string and the name
+        let seq_name_qual_and_errorpos_vec = get_corrosponding_seq_name_location_quality_from_bam(process_location, &chromosone.to_string(), &'X');
+        for seq_name_qual_and_errorpos in &seq_name_qual_and_errorpos_vec {
+            println!("Thread {}: Processing ccs file: {}", thread_id, seq_name_qual_and_errorpos.1);
+            // check if the css file is already available
+            if check_file_availability(&seq_name_qual_and_errorpos.1, INTERMEDIATE_PATH) {
+                println!("Thread {}: Required CSS File Available, skipping..", thread_id);
+                continue;
+            }
+            // check if graph is available, if available load all the data
+            let check_file = format!("{}_graph.txt", &seq_name_qual_and_errorpos.1);
+            if check_file_availability(&check_file, INTERMEDIATE_PATH) {
+                println!("Thread {}: Required File not Available, Graph Available, processing..", thread_id);
+            }
+            // if both not available
+            else {
+                println!("Thread {}: Nothing is available, continuing..", thread_id);
+                continue;
+            }
+            // find the subreads of that ccs
+            let sub_reads = get_the_subreads_by_name_sam(&seq_name_qual_and_errorpos.1);
+            // skip if no subreads, errors and stuff
+            if sub_reads.len() == 0 {
+                continue;
+            }
+            let calculated_graph = load_the_graph(check_file);
+            let (calculated_consensus, calculated_topology) = get_consensus_from_graph(&calculated_graph); //just poa
+            let quality_output = get_consensus_quality_scores(sub_reads.len(), &calculated_consensus, &calculated_topology, &calculated_graph);
+            // match the calculated consensus to the original consensus and get the required indices
+            let calculated_indices = get_redone_consensus_matched_positions(&seq_name_qual_and_errorpos.0, &calculated_consensus);
+            let mut index = 0;
+            for byte in sub_reads[0].as_bytes() {
+                let character = *byte as char;
+                let calculated_index = calculated_indices[index];
+                let write_string = format!("{} {} {} {:?}", character, quality_output.0[calculated_index] as usize, (sub_reads.len() - 1) ,quality_output.1[calculated_index]);
+                let write_file = format!("{}/{}", INTERMEDIATE_PATH, &seq_name_qual_and_errorpos.1);
+                write_string_to_file(&write_file, &write_string);
+                index += 1;
+            }
+            index_thread += 1;
+        }
+    }
+}
+
+fn get_consensus_from_graph(graph: &Graph<u8, i32, Directed, usize>) -> (Vec<u8>, Vec<usize>) {
+    let mut output: Vec<u8> = vec![];
+    let mut topopos: Vec<usize> = vec![];
+    let mut topo = Topo::new(graph);
+    let mut topo_indices = Vec::new();
+    let mut max_index = 0;
+    let mut max_score = 0.0;
+
+    while let Some(node) = topo.next(graph) {
+        topo_indices.push(node);
+        if max_index < node.index(){
+            max_index = node.index();
+        }
+    }
+    topo_indices.reverse();
+    //define score and nextinpath vectors with capacity of num nodes.
+    let mut weight_scores: Vec<i32> = vec![0; max_index + 1];
+    let mut scores: Vec<f64> = vec![0.0; max_index + 1];
+    let mut next_in_path: Vec<usize> = vec![0; max_index + 1];
+    //iterate thorugh the nodes in revere
+    for node in topo_indices{
+        let mut best_weight_score_edge: (i32, f64, usize) = (-1 , -1.0, 123456789);
+        let mut neighbour_nodes = graph.neighbors_directed(node, Outgoing);
+        while let Some(neighbour_node) = neighbour_nodes.next() {
+            let mut edges = graph.edges_connecting(node, neighbour_node);
+            let mut weight: i32 = 0;
+            while let Some(edge) = edges.next() {
+                weight += edge.weight().clone();
+            }
+            let weight_score_edge = (weight, scores[neighbour_node.index()], neighbour_node.index());
+            if weight_score_edge > best_weight_score_edge{
+                best_weight_score_edge = weight_score_edge;
+            }
+        }
+        //save score and traceback
+        if best_weight_score_edge.0 as f64 + best_weight_score_edge.1 > max_score{
+            max_score = best_weight_score_edge.0 as f64 + best_weight_score_edge.1;
+        }
+        scores[node.index()] = best_weight_score_edge.0 as f64 + best_weight_score_edge.1;
+        next_in_path[node.index()] = best_weight_score_edge.2;
+        weight_scores[node.index()] = best_weight_score_edge.0;
+    }
+    let mut pos = scores.iter().position(|&r| r == max_score).unwrap();
+    //calculate the start weight score
+    let mut consensus_started: bool = false;
+    let weight_average = scores[pos] / scores.len() as f64;
+    let weight_threshold = weight_average as i32 / 2; 
+    while pos != 123456789 {
+        //continue if starting weight score is too low
+        if consensus_started == false && weight_scores[pos] < weight_threshold {
+            pos = next_in_path[pos];
+            continue;
+        }
+        consensus_started = true;
+        topopos.push(pos as usize);
+        output.push(graph.raw_nodes()[pos].weight);
+        pos = next_in_path[pos];
+    }
+    (output, topopos)
+}
+
+fn load_the_graph (file_name: String) -> Graph<u8, i32, Directed, usize> {
+    let mut node_edge_list: Vec<(char, Vec<(usize, usize)>)> = vec![];
+    let mut node_capacity = 0;
+    let mut edge_capacity = 0;
+    // check if available, populate node_edge_list from file
+    if check_file_availability(&file_name, INTERMEDIATE_PATH) == true {
+        // read the file
+        let mut index = 0;
+        let read_path = format!("{}/{}", INTERMEDIATE_PATH, file_name);
+        for line in read_to_string(read_path).unwrap().lines() {
+            //println!("{}", line);
+            let line_parts: Vec<&str> = line.split(" ").collect();
+            // create the node edge list with capacity
+            if index == 0 {
+                if line_parts.len() == 1 {
+                    node_capacity = line_parts[0].parse::<usize>().unwrap();
+                    node_edge_list = vec![('X', vec![]); node_capacity];
+                }
+            }
+            // put the values in node edge list
+            else {
+                if line_parts.len() == 10 {
+                    let start_node = line_parts[4].parse::<usize>().unwrap();
+                    let chars: Vec<char> = line_parts[8].chars().collect();
+                    node_edge_list[start_node].0 = chars[2];
+                }
+                if line_parts.len() == 12 {
+                    let start_node = line_parts[4].parse::<usize>().unwrap();
+                    let end_node = line_parts[6].parse::<usize>().unwrap();
+                    let chars: Vec<char> = line_parts[10].chars().collect();
+                    let edge_weight = chars[1].to_string().parse::<usize>().unwrap();
+                    node_edge_list[start_node].1.push((end_node, edge_weight));
+                    edge_capacity += 1;
+                }
+            }
+            index += 1;
+        }
+    }
+    // make the graph from the vector
+    let mut graph: Graph<u8, i32, Directed, usize> = Graph::with_capacity(node_capacity, edge_capacity);
+    
+    // add the nodes first
+    for node_edge in &node_edge_list {
+        graph.add_node(node_edge.0 as u8);
+    }
+    // add the edges
+    for (idx, node_edge) in node_edge_list.iter().enumerate() {
+        for edge in &node_edge.1 {
+            graph.add_edge(NodeIndex::new(idx), NodeIndex::new(edge.0), edge.1 as i32);
+        }
+    }
+    //graph.add_node(weight);
+    // show graph 
+    //println!("{}", Dot::new(&graph.map(|_, n| (*n) as char, |_, e| *e)));
+    graph
+}
 
 pub fn pipeline_save_the_graphs (chromosone: &str, start: usize, end: usize, thread_id: usize) {
     let mut big_file_skip_count = 0;
@@ -150,63 +318,6 @@ pub fn test_graphs() {
     let test_graph = aligner.graph();
     save_the_graph(test_graph, &"test.txt".to_string());
     load_the_graph("test.txt".to_string());
-}
-
-fn load_the_graph (file_name: String) -> Graph<u8, i32, Directed, usize> {
-    let mut node_edge_list: Vec<(char, Vec<(usize, usize)>)> = vec![];
-    let mut node_capacity = 0;
-    let mut edge_capacity = 0;
-    // check if available, populate node_edge_list from file
-    if check_file_availability(&file_name, INTERMEDIATE_PATH) == true {
-        // read the file
-        let mut index = 0;
-        let read_path = format!("{}/{}", INTERMEDIATE_PATH, file_name);
-        for line in read_to_string(read_path).unwrap().lines() {
-            //println!("{}", line);
-            let line_parts: Vec<&str> = line.split(" ").collect();
-            // create the node edge list with capacity
-            if index == 0 {
-                if line_parts.len() == 1 {
-                    node_capacity = line_parts[0].parse::<usize>().unwrap();
-                    node_edge_list = vec![('X', vec![]); node_capacity];
-                }
-            }
-            // put the values in node edge list
-            else {
-                if line_parts.len() == 10 {
-                    let start_node = line_parts[4].parse::<usize>().unwrap();
-                    let chars: Vec<char> = line_parts[8].chars().collect();
-                    node_edge_list[start_node].0 = chars[2];
-                }
-                if line_parts.len() == 12 {
-                    let start_node = line_parts[4].parse::<usize>().unwrap();
-                    let end_node = line_parts[6].parse::<usize>().unwrap();
-                    let chars: Vec<char> = line_parts[10].chars().collect();
-                    let edge_weight = chars[1].to_string().parse::<usize>().unwrap();
-                    node_edge_list[start_node].1.push((end_node, edge_weight));
-                    edge_capacity += 1;
-                }
-            }
-            index += 1;
-        }
-    }
-    // make the graph from the vector
-    let mut graph: Graph<u8, i32, Directed, usize> = Graph::with_capacity(node_capacity, edge_capacity);
-    
-    // add the nodes first
-    for node_edge in &node_edge_list {
-        graph.add_node(node_edge.0 as u8);
-    }
-    // add the edges
-    for (idx, node_edge) in node_edge_list.iter().enumerate() {
-        for edge in &node_edge.1 {
-            graph.add_edge(NodeIndex::new(idx), NodeIndex::new(edge.0), edge.1 as i32);
-        }
-    }
-    //graph.add_node(weight);
-    // show graph 
-    //println!("{}", Dot::new(&graph.map(|_, n| (*n) as char, |_, e| *e)));
-    graph
 }
 
 pub fn get_quality_score_count_confident_error () {
