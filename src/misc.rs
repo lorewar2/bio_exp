@@ -73,15 +73,15 @@ pub fn pipeline_load_graph_get_topological_parallel_bases (chromosone: &str, sta
             let quality_output = get_consensus_quality_scores(sub_reads.len(), &calculated_consensus, &calculated_topology, &calculated_graph);
             // match the calculated consensus to the original consensus and get the required indices
             let calculated_indices = get_redone_consensus_matched_positions(&seq_name_qual_and_errorpos.0, &calculated_consensus);
-            let mut index = 0;
-            for byte in sub_reads[0].as_bytes() {
-                let character = *byte as char;
-                let calculated_index = calculated_indices[index];
-                let write_string = format!("{} {} {} {:?}", character, quality_output.0[calculated_index] as usize, (sub_reads.len() - 1) ,quality_output.1[calculated_index]);
-                let write_file = format!("{}/{}", INTERMEDIATE_PATH, &seq_name_qual_and_errorpos.1);
-                write_string_to_file(&write_file, &write_string);
-                index += 1;
-            }
+            // let mut index = 0;
+            // for byte in seq_name_qual_and_errorpos.0.as_bytes() {
+            //     let character = *byte as char;
+            //     let calculated_index = calculated_indices[index];
+            //     let write_string = format!("{} {} {} {:?}", character, quality_output.0[calculated_index] as usize, (sub_reads.len() - 1) ,quality_output.1[calculated_index]);
+            //     let write_file = format!("{}/{}", INTERMEDIATE_PATH, &seq_name_qual_and_errorpos.1);
+            //     write_string_to_file(&write_file, &write_string);
+            //     index += 1;
+            // }
             index_thread += 1;
         }
     }
@@ -691,8 +691,9 @@ fn check_file_availability (file_name: &str, search_path: &str) -> bool {
 fn get_redone_consensus_matched_positions (pacbio_consensus: &String, calculated_consensus: &Vec<u8>) -> Vec<usize> {
     let mut consensus_matched_indices: Vec<usize> = vec![];
     let pacbio_consensus_vec: Vec<u8> = pacbio_consensus.bytes().collect();
-    let (alignment, _) = pairwise(&calculated_consensus, &pacbio_consensus_vec, MATCH, MISMATCH, GAP_OPEN, GAP_EXTEND, 0);
+    let (alignment, temp_score) = pairwise(&calculated_consensus, &pacbio_consensus_vec, MATCH, MISMATCH, GAP_OPEN, GAP_EXTEND, 0);
     let mut calc_index = 0;
+    println!("score between consensus and pacbio {}", temp_score);
     for op in alignment {
         match op as char {
             'm' => {
