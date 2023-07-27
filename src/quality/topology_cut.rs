@@ -8,7 +8,7 @@ use statrs::function::factorial::binomial;
 const ERROR_PROBABILITY: f64 = 0.80;
 const PRINT_ALL: bool = false;
 const USEPACBIODATA: bool = true;
-const NUM_OF_ITER_FOR_PARALLEL: usize = 15;
+const NUM_OF_ITER_FOR_PARALLEL: usize = 10;
 
 pub fn get_consensus_quality_scores(seq_num: usize, consensus: &Vec<u8>, topology: &Vec<usize>, graph: &Graph<u8, i32, Directed, usize>) -> (Vec<f64>, Vec<Vec<usize>>) {
     let mut quality_scores: Vec<f64> = vec![];
