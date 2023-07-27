@@ -73,11 +73,12 @@ pub fn pipeline_load_graph_get_topological_parallel_bases (chromosone: &str, sta
             let quality_output = get_consensus_quality_scores(sub_reads.len(), &calculated_consensus, &calculated_topology, &calculated_graph);
             // match the calculated consensus to the original consensus and get the required indices
             let calculated_indices = get_redone_consensus_matched_positions(&seq_name_qual_and_errorpos.0, &calculated_consensus);
+            println!("{:?}", calculated_indices);
             let mut index = 0;
             for byte in seq_name_qual_and_errorpos.0.as_bytes() {
                 let character = *byte as char;
                 let calculated_index = calculated_indices[index];
-                println!("{} {} {:?}", calculated_consensus[index] as char, character, quality_output.1[calculated_index]);
+                println!("{} {} {:?}", calculated_consensus[calculated_index] as char, character, quality_output.1[calculated_index]);
                 let write_string = format!("{} {} {} {:?}", character, quality_output.0[calculated_index] as usize, (sub_reads.len() - 1) ,quality_output.1[calculated_index]);
                 let write_file = format!("{}/{}", INTERMEDIATE_PATH, &seq_name_qual_and_errorpos.1);
                 //write_string_to_file(&write_file, &write_string);
@@ -706,10 +707,10 @@ fn get_redone_consensus_matched_positions (pacbio_consensus: &String, calculated
                 consensus_matched_indices.push(0);
             },
             'd' => {
-                consensus_matched_indices.push(0);
+                calc_index += 1;
             },
             'i' => {
-                calc_index += 1;
+                consensus_matched_indices.push(0);
             },
             _ => {},
         }
