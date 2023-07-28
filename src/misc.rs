@@ -37,7 +37,6 @@ const INTERMEDIATE_PATH: &str = "result/intermediate";
 const CONFIDENT_PATH: &str = "/data1/GiaB_benchmark/HG001_GRCh38_1_22_v4.2.1_benchmark.bed";
 const BAND_SIZE: i32 = 1000;
 const MAX_NODES_IN_POA: usize = 62_000;
-const REVERSE_SCORE: isize = 20_000;
 
 pub fn pipeline_load_graph_get_topological_parallel_bases (chromosone: &str, start: usize, end: usize, thread_id: usize) {
     let mut index_thread = 0;
@@ -1099,23 +1098,35 @@ fn get_redone_consensus_error_position (pacbio_consensus: &String, calculated_co
 }
 
 fn check_the_scores_and_change_alignment (seqvec: Vec<String>, pacbio_consensus: &String) -> Vec<String> {
-    let mut invert: bool = false;
+    let mut forward_score = 0;
+    let mut backward_score = 0;
+    let pacbio_forward = pacbio_consensus.as_bytes().to_vec();
+    let mut pacbio_backward = pacbio_forward.clone();
+    pacbio_backward.reverse();
     let mut seqvec2: Vec<String> = vec![];
-    // check the scores for 3 sequences
+    // check the forward scores for 3 sequences
     let mut index = 0;
     for seq in &seqvec {
-        let (_, score) = pairwise(&pacbio_consensus.as_bytes().to_vec(), &seq.as_bytes().to_vec(), MATCH, MISMATCH, GAP_OPEN, GAP_EXTEND, 0);
-        println!("score: {}", score);
-        if score < REVERSE_SCORE {
-            invert = true;
-            break;
-        }
-        else if index > 1 {
+        let (_, score) = pairwise(&pacbio_forward, &seq.as_bytes().to_vec(), MATCH, MISMATCH, GAP_OPEN, GAP_EXTEND, 0);
+        println!("forward score: {}", score);
+        forward_score += score;
+        if index > 1 {
             break;
         }
         index += 1;
     }
-    if invert {
+    // check the backward scores for 3 sequences
+    index = 0;
+    for seq in &seqvec {
+        let (_, score) = pairwise(&pacbio_backward, &seq.as_bytes().to_vec(), MATCH, MISMATCH, GAP_OPEN, GAP_EXTEND, 0);
+        println!("backward score: {}", score);
+        backward_score += score;
+        if index > 1 {
+            break;
+        }
+        index += 1;
+    }
+    if backward_score > forward_score {
         println!("Scores are too low, inverting sequences.");
         //reverse complement every line
         for seq in &seqvec {
@@ -1132,22 +1143,11 @@ fn check_the_scores_and_change_alignment (seqvec: Vec<String>, pacbio_consensus:
             }
             seqvec2.push(tempseq.iter().cloned().collect::<String>());
         }
-        for seq in &seqvec2 {
-            let (_, score) = pairwise(&pacbio_consensus.as_bytes().to_vec(), &seq.as_bytes().to_vec(), MATCH, MISMATCH, GAP_OPEN, GAP_EXTEND, 0);
-            println!("score: {}", score);
-            if score < REVERSE_SCORE {
-                return vec![];
-            }
-            else if index > 1 {
-                break;
-            }
-            index += 1;
-        }
+        return seqvec2;
     }
     else {
-        seqvec2 = seqvec;
+        return seqvec;
     }
-    seqvec2
 }
 
 fn get_corrosponding_seq_name_location_quality_from_bam (error_pos: usize, error_chr: &String, base_change: &char) -> Vec<(String, String, u8, usize)> {
