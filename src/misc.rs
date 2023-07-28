@@ -37,6 +37,7 @@ const INTERMEDIATE_PATH: &str = "result/intermediate";
 const CONFIDENT_PATH: &str = "/data1/GiaB_benchmark/HG001_GRCh38_1_22_v4.2.1_benchmark.bed";
 const BAND_SIZE: i32 = 1000;
 const MAX_NODES_IN_POA: usize = 62_000;
+const SKIP_SCORE: isize = 40_000;
 
 pub fn pipeline_load_graph_get_topological_parallel_bases (chromosone: &str, start: usize, end: usize, thread_id: usize) {
     let mut index_thread = 0;
@@ -223,7 +224,7 @@ pub fn pipeline_save_the_graphs (chromosone: &str, start: usize, end: usize, thr
         // skip thousand when same found
         if skip_thousand {
             skip_index += 1;
-            if skip_index > 10000 {
+            if skip_index > 5000 {
                 skip_thousand = false;
                 skip_index = 0;
             }
@@ -255,6 +256,10 @@ pub fn pipeline_save_the_graphs (chromosone: &str, start: usize, end: usize, thr
             sub_reads = reverse_complement_filter_and_rearrange_subreads(&sub_reads);
             // reverse if score is too low
             sub_reads = check_the_scores_and_change_alignment(sub_reads, &seq_name_qual_and_errorpos.0);
+            if sub_reads.len() == 0 {
+                skip_thousand = true;
+                continue 'bigloop;
+            }
 
             sub_reads.insert(0, seq_name_qual_and_errorpos.0.clone());
             // do poa with the read and subreads, get the poa and consensus
@@ -1107,10 +1112,10 @@ fn check_the_scores_and_change_alignment (seqvec: Vec<String>, pacbio_consensus:
     // check the forward scores for 3 sequences
     let mut index = 0;
     for seq in &seqvec {
-        let (_, score) = pairwise(&pacbio_forward, &seq.as_bytes().to_vec(), MATCH, MISMATCH, GAP_OPEN, GAP_EXTEND, 0);
+        let (_, score) = pairwise(&pacbio_forward, &seq.as_bytes().to_vec(), 4, -4, -4, -2, 0);
         println!("forward score: {}", score);
         forward_score += score;
-        if index > 1 {
+        if index > 0 {
             break;
         }
         index += 1;
@@ -1118,15 +1123,18 @@ fn check_the_scores_and_change_alignment (seqvec: Vec<String>, pacbio_consensus:
     // check the backward scores for 3 sequences
     index = 0;
     for seq in &seqvec {
-        let (_, score) = pairwise(&pacbio_backward, &seq.as_bytes().to_vec(), MATCH, MISMATCH, GAP_OPEN, GAP_EXTEND, 0);
+        let (_, score) = pairwise(&pacbio_backward, &seq.as_bytes().to_vec(), 4, -4, -4, -2, 0);
         println!("backward score: {}", score);
         backward_score += score;
-        if index > 1 {
+        if index > 0 {
             break;
         }
         index += 1;
     }
-    if backward_score > forward_score {
+    if forward_score < SKIP_SCORE && backward_score < SKIP_SCORE {
+        return vec![];
+    }
+    else if backward_score > forward_score {
         println!("Scores are too low, inverting sequences.");
         //reverse complement every line
         for seq in &seqvec {
