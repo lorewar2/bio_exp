@@ -79,7 +79,7 @@ pub fn pipeline_load_graph_get_topological_parallel_bases (chromosone: &str, sta
                 let pacbio_character = pacbio[id.0];
                 let calculated_character = calculated_consensus[id.1];
                 let quality = quality_output.1[id.1].clone();
-                println!("{} {} {:?}", calculated_character as char, pacbio_character as char, quality);
+                //println!("{} {} {:?}", calculated_character as char, pacbio_character as char, quality);
                 //let write_string = format!("{} {} {} {:?}", character, quality_output.0[calculated_index] as usize, (sub_reads.len() - 1) ,quality_output.1[calculated_index]);
                 //let write_file = format!("{}/{}", INTERMEDIATE_PATH, &seq_name_qual_and_errorpos.1);
                 //write_string_to_file(&write_file, &write_string);
@@ -704,6 +704,7 @@ fn get_redone_consensus_matched_positions (pacbio_consensus: &String, calculated
         match op as char {
             'm' => {
                 consensus_matched_indices.push((pacbio_index, calc_index));
+                println!("MATCHED ?? {} {}", pacbio_consensus_vec[pacbio_index] as char, calculated_consensus[calc_index] as char);
                 calc_index += 1;
                 pacbio_index += 1;
                 matches += 1;
