@@ -88,7 +88,7 @@ pub fn pipeline_load_graph_get_topological_parallel_bases (chromosone: &str, sta
                     parallel_quality = 0;
                 }
                 let write_string = format!("{} {} {} {:?}", pacbio_char, parallel_quality, (sub_reads.len() - 1) ,quality_vec);
-                println!("{}", write_string);
+                //println!("{}", write_string);
                 let write_file = format!("{}/{}", INTERMEDIATE_PATH, &seq_name_qual_and_errorpos.1);
                 //write_string_to_file(&write_file, &write_string);
             } 
@@ -701,7 +701,7 @@ fn check_file_availability (file_name: &str, search_path: &str) -> bool {
 fn get_redone_consensus_matched_positions (pacbio_consensus: &String, calculated_consensus: &Vec<u8>) -> Vec<usize> {
     let mut consensus_matched_indices: Vec<usize> = vec![];
     let pacbio_consensus_vec: Vec<u8> = pacbio_consensus.bytes().collect();
-    let (alignment, _) = pairwise(&calculated_consensus, &pacbio_consensus_vec, MATCH, MISMATCH, GAP_OPEN, GAP_EXTEND, 0);
+    let (alignment, temp_score) = pairwise(&calculated_consensus, &pacbio_consensus_vec, MATCH, MISMATCH, GAP_OPEN, GAP_EXTEND, 0);
     let mut calc_index = 0;
     for op in alignment {
         match op as char {
@@ -722,6 +722,7 @@ fn get_redone_consensus_matched_positions (pacbio_consensus: &String, calculated
             _ => {},
         }
     }
+    println!("score {}", temp_score);
     consensus_matched_indices
 }
 
