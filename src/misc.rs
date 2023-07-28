@@ -76,8 +76,16 @@ pub fn pipeline_load_graph_get_topological_parallel_bases (chromosone: &str, sta
             
             for (index, pacbio_base) in seq_name_qual_and_errorpos.0.as_bytes().to_vec().iter().enumerate() {
                 let pacbio_char = *pacbio_base as char;
-                let calculated_char = calculated_consensus[calc_cons_id[index]];
-                let quality = quality_output.1[calc_cons_id[index]].clone();
+                let calculated_char;
+                let quality;
+                if calc_cons_id[index] == usize::MAX {
+                    calculated_char = calculated_consensus[calc_cons_id[index]];
+                    quality = quality_output.1[calc_cons_id[index]].clone();
+                }
+                else {
+                    calculated_char = 'x' as u8;
+                    quality = vec![1, 1, 1, 1];
+                }
                 println!("{} {} {:?}", calculated_char as char, pacbio_char as char, quality);
                 //let write_string = format!("{} {} {} {:?}", character, quality_output.0[calculated_index] as usize, (sub_reads.len() - 1) ,quality_output.1[calculated_index]);
                 //let write_file = format!("{}/{}", INTERMEDIATE_PATH, &seq_name_qual_and_errorpos.1);
@@ -701,11 +709,11 @@ fn get_redone_consensus_matched_positions (pacbio_consensus: &String, calculated
                 calc_index += 1;
             },
             's' => {
-                consensus_matched_indices.push(calc_index);
+                consensus_matched_indices.push(usize::MAX);
                 calc_index += 1;
             },
             'd' => {
-                consensus_matched_indices.push(0);
+                consensus_matched_indices.push(usize::MAX);
             },
             'i' => {
                 calc_index += 1;
