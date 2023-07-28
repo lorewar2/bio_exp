@@ -73,22 +73,23 @@ pub fn pipeline_load_graph_get_topological_parallel_bases (chromosone: &str, sta
             let quality_output = get_consensus_quality_scores(sub_reads.len(), &calculated_consensus, &calculated_topology, &calculated_graph);
             // match the calculated consensus to the original consensus and get the required indices
             let calc_cons_id = get_redone_consensus_matched_positions(&seq_name_qual_and_errorpos.0, &calculated_consensus);
-            
             for (index, pacbio_base) in seq_name_qual_and_errorpos.0.as_bytes().to_vec().iter().enumerate() {
                 let pacbio_char = *pacbio_base as char;
-                let calculated_char;
-                let quality;
-                if calc_cons_id[index] == usize::MAX {
-                    calculated_char = calculated_consensus[calc_cons_id[index]];
-                    quality = quality_output.1[calc_cons_id[index]].clone();
+                let quality_vec;
+                let parallel_quality;
+                if calc_cons_id[index] != usize::MAX {
+                    //calculated_char = calculated_consensus[calc_cons_id[index]];
+                    quality_vec = quality_output.1[calc_cons_id[index]].clone();
+                    parallel_quality = quality_output.0[calc_cons_id[index]] as usize;
                 }
                 else {
-                    calculated_char = 'x' as u8;
-                    quality = vec![1, 1, 1, 1];
+                    //calculated_char = 'x' as u8;
+                    quality_vec = vec![1, 1, 1, 1];
+                    parallel_quality = 0;
                 }
-                println!("{} {} {:?}", calculated_char as char, pacbio_char as char, quality);
-                //let write_string = format!("{} {} {} {:?}", character, quality_output.0[calculated_index] as usize, (sub_reads.len() - 1) ,quality_output.1[calculated_index]);
-                //let write_file = format!("{}/{}", INTERMEDIATE_PATH, &seq_name_qual_and_errorpos.1);
+                let write_string = format!("{} {} {} {:?}", pacbio_char, parallel_quality, (sub_reads.len() - 1) ,quality_vec);
+                println!("{}", write_string);
+                let write_file = format!("{}/{}", INTERMEDIATE_PATH, &seq_name_qual_and_errorpos.1);
                 //write_string_to_file(&write_file, &write_string);
             } 
             index_thread += 1;
