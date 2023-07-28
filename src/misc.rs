@@ -301,7 +301,7 @@ pub fn test_banded_pairwise () {
     let seqvec = get_random_sequences_from_generator(RANDOM_SEQUENCE_LENGTH, NUMBER_OF_RANDOM_SEQUENCES, SEED);
     let sequence1: Vec<u8> = seqvec[0].bytes().collect();
     let sequence2: Vec<u8> = seqvec[1].bytes().collect();
-    let (_, full_score) = pairwise(&sequence1, &sequence2, MATCH, MISMATCH, GAP_OPEN, GAP_EXTEND);
+    let (_, full_score) = pairwise(&sequence1, &sequence2, MATCH, MISMATCH, GAP_OPEN, GAP_EXTEND, 3);
     println!("full score: {}", full_score);
 }
 
@@ -693,7 +693,7 @@ fn check_file_availability (file_name: &str, search_path: &str) -> bool {
 fn get_redone_consensus_matched_positions (pacbio_consensus: &String, calculated_consensus: &Vec<u8>) -> Vec<(usize, usize)> {
     let mut consensus_matched_indices: Vec<(usize, usize)> = vec![];
     let pacbio_consensus_vec: Vec<u8> = pacbio_consensus.bytes().collect();
-    let (alignment, temp_score) = pairwise(&calculated_consensus, &pacbio_consensus_vec, MATCH, MISMATCH, GAP_OPEN, GAP_EXTEND);
+    let (alignment, temp_score) = pairwise(&calculated_consensus, &pacbio_consensus_vec, MATCH, MISMATCH, GAP_OPEN, GAP_EXTEND, 0);
     let mut calc_index = 0;
     let mut pacbio_index = 0;
     let mut matches = 0;
@@ -1067,7 +1067,7 @@ fn get_redone_consensus_error_position (pacbio_consensus: &String, calculated_co
     let pacbio_consensus_vec: Vec<u8> = pacbio_consensus.bytes().collect();
     let mut aligned_pacbio_scores_vec: Vec<usize> = vec![];
     let mut aligned_pacbio_bases:Vec<u8> = vec![];
-    let (alignment, _) = pairwise(&calculated_consensus, &pacbio_consensus_vec, MATCH, MISMATCH, GAP_OPEN, GAP_EXTEND);
+    let (alignment, _) = pairwise(&calculated_consensus, &pacbio_consensus_vec, MATCH, MISMATCH, GAP_OPEN, GAP_EXTEND, 0);
     let mut pacbio_index = 0;
     let mut calc_index = 0;
     let mut calc_error_position: usize = 0;
@@ -1108,7 +1108,7 @@ fn check_the_scores_and_change_alignment (seqvec: Vec<String>, pacbio_consensus:
     // check the scores for 3 sequences
     let mut index = 0;
     for seq in &seqvec {
-        let (_, score) = pairwise(&pacbio_consensus.as_bytes().to_vec(), &seq.as_bytes().to_vec(), MATCH, MISMATCH, GAP_OPEN, GAP_EXTEND);
+        let (_, score) = pairwise(&pacbio_consensus.as_bytes().to_vec(), &seq.as_bytes().to_vec(), MATCH, MISMATCH, GAP_OPEN, GAP_EXTEND, 0);
         println!("score: {}", score);
         if score < REVERSE_SCORE {
             invert = true;
@@ -1137,7 +1137,7 @@ fn check_the_scores_and_change_alignment (seqvec: Vec<String>, pacbio_consensus:
             seqvec2.push(tempseq.iter().cloned().collect::<String>());
         }
         for seq in &seqvec2 {
-            let (_, score) = pairwise(&pacbio_consensus.as_bytes().to_vec(), &seq.as_bytes().to_vec(), MATCH, MISMATCH, GAP_OPEN, GAP_EXTEND);
+            let (_, score) = pairwise(&pacbio_consensus.as_bytes().to_vec(), &seq.as_bytes().to_vec(), MATCH, MISMATCH, GAP_OPEN, GAP_EXTEND, 0);
             println!("score: {}", score);
             if score < REVERSE_SCORE {
                 return vec![];
@@ -1819,7 +1819,7 @@ pub fn convert_sequence_to_homopolymer (sequence: &String) -> Vec<HomopolymerCel
 pub fn get_consensus_score(seqvec : &Vec<String>, consensus: &Vec<u8>, match_score: i32, mismatch_score: i32, gap_open_score: i32, gap_extend_score: i32) -> isize {
     let mut consensus_score = 0;
     for seq in seqvec {
-        let (_, score) = pairwise(&consensus, &seq.as_bytes().to_vec(), match_score, mismatch_score, gap_open_score, gap_extend_score);
+        let (_, score) = pairwise(&consensus, &seq.as_bytes().to_vec(), match_score, mismatch_score, gap_open_score, gap_extend_score, 0);
         consensus_score += score;
     }
     consensus_score
