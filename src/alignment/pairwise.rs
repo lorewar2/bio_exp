@@ -15,7 +15,7 @@ pub fn pairwise (seq_x: &Vec<u8>, seq_y: &Vec<u8>, match_score: i32, mismatch_sc
     let mut align_vec: Vec<u8> = Vec::new();
 
     // make one matrix 
-    let mut pair_wise_matrix: Vec<Vec<PairwiseMatrixCell>> = vec![vec![PairwiseMatrixCell { match_score: (0), del_score: (0), ins_score: (0), back: ('d') }; seq_y.len() + 1]; seq_x.len() + 1];
+    let mut pair_wise_matrix: Vec<Vec<PairwiseMatrixCell>> = vec![vec![PairwiseMatrixCell { match_score: (0), del_score: (0), ins_score: (0), back: ('X') }; seq_y.len() + 1]; seq_x.len() + 1];
 
     // fill out the first row and colomn
     let temp_value = gap_open_score as isize + gap_extend_score as isize;
