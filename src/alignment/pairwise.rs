@@ -10,7 +10,7 @@ struct PairwiseMatrixCell {
     back: char,
 }
 
-pub fn pairwise (seq_x: &Vec<u8>, seq_y: &Vec<u8>, match_score: i32, mismatch_score: i32, gap_open_score: i32, gap_extend_score: i32, band_size: usize) -> (Vec<u8>, isize) {
+pub fn pairwise (seq_x: &Vec<u8>, seq_y: &Vec<u8>, match_score: i32, mismatch_score: i32, gap_open_score: i32, gap_extend_score: i32) -> (Vec<u8>, isize) {
     // variables to save results
     let mut align_vec: Vec<u8> = Vec::new();
 
@@ -31,37 +31,8 @@ pub fn pairwise (seq_x: &Vec<u8>, seq_y: &Vec<u8>, match_score: i32, mismatch_sc
     }
     // calculations
     // filling out score matrices and back matrix
-    let mut max_scored_position = 0;
-    let mut max_score;
-    let mut start = 0;
-    let mut end= seq_x.len();
-    for i in 1..seq_x.len() + 1 {
-        max_score = MIN_SCORE;
-        if band_size > 0 {
-            if max_scored_position < band_size {
-                start = 0;
-            }
-            else {
-                start = max_scored_position - band_size;
-            }
-            end = max_scored_position + band_size;
-            // start at 0 initially
-            if i < 20 {
-                start = 0;
-            }
-            // end at end at end :D
-            if i > seq_x.len() - 20 {
-                end = seq_x.len();
-            }
-        }
-        
+    for i in 1..seq_x.len() + 1 {       
         for j in 1..seq_y.len() + 1 {
-            if j < start && (band_size > 0) && i > 1 {
-                continue;
-            }
-            if j > end && (band_size > 0) && i > 1{
-                break;
-            }
             // fill del matrix 
             // get j - 1 score from same matrix with gap extend
             let temp_del_score = pair_wise_matrix[i][j - 1].del_score + gap_extend_score as isize;
@@ -95,10 +66,6 @@ pub fn pairwise (seq_x: &Vec<u8>, seq_y: &Vec<u8>, match_score: i32, mismatch_sc
             }
             // insert the max
             pair_wise_matrix[i][j].match_score = cmp::max(temp_match_score, cmp::max(temp_ins_score, temp_del_score));
-            if max_score < pair_wise_matrix[i][j].match_score {
-                max_score = pair_wise_matrix[i][j].match_score;
-                max_scored_position = j;
-            }
             if (temp_match_score >= temp_ins_score) && (temp_match_score >= temp_del_score) {
                 // already allocated
             }
