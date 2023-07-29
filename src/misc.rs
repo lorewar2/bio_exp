@@ -47,12 +47,12 @@ pub fn test_poa_topology_thing (chromosone: &str, start: usize, end: usize, thre
         // get the string and the name
         let seq_name_qual_and_errorpos_vec = get_corrosponding_seq_name_location_quality_from_bam(process_location, &chromosone.to_string(), &'X');
         for seq_name_qual_and_errorpos in &seq_name_qual_and_errorpos_vec {
-            if seq_name_qual_and_errorpos.1 == "m64125_201110_063134/75368608/ccs" {
+            /*if seq_name_qual_and_errorpos.1 == "m64125_201110_063134/75368608/ccs" {
                 println!("FOUND!!!!!!");
             }
             else {
                 continue;
-            }
+            }*/
             println!("Thread {}: Processing ccs file: {}", thread_id, seq_name_qual_and_errorpos.1);
             // find the subreads of that ccs
             let mut sub_reads = get_the_subreads_by_name_sam(&seq_name_qual_and_errorpos.1);
