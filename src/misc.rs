@@ -1105,11 +1105,22 @@ fn get_redone_consensus_error_position (pacbio_consensus: &String, calculated_co
 fn check_the_scores_and_change_alignment (seqvec: Vec<String>, pacbio_consensus: &String) -> Vec<String> {
     let mut forward_score = 0;
     let mut backward_score = 0;
+    // make the pacbio orientation files
     let pacbio_forward = pacbio_consensus.as_bytes().to_vec();
-    let mut pacbio_backward = pacbio_forward.clone();
-    pacbio_backward.reverse();
-    let mut seqvec2: Vec<String> = vec![];
-    // check the forward scores for 3 sequences
+    let pacbio_backward;
+    let mut tempseq: Vec<char> = vec![];
+    let iterator = pacbio_consensus.chars().rev().into_iter();
+    for char in iterator{
+        tempseq.push(match char {
+            'A' => 'T',
+            'C' => 'G',
+            'G' => 'C',
+            'T' => 'A',
+            _ => ' ',
+        });
+    }
+    pacbio_backward = tempseq.iter().cloned().collect::<String>().as_bytes().to_vec();
+    // check the forward scores for 2 sequences
     let mut index = 0;
     for seq in &seqvec {
         let (_, score) = pairwise(&pacbio_forward, &seq.as_bytes().to_vec(), 4, -4, -4, -2, 0);
@@ -1120,7 +1131,7 @@ fn check_the_scores_and_change_alignment (seqvec: Vec<String>, pacbio_consensus:
         }
         index += 1;
     }
-    // check the backward scores for 3 sequences
+    // check the backward scores for 2 sequences
     index = 0;
     for seq in &seqvec {
         let (_, score) = pairwise(&pacbio_backward, &seq.as_bytes().to_vec(), 4, -4, -4, -2, 0);
@@ -1136,6 +1147,7 @@ fn check_the_scores_and_change_alignment (seqvec: Vec<String>, pacbio_consensus:
     }
     else if backward_score > forward_score {
         println!("Scores are too low, inverting sequences.");
+        let mut seqvec2 = vec![];
         //reverse complement every line
         for seq in &seqvec {
             let mut tempseq: Vec<char> = vec![];
