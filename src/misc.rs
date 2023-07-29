@@ -39,6 +39,100 @@ const BAND_SIZE: i32 = 1000;
 const MAX_NODES_IN_POA: usize = 62_000;
 const SKIP_SCORE: isize = 40_000;
 
+pub fn pipeline_process_all_ccs_file_poa (chromosone: &str, start: usize, end: usize, thread_id: usize) {
+    let mut index_thread = 0;
+    let mut skip_thousand = false;
+    let mut skip_index = 0;
+    'bigloop: for process_location in start..end {
+        // skip thousand when same found
+        if skip_thousand {
+            skip_index += 1;
+            if skip_index > 10000 {
+                skip_thousand = false;
+                skip_index = 0;
+            }
+            else {
+                continue;
+            }
+        }
+        println!("Thread {}: Chr {} Loc {}, tasks_done {}", thread_id, chromosone, process_location, index_thread);
+        // get the string and the name
+        let seq_name_qual_and_errorpos_vec = get_corrosponding_seq_name_location_quality_from_bam(process_location, &chromosone.to_string(), &'X');
+        let mut all_skipped = true;
+        for seq_name_qual_and_errorpos in &seq_name_qual_and_errorpos_vec {
+            println!("Thread {}: Processing ccs file: {}", thread_id, seq_name_qual_and_errorpos.1);
+            // check if the file is already available
+            if check_file_availability(&seq_name_qual_and_errorpos.1, INTERMEDIATE_PATH) {
+                println!("Thread {}: File Available, skipping", thread_id);
+                continue;
+            }
+            // if not available do poa and make a file
+            // find the subreads of that ccs
+            let mut sub_reads = get_the_subreads_by_name_sam(&seq_name_qual_and_errorpos.1);
+            // skip if no subreads, errors and stuff
+            if sub_reads.len() == 0 {
+                continue;
+            }
+            all_skipped = false;
+            // filter out the long reads and rearrange the reads
+            sub_reads = reverse_complement_filter_and_rearrange_subreads(&sub_reads);
+            // reverse if score is too low
+            sub_reads = check_the_scores_and_change_alignment(sub_reads, &seq_name_qual_and_errorpos.0);
+
+            sub_reads.insert(0, seq_name_qual_and_errorpos.0.clone());
+            // do poa with the read and subreads, get the poa and consensus
+            let mut sequence_number: usize = 0;
+            let mut aligner = Aligner::new(MATCH, MISMATCH, GAP_OPEN, &sub_reads[0].as_bytes().to_vec(), BAND_SIZE);
+            
+            for sub_read in &sub_reads {
+                if sequence_number != 0 {
+                    aligner.global(&sub_read.as_bytes().to_vec()).add_to_graph();
+                }
+                let node_num = aligner.graph().node_count();
+                if node_num > MAX_NODES_IN_POA {
+                    println!("NUM OF NODES {} TOO BIG, SKIPPING", node_num);
+                    skip_thousand = true;
+                    continue 'bigloop;
+                }
+                sequence_number += 1;
+                println!("Thread {}: Sequence {} processed", thread_id, sequence_number);
+                if sequence_number > 10 {
+                    break;
+                }
+            }
+            let (calculated_consensus, calculated_topology) = aligner.poa.consensus(); //just poa
+            let calculated_graph: &Graph<u8, i32, Directed, usize> = aligner.graph();
+            // match the calculated consensus to the original consensus and get the required indices
+            let quality_output = get_consensus_quality_scores(sub_reads.len(), &calculated_consensus, &calculated_topology, &calculated_graph);
+            // match the calculated consensus to the original consensus and get the required indices
+            let calc_cons_id = get_redone_consensus_matched_positions(&seq_name_qual_and_errorpos.0, &calculated_consensus);
+            for (index, pacbio_base) in seq_name_qual_and_errorpos.0.as_bytes().to_vec().iter().enumerate() {
+                let pacbio_char = *pacbio_base as char;
+                let quality_vec;
+                let parallel_quality;
+                if calc_cons_id[index] != usize::MAX {
+                    //calculated_char = calculated_consensus[calc_cons_id[index]];
+                    quality_vec = quality_output.1[calc_cons_id[index]].clone();
+                    parallel_quality = quality_output.0[calc_cons_id[index]] as usize;
+                }
+                else {
+                    //calculated_char = 'x' as u8;
+                    quality_vec = vec![1, 1, 1, 1];
+                    parallel_quality = 0;
+                }
+                let write_string = format!("{} {} {} {:?}", pacbio_char, parallel_quality, (sub_reads.len() - 1) ,quality_vec);
+                println!("{}", write_string);
+                let write_file = format!("{}/{}", INTERMEDIATE_PATH, &seq_name_qual_and_errorpos.1);
+                write_string_to_file(&write_file, &write_string);
+            } 
+            index_thread += 1;
+        }
+        if all_skipped {
+            skip_thousand = true;
+        }
+    }
+}
+
 pub fn test_poa_topology_thing (chromosone: &str, start: usize, end: usize, thread_id: usize) {
     let mut index_thread = 0;
     for process_location in start..end {
@@ -101,7 +195,7 @@ pub fn test_poa_topology_thing (chromosone: &str, start: usize, end: usize, thre
                 }
                 let write_string = format!("{} {} {} {:?}", pacbio_char, parallel_quality, (sub_reads.len() - 1) ,quality_vec);
                 println!("{}", write_string);
-                let write_file = format!("{}/{}", INTERMEDIATE_PATH, &seq_name_qual_and_errorpos.1);
+                //let write_file = format!("{}/{}", INTERMEDIATE_PATH, &seq_name_qual_and_errorpos.1);
                 //write_string_to_file(&write_file, &write_string);
             } 
             index_thread += 1;
@@ -159,7 +253,7 @@ pub fn pipeline_load_graph_get_topological_parallel_bases (chromosone: &str, sta
                 }
                 let write_string = format!("{} {} {} {:?}", pacbio_char, parallel_quality, (sub_reads.len() - 1) ,quality_vec);
                 println!("{}", write_string);
-                let write_file = format!("{}/{}", INTERMEDIATE_PATH, &seq_name_qual_and_errorpos.1);
+                //let write_file = format!("{}/{}", INTERMEDIATE_PATH, &seq_name_qual_and_errorpos.1);
                 //write_string_to_file(&write_file, &write_string);
             } 
             index_thread += 1;
@@ -667,89 +761,6 @@ pub fn get_quality_scores_from_file(file_path: &String, required_pos: usize) -> 
         current_pos += 1;
     }
     temp_quality_vec
-}
-
-pub fn pipeline_process_all_ccs_file_poa (chromosone: &str, start: usize, end: usize, thread_id: usize) {
-    let mut index_thread = 0;
-    let mut skip_thousand = false;
-    let mut skip_index = 0;
-    'bigloop: for process_location in start..end {
-        // skip thousand when same found
-        if skip_thousand {
-            skip_index += 1;
-            if skip_index > 10000 {
-                skip_thousand = false;
-                skip_index = 0;
-            }
-            else {
-                continue;
-            }
-        }
-        println!("Thread {}: Chr {} Loc {}, tasks_done {}", thread_id, chromosone, process_location, index_thread);
-        // get the string and the name
-        let seq_name_qual_and_errorpos_vec = get_corrosponding_seq_name_location_quality_from_bam(process_location, &chromosone.to_string(), &'X');
-        let mut all_skipped = true;
-        for seq_name_qual_and_errorpos in &seq_name_qual_and_errorpos_vec {
-            println!("Thread {}: Processing ccs file: {}", thread_id, seq_name_qual_and_errorpos.1);
-            // check if the file is already available
-            if check_file_availability(&seq_name_qual_and_errorpos.1, INTERMEDIATE_PATH) {
-                println!("Thread {}: File Available, skipping", thread_id);
-                continue;
-            }
-            // if not available do poa and make a file
-            // find the subreads of that ccs
-            let mut sub_reads = get_the_subreads_by_name_sam(&seq_name_qual_and_errorpos.1);
-            // skip if no subreads, errors and stuff
-            if sub_reads.len() == 0 {
-                continue;
-            }
-            all_skipped = false;
-            // filter out the long reads and rearrange the reads
-            sub_reads = reverse_complement_filter_and_rearrange_subreads(&sub_reads);
-            // reverse if score is too low
-            sub_reads = check_the_scores_and_change_alignment(sub_reads, &seq_name_qual_and_errorpos.0);
-
-            sub_reads.insert(0, seq_name_qual_and_errorpos.0.clone());
-            // do poa with the read and subreads, get the poa and consensus
-            let mut sequence_number: usize = 0;
-            let mut aligner = Aligner::new(MATCH, MISMATCH, GAP_OPEN, &sub_reads[0].as_bytes().to_vec(), BAND_SIZE);
-            
-            for sub_read in &sub_reads {
-                if sequence_number != 0 {
-                    aligner.global(&sub_read.as_bytes().to_vec()).add_to_graph();
-                }
-                let node_num = aligner.graph().node_count();
-                if node_num > MAX_NODES_IN_POA {
-                    println!("NUM OF NODES {} TOO BIG, SKIPPING", node_num);
-                    skip_thousand = true;
-                    continue 'bigloop;
-                }
-                sequence_number += 1;
-                println!("Thread {}: Sequence {} processed", thread_id, sequence_number);
-                if sequence_number > 10 {
-                    break;
-                }
-            }
-            let (calculated_consensus, calculated_topology) = aligner.poa.consensus(); //just poa
-            let calculated_graph: &Graph<u8, i32, Directed, usize> = aligner.graph();
-            let quality_output = get_consensus_quality_scores(sequence_number, &calculated_consensus, &calculated_topology, calculated_graph);
-            // match the calculated consensus to the original consensus and get the required indices
-            let calculated_indices = get_redone_consensus_matched_positions(&sub_reads[0], &calculated_consensus);
-            let mut index = 0;
-            for byte in sub_reads[0].as_bytes() {
-                let character = *byte as char;
-                let calculated_index = calculated_indices[index];
-                let write_string = format!("{} {} {} {:?}", character, quality_output.0[calculated_index] as usize, (sub_reads.len() - 1) ,quality_output.1[calculated_index]);
-                let write_file = format!("{}/{}", INTERMEDIATE_PATH, &seq_name_qual_and_errorpos.1);
-                write_string_to_file(&write_file, &write_string);
-                index += 1;
-            }
-            index_thread += 1;
-        }
-        if all_skipped {
-            skip_thousand = true;
-        }
-    }
 }
 
 fn check_file_availability (file_name: &str, search_path: &str) -> bool {
