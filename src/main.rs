@@ -6,7 +6,7 @@ mod generator;
 mod misc;
 mod quality;
 use std::thread;
-use crate::misc::pipeline_process_all_ccs_file_poa;
+use crate::misc::get_data_for_ml;
 
 const SEED: u64 = 2;
 const GAP_OPEN: i32 = -2;
@@ -16,6 +16,7 @@ const MISMATCH: i32 = -2;
 const NTHREADS: usize = 1;
 
 fn main() {
+    //concancate_files();
     // make a vector to hold the children which are spawned.
     let mut children = vec![];
     let chromosone = "chr21";
@@ -30,7 +31,7 @@ fn main() {
             let start = total_start + one_thread_allocation * i;
             let end = start + one_thread_allocation;
             println!("Thread number {} started, {} from {} to {}..", chromosone, i, start, end);
-            pipeline_process_all_ccs_file_poa(chromosone, start, end, i);
+            get_data_for_ml(chromosone, start, end, i);
         }));
     }
     for child in children {

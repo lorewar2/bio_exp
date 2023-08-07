@@ -36,8 +36,18 @@ const READ_BAM_PATH: &str = "/data1/hifi_consensus/try2/merged.bam";
 const INTERMEDIATE_PATH: &str = "result/intermediate";
 const CONFIDENT_PATH: &str = "/data1/GiaB_benchmark/HG001_GRCh38_1_22_v4.2.1_benchmark.bed";
 const BAND_SIZE: i32 = 1000;
-const MAX_NODES_IN_POA: usize = 62_000;
+const MAX_NODES_IN_POA: usize = 55_000;
 const SKIP_SCORE: isize = 40_000;
+
+pub fn concancate_files () {
+    let mut output = File::create("result/ml_file").unwrap();
+    let inputs = vec!["data/0_mldata.txt", "data/1_mldata.txt", "data/2_mldata.txt", "data/3_mldata.txt", "data/4_mldata.txt", "data/5_mldata.txt", "data/7_mldata.txt", "data/8_mldata.txt", "data/9_mldata.txt", "data/10_mldata.txt", "data/11_mldata.txt"];
+    for i in inputs {
+        let mut input = File::open(i).unwrap();
+        io::copy(&mut input, &mut output).unwrap();
+    }
+    println!("done");
+}
 
 pub fn pipeline_process_all_ccs_file_poa (chromosone: &str, start: usize, end: usize, thread_id: usize) {
     let mut index_thread = 0;
@@ -463,16 +473,6 @@ fn save_the_graph (graph: &Graph<u8, i32, Directed, usize>, file_name: &String) 
     write_string_to_file(&write_path, &write_string);
 }
 
-pub fn concancate_files () {
-    let mut output = File::create("result/chr21_ml_file").unwrap();
-    let inputs = vec!["data/0_chr21mldata.txt", "data/1_chr21mldata.txt", "data/7_chr21mldata.txt", "data/10_chr21mldata.txt", "data/12_chr21mldata.txt", "data/16_chr21mldata.txt", "data/17_chr21mldata.txt", "data/18_chr21mldata.txt", "data/19_chr21mldata.txt"];
-    for i in inputs {
-        let mut input = File::open(i).unwrap();
-        io::copy(&mut input, &mut output).unwrap();
-    }
-    println!("done");
-}
-
 pub fn test_banded_pairwise () {
     let seqvec = get_random_sequences_from_generator(RANDOM_SEQUENCE_LENGTH, NUMBER_OF_RANDOM_SEQUENCES, SEED);
     let sequence1: Vec<u8> = seqvec[0].bytes().collect();
@@ -607,8 +607,7 @@ fn get_confident_locations_from_file () -> Vec<(String, usize, usize)> {
     location_vec
 }
 
-pub fn get_data_for_ml (start: usize, end: usize, thread_id: usize) {
-    let chromosone = format!("{}{}", String::from("chr"), 1);
+pub fn get_data_for_ml (chromosone: &str, start: usize, end: usize, thread_id: usize) {
     let mut position_base = start;
     let mut error_index = 0;
     let error_locations = get_error_bases_from_himut_vcf (); //chromosone, location, ref allele, alt allele
@@ -627,7 +626,7 @@ pub fn get_data_for_ml (start: usize, end: usize, thread_id: usize) {
         for seq_name_qual_and_errorpos in &seq_name_qual_and_errorpos_vec {
             // get the three base context
             let mut fai_reader = faidx::Reader::from_path(&"/data1/GiaB_benchmark/GRCh38.fa").unwrap();
-            let threebase_context = read_fai_file(position_base - 1, &chromosone, &mut fai_reader);
+            let threebase_context = read_fai_file(position_base - 1, &chromosone.to_string(), &mut fai_reader);
 
             let mut error = false;
             // error is here
