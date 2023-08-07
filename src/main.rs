@@ -6,7 +6,7 @@ mod generator;
 mod misc;
 mod quality;
 use std::thread;
-use crate::misc::get_data_for_ml;
+use crate::misc::concancate_files;
 
 const SEED: u64 = 2;
 const GAP_OPEN: i32 = -2;
@@ -16,8 +16,9 @@ const MISMATCH: i32 = -2;
 const NTHREADS: usize = 1;
 
 fn main() {
-    //concancate_files();
+    concancate_files();
     // make a vector to hold the children which are spawned.
+    /* 
     let mut children = vec![];
     let chromosone = "chr21";
     let total_start = 14_000_000;
@@ -37,7 +38,7 @@ fn main() {
     for child in children {
         // wait for the thread to finish. Returns a result.
         let _ = child.join();
-    }
+    }*/
 }
 
 

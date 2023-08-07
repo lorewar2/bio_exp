@@ -41,8 +41,12 @@ const SKIP_SCORE: isize = 40_000;
 
 pub fn concancate_files () {
     let mut output = File::create("result/ml_file").unwrap();
-    let inputs = vec!["data/0_mldata.txt", "data/1_mldata.txt", "data/2_mldata.txt", "data/3_mldata.txt", "data/4_mldata.txt", "data/5_mldata.txt", "data/7_mldata.txt", "data/8_mldata.txt", "data/9_mldata.txt", "data/10_mldata.txt", "data/11_mldata.txt"];
-    for i in inputs {
+    let mut input_vec = vec![];
+    for i in 0..100 {
+        input_vec.push(format!("{}_mldata.txt", i));
+    }
+    //let inputs = vec!["data/0_mldata.txt", "data/1_mldata.txt", "data/2_mldata.txt", "data/3_mldata.txt", "data/4_mldata.txt", "data/5_mldata.txt", "data/7_mldata.txt", "data/8_mldata.txt", "data/9_mldata.txt", "data/10_mldata.txt", "data/11_mldata.txt"];
+    for i in input_vec {
         let mut input = File::open(i).unwrap();
         io::copy(&mut input, &mut output).unwrap();
     }
