@@ -43,7 +43,12 @@ pub fn concancate_files () {
     let mut output = File::create("result/ml_file").unwrap();
     let mut input_vec = vec![];
     for i in 0..100 {
-        input_vec.push(format!("{}_mldata.txt", i));
+        if (i == 83) || (i == 84) {
+        }
+        else {
+            input_vec.push(format!("data/{}_mldata.txt", i));
+            println!("{}", i);
+        }
     }
     //let inputs = vec!["data/0_mldata.txt", "data/1_mldata.txt", "data/2_mldata.txt", "data/3_mldata.txt", "data/4_mldata.txt", "data/5_mldata.txt", "data/7_mldata.txt", "data/8_mldata.txt", "data/9_mldata.txt", "data/10_mldata.txt", "data/11_mldata.txt"];
     for i in input_vec {
@@ -650,6 +655,7 @@ pub fn get_data_for_ml (chromosone: &str, start: usize, end: usize, thread_id: u
                 parallel_stuff = temp_quality_score.2;
             }
             else {
+                println!("Thread: {} Skipping this file (not available) {} ", thread_id, seq_name_qual_and_errorpos.1);
                 continue;
             }
             // write data
