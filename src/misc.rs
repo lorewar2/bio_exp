@@ -632,7 +632,7 @@ pub fn get_data_for_ml (chromosone: &str, start: usize, end: usize, thread_id: u
             println!("Thread ID: {} Position {}", thread_id, position_base);
         }
         let seq_name_qual_and_errorpos_vec = get_corrosponding_seq_name_location_quality_from_bam(position_base, &chromosone.to_string(), &'X');
-        println!("thread {} length = {}", thread_id, seq_name_qual_and_errorpos_vec.len());
+        println!("thread {} length = {} position = {} ", thread_id, seq_name_qual_and_errorpos_vec.len(), position_base);
         for seq_name_qual_and_errorpos in &seq_name_qual_and_errorpos_vec {
             // get the three base context
             let mut fai_reader = faidx::Reader::from_path(&"/data1/GiaB_benchmark/GRCh38.fa").unwrap();
