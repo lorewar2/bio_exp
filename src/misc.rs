@@ -39,6 +39,295 @@ const BAND_SIZE: i32 = 1000;
 const MAX_NODES_IN_POA: usize = 55_000;
 const SKIP_SCORE: isize = 40_000;
 
+pub fn debug_saving_loading_graphs (chromosone: &str, start: usize, end: usize, thread_id: usize) {
+    let mut index_thread = 0;
+    let mut skip_thousand = false;
+    let mut skip_index = 0;
+    'bigloop: for process_location in start..end {
+        // skip thousand when same found
+        if skip_thousand {
+            skip_index += 1;
+            if skip_index > 10000 {
+                skip_thousand = false;
+                skip_index = 0;
+            }
+            else {
+                continue;
+            }
+        }
+        println!("Thread {}: Chr {} Loc {}, tasks_done {}", thread_id, chromosone, process_location, index_thread);
+        // get the string and the name
+        let seq_name_qual_and_errorpos_vec = get_corrosponding_seq_name_location_quality_from_bam(process_location, &chromosone.to_string(), &'X');
+        let mut all_skipped = true;
+        for seq_name_qual_and_errorpos in &seq_name_qual_and_errorpos_vec {
+            println!("Thread {}: Processing ccs file: {}", thread_id, seq_name_qual_and_errorpos.1);
+            // check if the file is already available
+            if check_file_availability(&seq_name_qual_and_errorpos.1, INTERMEDIATE_PATH) {
+                println!("Thread {}: File Available, skipping", thread_id);
+                continue;
+            }
+            // if not available do poa and make a file
+            // find the subreads of that ccs
+            let mut sub_reads = get_the_subreads_by_name_sam(&seq_name_qual_and_errorpos.1);
+            // skip if no subreads, errors and stuff
+            if sub_reads.len() == 0 {
+                continue;
+            }
+            all_skipped = false;
+            // filter out the long reads and rearrange the reads
+            sub_reads = reverse_complement_filter_and_rearrange_subreads(&sub_reads);
+            // reverse if score is too low
+            sub_reads = check_the_scores_and_change_alignment(sub_reads, &seq_name_qual_and_errorpos.0);
+
+            sub_reads.insert(0, seq_name_qual_and_errorpos.0.clone());
+            // do poa with the read and subreads, get the poa and consensus
+            let mut sequence_number: usize = 0;
+            let mut aligner = Aligner::new(MATCH, MISMATCH, GAP_OPEN, &sub_reads[0].as_bytes().to_vec(), BAND_SIZE);
+            
+            for sub_read in &sub_reads {
+                if sequence_number != 0 {
+                    aligner.global(&sub_read.as_bytes().to_vec()).add_to_graph();
+                }
+                let node_num = aligner.graph().node_count();
+                if node_num > MAX_NODES_IN_POA {
+                    println!("NUM OF NODES {} TOO BIG, SKIPPING", node_num);
+                    skip_thousand = true;
+                    continue 'bigloop;
+                }
+                sequence_number += 1;
+                println!("Thread {}: Sequence {} processed", thread_id, sequence_number);
+                if sequence_number > 10 {
+                    break;
+                }
+            }
+            let (calculated_consensus, calculated_topology) = aligner.poa.consensus(); //just poa
+            let calculated_graph: &Graph<u8, i32, Directed, usize> = aligner.graph();
+            // save the graph 
+            save_the_graph(calculated_graph, &"test".to_string());
+            // load the graph
+            let reloaded_graph = load_the_graph("test".to_string());
+            // consensus from reloaded graph 
+            let (reloaded_consensus, reloaded_topology) = get_consensus_from_graph(&reloaded_graph);
+            // original graph result
+            // match the calculated consensus to the original consensus and get the required indices
+            let quality_output = get_consensus_quality_scores(sub_reads.len(), &calculated_consensus, &calculated_topology, &calculated_graph);
+            // match the calculated consensus to the original consensus and get the required indices
+            let calc_cons_id = get_redone_consensus_matched_positions(&seq_name_qual_and_errorpos.0, &calculated_consensus);
+            for (index, pacbio_base) in seq_name_qual_and_errorpos.0.as_bytes().to_vec().iter().enumerate() {
+                let pacbio_char = *pacbio_base as char;
+                let quality_vec;
+                let parallel_quality;
+                if calc_cons_id[index] != usize::MAX {
+                    //calculated_char = calculated_consensus[calc_cons_id[index]];
+                    quality_vec = quality_output.1[calc_cons_id[index]].clone();
+                    parallel_quality = quality_output.0[calc_cons_id[index]] as usize;
+                }
+                else {
+                    //calculated_char = 'x' as u8;
+                    quality_vec = vec![1, 1, 1, 1];
+                    parallel_quality = 0;
+                }
+                println!("{} {} {} {} {:?}", "original", pacbio_char, parallel_quality, (sub_reads.len() - 1) ,quality_vec);
+                if index > 10 {
+                    break;
+                }
+            } 
+            // reloaded graph result
+            // match the calculated consensus to the original consensus and get the required indices
+            let quality_output = get_consensus_quality_scores(sub_reads.len(), &reloaded_consensus, &reloaded_topology, &reloaded_graph);
+            // match the calculated consensus to the original consensus and get the required indices
+            let calc_cons_id = get_redone_consensus_matched_positions(&seq_name_qual_and_errorpos.0, &reloaded_consensus);
+            for (index, pacbio_base) in seq_name_qual_and_errorpos.0.as_bytes().to_vec().iter().enumerate() {
+                let pacbio_char = *pacbio_base as char;
+                let quality_vec;
+                let parallel_quality;
+                if calc_cons_id[index] != usize::MAX {
+                    //calculated_char = calculated_consensus[calc_cons_id[index]];
+                    quality_vec = quality_output.1[calc_cons_id[index]].clone();
+                    parallel_quality = quality_output.0[calc_cons_id[index]] as usize;
+                }
+                else {
+                    //calculated_char = 'x' as u8;
+                    quality_vec = vec![1, 1, 1, 1];
+                    parallel_quality = 0;
+                }
+                println!("{} {} {} {} {:?}", "original", pacbio_char, parallel_quality, (sub_reads.len() - 1) ,quality_vec);
+                if index > 10 {
+                    break;
+                }
+            }
+            index_thread += 1;
+        }
+        if all_skipped {
+            skip_thousand = true;
+        }
+    }
+}
+
+pub fn write_string_to_newfile (file_name: &String, input_string: &String) {
+    let path = std::path::Path::new(&file_name);
+    let prefix = path.parent().unwrap();
+    create_dir_all(prefix).unwrap();
+    let mut file = OpenOptions::new().create(true).open(file_name).unwrap();
+    writeln!(file, "{}", input_string).expect("result file cannot be written");
+}
+
+fn save_the_graph (graph: &Graph<u8, i32, Directed, usize>, file_name: &String) {
+    let write_string = format!("{}\n{:?}", graph.node_count(), Dot::new(&graph.map(|_, n| (*n) as char, |_, e| *e)));
+    let write_path = format!("{}/{}_graph.txt", INTERMEDIATE_PATH, file_name);
+    write_string_to_newfile(&write_path, &write_string);
+}
+
+fn load_the_graph (file_name: String) -> Graph<u8, i32, Directed, usize> {
+    let mut node_edge_list: Vec<(char, Vec<(usize, usize)>)> = vec![];
+    let mut node_capacity = 0;
+    let mut edge_capacity = 0;
+    // check if available, populate node_edge_list from file
+    if check_file_availability(&file_name, INTERMEDIATE_PATH) == true {
+        // read the file
+        let mut index = 0;
+        let read_path = format!("{}/{}", INTERMEDIATE_PATH, file_name);
+        for line in read_to_string(read_path).unwrap().lines() {
+            //println!("{}", line);
+            let line_parts: Vec<&str> = line.split(" ").collect();
+            // create the node edge list with capacity
+            if index == 0 {
+                if line_parts.len() == 1 {
+                    node_capacity = line_parts[0].parse::<usize>().unwrap();
+                    node_edge_list = vec![('X', vec![]); node_capacity];
+                }
+            }
+            // put the values in node edge list
+            else {
+                if line_parts.len() == 10 {
+                    let start_node = line_parts[4].parse::<usize>().unwrap();
+                    let chars: Vec<char> = line_parts[8].chars().collect();
+                    node_edge_list[start_node].0 = chars[2];
+                }
+                if line_parts.len() == 12 {
+                    let start_node = line_parts[4].parse::<usize>().unwrap();
+                    let end_node = line_parts[6].parse::<usize>().unwrap();
+                    let chars: Vec<char> = line_parts[10].chars().collect();
+                    let edge_weight = chars[1].to_string().parse::<usize>().unwrap();
+                    node_edge_list[start_node].1.push((end_node, edge_weight));
+                    edge_capacity += 1;
+                }
+            }
+            index += 1;
+        }
+    }
+    // make the graph from the vector
+    let mut graph: Graph<u8, i32, Directed, usize> = Graph::with_capacity(node_capacity, edge_capacity);
+    
+    // add the nodes first
+    for node_edge in &node_edge_list {
+        graph.add_node(node_edge.0 as u8);
+    }
+    // add the edges
+    for (idx, node_edge) in node_edge_list.iter().enumerate() {
+        for edge in &node_edge.1 {
+            graph.add_edge(NodeIndex::new(idx), NodeIndex::new(edge.0), edge.1 as i32);
+        }
+    }
+    //graph.add_node(weight);
+    // show graph 
+    //println!("{}", Dot::new(&graph.map(|_, n| (*n) as char, |_, e| *e)));
+    graph
+}
+
+pub fn pipeline_process_all_ccs_file_poa (chromosone: &str, start: usize, end: usize, thread_id: usize) {
+    let mut index_thread = 0;
+    let mut skip_thousand = false;
+    let mut skip_index = 0;
+    'bigloop: for process_location in start..end {
+        // skip thousand when same found
+        if skip_thousand {
+            skip_index += 1;
+            if skip_index > 10000 {
+                skip_thousand = false;
+                skip_index = 0;
+            }
+            else {
+                continue;
+            }
+        }
+        println!("Thread {}: Chr {} Loc {}, tasks_done {}", thread_id, chromosone, process_location, index_thread);
+        // get the string and the name
+        let seq_name_qual_and_errorpos_vec = get_corrosponding_seq_name_location_quality_from_bam(process_location, &chromosone.to_string(), &'X');
+        let mut all_skipped = true;
+        for seq_name_qual_and_errorpos in &seq_name_qual_and_errorpos_vec {
+            println!("Thread {}: Processing ccs file: {}", thread_id, seq_name_qual_and_errorpos.1);
+            // check if the file is already available
+            if check_file_availability(&seq_name_qual_and_errorpos.1, INTERMEDIATE_PATH) {
+                println!("Thread {}: File Available, skipping", thread_id);
+                continue;
+            }
+            // if not available do poa and make a file
+            // find the subreads of that ccs
+            let mut sub_reads = get_the_subreads_by_name_sam(&seq_name_qual_and_errorpos.1);
+            // skip if no subreads, errors and stuff
+            if sub_reads.len() == 0 {
+                continue;
+            }
+            all_skipped = false;
+            // filter out the long reads and rearrange the reads
+            sub_reads = reverse_complement_filter_and_rearrange_subreads(&sub_reads);
+            // reverse if score is too low
+            sub_reads = check_the_scores_and_change_alignment(sub_reads, &seq_name_qual_and_errorpos.0);
+
+            sub_reads.insert(0, seq_name_qual_and_errorpos.0.clone());
+            // do poa with the read and subreads, get the poa and consensus
+            let mut sequence_number: usize = 0;
+            let mut aligner = Aligner::new(MATCH, MISMATCH, GAP_OPEN, &sub_reads[0].as_bytes().to_vec(), BAND_SIZE);
+            
+            for sub_read in &sub_reads {
+                if sequence_number != 0 {
+                    aligner.global(&sub_read.as_bytes().to_vec()).add_to_graph();
+                }
+                let node_num = aligner.graph().node_count();
+                if node_num > MAX_NODES_IN_POA {
+                    println!("NUM OF NODES {} TOO BIG, SKIPPING", node_num);
+                    skip_thousand = true;
+                    continue 'bigloop;
+                }
+                sequence_number += 1;
+                println!("Thread {}: Sequence {} processed", thread_id, sequence_number);
+                if sequence_number > 10 {
+                    break;
+                }
+            }
+            let (calculated_consensus, calculated_topology) = aligner.poa.consensus(); //just poa
+            let calculated_graph: &Graph<u8, i32, Directed, usize> = aligner.graph();
+            // match the calculated consensus to the original consensus and get the required indices
+            let quality_output = get_consensus_quality_scores(sub_reads.len(), &calculated_consensus, &calculated_topology, &calculated_graph);
+            // match the calculated consensus to the original consensus and get the required indices
+            let calc_cons_id = get_redone_consensus_matched_positions(&seq_name_qual_and_errorpos.0, &calculated_consensus);
+            for (index, pacbio_base) in seq_name_qual_and_errorpos.0.as_bytes().to_vec().iter().enumerate() {
+                let pacbio_char = *pacbio_base as char;
+                let quality_vec;
+                let parallel_quality;
+                if calc_cons_id[index] != usize::MAX {
+                    //calculated_char = calculated_consensus[calc_cons_id[index]];
+                    quality_vec = quality_output.1[calc_cons_id[index]].clone();
+                    parallel_quality = quality_output.0[calc_cons_id[index]] as usize;
+                }
+                else {
+                    //calculated_char = 'x' as u8;
+                    quality_vec = vec![1, 1, 1, 1];
+                    parallel_quality = 0;
+                }
+                let write_string = format!("{} {} {} {:?}", pacbio_char, parallel_quality, (sub_reads.len() - 1) ,quality_vec);
+                println!("{}", write_string);
+                let write_file = format!("{}/{}", INTERMEDIATE_PATH, &seq_name_qual_and_errorpos.1);
+                write_string_to_file(&write_file, &write_string);
+            } 
+            index_thread += 1;
+        }
+        if all_skipped {
+            skip_thousand = true;
+        }
+    }
+}
 
 pub fn get_data_for_ml (chromosone: &str, start: usize, end: usize, thread_id: usize) {
     let mut position_base = start;
@@ -142,100 +431,6 @@ pub fn concancate_files () {
         io::copy(&mut input, &mut output).unwrap();
     }
     println!("done");
-}
-
-pub fn pipeline_process_all_ccs_file_poa (chromosone: &str, start: usize, end: usize, thread_id: usize) {
-    let mut index_thread = 0;
-    let mut skip_thousand = false;
-    let mut skip_index = 0;
-    'bigloop: for process_location in start..end {
-        // skip thousand when same found
-        if skip_thousand {
-            skip_index += 1;
-            if skip_index > 10000 {
-                skip_thousand = false;
-                skip_index = 0;
-            }
-            else {
-                continue;
-            }
-        }
-        println!("Thread {}: Chr {} Loc {}, tasks_done {}", thread_id, chromosone, process_location, index_thread);
-        // get the string and the name
-        let seq_name_qual_and_errorpos_vec = get_corrosponding_seq_name_location_quality_from_bam(process_location, &chromosone.to_string(), &'X');
-        let mut all_skipped = true;
-        for seq_name_qual_and_errorpos in &seq_name_qual_and_errorpos_vec {
-            println!("Thread {}: Processing ccs file: {}", thread_id, seq_name_qual_and_errorpos.1);
-            // check if the file is already available
-            if check_file_availability(&seq_name_qual_and_errorpos.1, INTERMEDIATE_PATH) {
-                println!("Thread {}: File Available, skipping", thread_id);
-                continue;
-            }
-            // if not available do poa and make a file
-            // find the subreads of that ccs
-            let mut sub_reads = get_the_subreads_by_name_sam(&seq_name_qual_and_errorpos.1);
-            // skip if no subreads, errors and stuff
-            if sub_reads.len() == 0 {
-                continue;
-            }
-            all_skipped = false;
-            // filter out the long reads and rearrange the reads
-            sub_reads = reverse_complement_filter_and_rearrange_subreads(&sub_reads);
-            // reverse if score is too low
-            sub_reads = check_the_scores_and_change_alignment(sub_reads, &seq_name_qual_and_errorpos.0);
-
-            sub_reads.insert(0, seq_name_qual_and_errorpos.0.clone());
-            // do poa with the read and subreads, get the poa and consensus
-            let mut sequence_number: usize = 0;
-            let mut aligner = Aligner::new(MATCH, MISMATCH, GAP_OPEN, &sub_reads[0].as_bytes().to_vec(), BAND_SIZE);
-            
-            for sub_read in &sub_reads {
-                if sequence_number != 0 {
-                    aligner.global(&sub_read.as_bytes().to_vec()).add_to_graph();
-                }
-                let node_num = aligner.graph().node_count();
-                if node_num > MAX_NODES_IN_POA {
-                    println!("NUM OF NODES {} TOO BIG, SKIPPING", node_num);
-                    skip_thousand = true;
-                    continue 'bigloop;
-                }
-                sequence_number += 1;
-                println!("Thread {}: Sequence {} processed", thread_id, sequence_number);
-                if sequence_number > 10 {
-                    break;
-                }
-            }
-            let (calculated_consensus, calculated_topology) = aligner.poa.consensus(); //just poa
-            let calculated_graph: &Graph<u8, i32, Directed, usize> = aligner.graph();
-            // match the calculated consensus to the original consensus and get the required indices
-            let quality_output = get_consensus_quality_scores(sub_reads.len(), &calculated_consensus, &calculated_topology, &calculated_graph);
-            // match the calculated consensus to the original consensus and get the required indices
-            let calc_cons_id = get_redone_consensus_matched_positions(&seq_name_qual_and_errorpos.0, &calculated_consensus);
-            for (index, pacbio_base) in seq_name_qual_and_errorpos.0.as_bytes().to_vec().iter().enumerate() {
-                let pacbio_char = *pacbio_base as char;
-                let quality_vec;
-                let parallel_quality;
-                if calc_cons_id[index] != usize::MAX {
-                    //calculated_char = calculated_consensus[calc_cons_id[index]];
-                    quality_vec = quality_output.1[calc_cons_id[index]].clone();
-                    parallel_quality = quality_output.0[calc_cons_id[index]] as usize;
-                }
-                else {
-                    //calculated_char = 'x' as u8;
-                    quality_vec = vec![1, 1, 1, 1];
-                    parallel_quality = 0;
-                }
-                let write_string = format!("{} {} {} {:?}", pacbio_char, parallel_quality, (sub_reads.len() - 1) ,quality_vec);
-                println!("{}", write_string);
-                let write_file = format!("{}/{}", INTERMEDIATE_PATH, &seq_name_qual_and_errorpos.1);
-                write_string_to_file(&write_file, &write_string);
-            } 
-            index_thread += 1;
-        }
-        if all_skipped {
-            skip_thousand = true;
-        }
-    }
 }
 
 pub fn test_poa_topology_thing (chromosone: &str, start: usize, end: usize, thread_id: usize) {
@@ -427,63 +622,6 @@ fn get_consensus_from_graph(graph: &Graph<u8, i32, Directed, usize>) -> (Vec<u8>
     (output, topopos)
 }
 
-fn load_the_graph (file_name: String) -> Graph<u8, i32, Directed, usize> {
-    let mut node_edge_list: Vec<(char, Vec<(usize, usize)>)> = vec![];
-    let mut node_capacity = 0;
-    let mut edge_capacity = 0;
-    // check if available, populate node_edge_list from file
-    if check_file_availability(&file_name, INTERMEDIATE_PATH) == true {
-        // read the file
-        let mut index = 0;
-        let read_path = format!("{}/{}", INTERMEDIATE_PATH, file_name);
-        for line in read_to_string(read_path).unwrap().lines() {
-            //println!("{}", line);
-            let line_parts: Vec<&str> = line.split(" ").collect();
-            // create the node edge list with capacity
-            if index == 0 {
-                if line_parts.len() == 1 {
-                    node_capacity = line_parts[0].parse::<usize>().unwrap();
-                    node_edge_list = vec![('X', vec![]); node_capacity];
-                }
-            }
-            // put the values in node edge list
-            else {
-                if line_parts.len() == 10 {
-                    let start_node = line_parts[4].parse::<usize>().unwrap();
-                    let chars: Vec<char> = line_parts[8].chars().collect();
-                    node_edge_list[start_node].0 = chars[2];
-                }
-                if line_parts.len() == 12 {
-                    let start_node = line_parts[4].parse::<usize>().unwrap();
-                    let end_node = line_parts[6].parse::<usize>().unwrap();
-                    let chars: Vec<char> = line_parts[10].chars().collect();
-                    let edge_weight = chars[1].to_string().parse::<usize>().unwrap();
-                    node_edge_list[start_node].1.push((end_node, edge_weight));
-                    edge_capacity += 1;
-                }
-            }
-            index += 1;
-        }
-    }
-    // make the graph from the vector
-    let mut graph: Graph<u8, i32, Directed, usize> = Graph::with_capacity(node_capacity, edge_capacity);
-    
-    // add the nodes first
-    for node_edge in &node_edge_list {
-        graph.add_node(node_edge.0 as u8);
-    }
-    // add the edges
-    for (idx, node_edge) in node_edge_list.iter().enumerate() {
-        for edge in &node_edge.1 {
-            graph.add_edge(NodeIndex::new(idx), NodeIndex::new(edge.0), edge.1 as i32);
-        }
-    }
-    //graph.add_node(weight);
-    // show graph 
-    //println!("{}", Dot::new(&graph.map(|_, n| (*n) as char, |_, e| *e)));
-    graph
-}
-
 pub fn pipeline_save_the_graphs (chromosone: &str, start: usize, end: usize, thread_id: usize) {
     let mut big_file_skip_count = 0;
     let mut index_thread = 0;
@@ -560,12 +698,6 @@ pub fn pipeline_save_the_graphs (chromosone: &str, start: usize, end: usize, thr
             skip_thousand = true;
         }
     }
-}
-
-fn save_the_graph (graph: &Graph<u8, i32, Directed, usize>, file_name: &String) {
-    let write_string = format!("{}\n{:?}", graph.node_count(), Dot::new(&graph.map(|_, n| (*n) as char, |_, e| *e)));
-    let write_path = format!("{}/{}_graph.txt", INTERMEDIATE_PATH, file_name);
-    write_string_to_file(&write_path, &write_string);
 }
 
 pub fn test_banded_pairwise () {
