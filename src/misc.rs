@@ -105,7 +105,7 @@ pub fn debug_saving_loading_graphs (chromosone: &str, start: usize, end: usize, 
             // save the graph 
             save_the_graph(calculated_graph, &"test".to_string());
             // load the graph
-            let reloaded_graph = load_the_graph("test".to_string());
+            let reloaded_graph = load_the_graph("test_graph.txt".to_string());
             // consensus from reloaded graph 
             let (reloaded_consensus, reloaded_topology) = get_consensus_from_graph(&reloaded_graph);
             // original graph result
@@ -151,7 +151,7 @@ pub fn debug_saving_loading_graphs (chromosone: &str, start: usize, end: usize, 
                     quality_vec = vec![1, 1, 1, 1];
                     parallel_quality = 0;
                 }
-                println!("{} {} {} {} {:?}", "original", pacbio_char, parallel_quality, (sub_reads.len() - 1) ,quality_vec);
+                println!("{} {} {} {} {:?}", "reloaded", pacbio_char, parallel_quality, (sub_reads.len() - 1) ,quality_vec);
                 if index > 10 {
                     break;
                 }
@@ -168,7 +168,7 @@ pub fn write_string_to_newfile (file_name: &String, input_string: &String) {
     let path = std::path::Path::new(&file_name);
     let prefix = path.parent().unwrap();
     create_dir_all(prefix).unwrap();
-    let mut file = OpenOptions::new().create(true).open(file_name).unwrap();
+    let mut file = OpenOptions::new().create(true).write(true).open(file_name).unwrap();
     writeln!(file, "{}", input_string).expect("result file cannot be written");
 }
 
@@ -179,7 +179,7 @@ fn save_the_graph (graph: &Graph<u8, i32, Directed, usize>, file_name: &String) 
 }
 
 fn load_the_graph (file_name: String) -> Graph<u8, i32, Directed, usize> {
-    let mut node_edge_list: Vec<(char, Vec<(usize, usize)>)> = vec![];
+    let mut node_edge_list: Vec<(usize, char, Vec<(usize, usize)>)> = vec![]; // node number, base, connected nodes
     let mut node_capacity = 0;
     let mut edge_capacity = 0;
     // check if available, populate node_edge_list from file
@@ -190,26 +190,28 @@ fn load_the_graph (file_name: String) -> Graph<u8, i32, Directed, usize> {
         for line in read_to_string(read_path).unwrap().lines() {
             //println!("{}", line);
             let line_parts: Vec<&str> = line.split(" ").collect();
-            // create the node edge list with capacity
+            // do nothing for number of nodes
             if index == 0 {
-                if line_parts.len() == 1 {
-                    node_capacity = line_parts[0].parse::<usize>().unwrap();
-                    node_edge_list = vec![('X', vec![]); node_capacity];
-                }
+
             }
             // put the values in node edge list
             else {
+                // node definition
                 if line_parts.len() == 10 {
                     let start_node = line_parts[4].parse::<usize>().unwrap();
                     let chars: Vec<char> = line_parts[8].chars().collect();
-                    node_edge_list[start_node].0 = chars[2];
+                    node_edge_list.push((start_node, chars[2], vec![]));
+                    node_capacity += 1;
                 }
+                // edge definition
                 if line_parts.len() == 12 {
                     let start_node = line_parts[4].parse::<usize>().unwrap();
                     let end_node = line_parts[6].parse::<usize>().unwrap();
                     let chars: Vec<char> = line_parts[10].chars().collect();
                     let edge_weight = chars[1].to_string().parse::<usize>().unwrap();
-                    node_edge_list[start_node].1.push((end_node, edge_weight));
+                    // find the start node in the node edge list, add the thing
+                    let required_index = node_edge_list.iter().position(|r| r.0 == start_node).unwrap();
+                    node_edge_list[required_index].2.push((end_node, edge_weight));
                     edge_capacity += 1;
                 }
             }
@@ -225,7 +227,7 @@ fn load_the_graph (file_name: String) -> Graph<u8, i32, Directed, usize> {
     }
     // add the edges
     for (idx, node_edge) in node_edge_list.iter().enumerate() {
-        for edge in &node_edge.1 {
+        for edge in &node_edge.2 {
             graph.add_edge(NodeIndex::new(idx), NodeIndex::new(edge.0), edge.1 as i32);
         }
     }
