@@ -182,6 +182,7 @@ fn load_the_graph (file_name: String) -> Graph<u8, i32, Directed, usize> {
     let mut node_edge_list: Vec<(usize, char, Vec<(usize, usize)>)> = vec![]; // node number, base, connected nodes
     let mut node_capacity = 0;
     let mut edge_capacity = 0;
+    let mut max_node_index = 0;
     // check if available, populate node_edge_list from file
     if check_file_availability(&file_name, INTERMEDIATE_PATH) == true {
         // read the file
@@ -202,6 +203,9 @@ fn load_the_graph (file_name: String) -> Graph<u8, i32, Directed, usize> {
                     let chars: Vec<char> = line_parts[8].chars().collect();
                     node_edge_list.push((start_node, chars[2], vec![]));
                     node_capacity += 1;
+                    if start_node > max_node_index {
+                        max_node_index = start_node;
+                    }
                 }
                 // edge definition
                 if line_parts.len() == 12 {
@@ -222,13 +226,23 @@ fn load_the_graph (file_name: String) -> Graph<u8, i32, Directed, usize> {
     let mut graph: Graph<u8, i32, Directed, usize> = Graph::with_capacity(node_capacity, edge_capacity);
     
     // add the nodes first
+    for index in 0..max_node_index {
+        match node_edge_list.iter().position(|r| r.0 == index) {
+            Some(x) => {
+                graph.add_node(node_edge_list[x].1 as u8);
+            },
+            None => {
+                graph.add_node(0);
+            }
+        }
+    }
     for node_edge in &node_edge_list {
         graph.add_node(node_edge.0 as u8);
     }
     // add the edges
-    for (idx, node_edge) in node_edge_list.iter().enumerate() {
+    for (_, node_edge) in node_edge_list.iter().enumerate() {
         for edge in &node_edge.2 {
-            graph.add_edge(NodeIndex::new(idx), NodeIndex::new(edge.0), edge.1 as i32);
+            graph.add_edge(NodeIndex::new(node_edge.0), NodeIndex::new(edge.0), edge.1 as i32);
         }
     }
     //graph.add_node(weight);
