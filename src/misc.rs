@@ -214,7 +214,13 @@ fn load_the_graph (file_name: String) -> Graph<u8, i32, Directed, usize> {
                     let chars: Vec<char> = line_parts[10].chars().collect();
                     let edge_weight = chars[1].to_string().parse::<usize>().unwrap();
                     // find the start node in the node edge list, add the thing
-                    let required_index = node_edge_list.iter().position(|r| r.0 == start_node).unwrap();
+                    let required_index = match node_edge_list.iter().position(|r| r.0 == start_node) {
+                        Some(x) => {x},
+                        None => {
+                            println!("required node was {}, not available", start_node);
+                            0
+                            },
+                    };
                     node_edge_list[required_index].2.push((end_node, edge_weight));
                     edge_capacity += 1;
                 }
