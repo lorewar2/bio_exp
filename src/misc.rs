@@ -1648,7 +1648,7 @@ fn modify_dot_graph_with_highlight (mut dot: String, focus_node: &usize) -> Stri
 
 pub fn get_error_bases_from_himut_vcf () -> Vec<(String, usize, char, char)> {
     let mut error_locus_vec: Vec<(String, usize, char, char)> = vec![]; //chromosone, position, ref, alt
-    let path = &"data/somatic.vcf";
+    let path = &"data/test.vcf";
     let mut bcf = Reader::from_path(path).expect("Error opening file.");
     // iterate through each row of the vcf body.
     for (_, record_result) in bcf.records().enumerate() {
