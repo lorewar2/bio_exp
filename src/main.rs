@@ -21,8 +21,8 @@ fn main() {
     //new_poa_tester();
     let mut children = vec![];
     let chromosone = "chr2";
-    let total_start = 44_000_000;
-    let total_end = 45_000_000;
+    let total_start = 10_000_000;
+    let total_end = 245_000_000;
     let one_thread_allocation = (total_end - total_start) / NTHREADS;
     for i in 0..NTHREADS {
         // calculate my start and end locations

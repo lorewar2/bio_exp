@@ -1656,10 +1656,12 @@ pub fn get_error_bases_from_himut_vcf () -> Vec<(String, usize, char, char)> {
         let mut allele_vec: Vec<char> = vec![];
         // only pass filters are acceptedß
         let mut test = record.filters();
-        if test.next() == None {
+        let damn = test.next();
+        if damn == None {
 
         }
         else {
+            println!("{:?}", damn.unwrap());
             continue;
         }
         for allele in record.alleles() {
