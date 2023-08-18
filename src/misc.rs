@@ -1,5 +1,6 @@
 use crate::alignment::pairwise::pairwise;
 use crate::alignment::poabandedsmarter::Aligner;
+use crate::alignment::poamemory::Aligner as AlignerMemory;
 use crate::generator::simple::get_random_sequences_from_generator;
 use crate::alignment::poahomopolymer::Poa;
 use crate::quality::topology_cut::base_quality_score_calculation;
@@ -27,8 +28,8 @@ const GAP_OPEN: i32 = -2;
 const GAP_EXTEND: i32 = 0;
 const MATCH: i32 = 2;
 const MISMATCH: i32 = -2;
-const RANDOM_SEQUENCE_LENGTH: usize = 20;
-const NUMBER_OF_RANDOM_SEQUENCES: usize = 2;
+const RANDOM_SEQUENCE_LENGTH: usize = 200;
+const NUMBER_OF_RANDOM_SEQUENCES: usize = 10;
 const THREE_BASE_CONTEXT_READ_LENGTH: usize = 2;
 const NUM_OF_ITER_FOR_ZOOMED_GRAPHS: usize = 4;
 const DATA_PATH: &str = "/data1/hifi_consensus/try2/";
@@ -38,6 +39,21 @@ const CONFIDENT_PATH: &str = "/data1/GiaB_benchmark/HG001_GRCh38_1_22_v4.2.1_ben
 const BAND_SIZE: i32 = 1000;
 const MAX_NODES_IN_POA: usize = 55_000;
 const SKIP_SCORE: isize = 40_000;
+
+pub fn new_poa_tester () {
+    let seqvec = get_random_sequences_from_generator(RANDOM_SEQUENCE_LENGTH, NUMBER_OF_RANDOM_SEQUENCES, SEED);
+    println!("Processing seq 1");
+    let mut aligner = AlignerMemory::new(MATCH, MISMATCH, GAP_OPEN, &seqvec[0].as_bytes().to_vec(), 200);
+    let mut index = 0;
+    for seq in &seqvec {
+        if index != 0 {
+            println!("Processing seq {}", index + 1);
+            aligner.global(&seq.as_bytes().to_vec()).add_to_graph();
+        }
+        index += 1;
+    }
+    //let test_graph = aligner.graph();
+}
 
 pub fn debug_saving_loading_graphs (chromosone: &str, start: usize, end: usize, thread_id: usize) {
     let mut index_thread = 0;
@@ -1638,6 +1654,14 @@ pub fn get_error_bases_from_himut_vcf () -> Vec<(String, usize, char, char)> {
     for (_, record_result) in bcf.records().enumerate() {
         let record = record_result.expect("Fail to read record");
         let mut allele_vec: Vec<char> = vec![];
+        // only pass filters are acceptedß
+        let mut test = record.filters();
+        if test.next() == None {
+
+        }
+        else {
+            continue;
+        }
         for allele in record.alleles() {
             for c in allele {
                 allele_vec.push(char::from(*c));
