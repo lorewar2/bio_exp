@@ -1655,13 +1655,7 @@ pub fn get_error_bases_from_himut_vcf () -> Vec<(String, usize, char, char)> {
         let record = record_result.expect("Fail to read record");
         let mut allele_vec: Vec<char> = vec![];
         // only pass filters are acceptedß
-        let mut test = record.filters();
-        let damn = test.next();
-        if damn == None {
-
-        }
-        else {
-            println!("{:?}", damn.unwrap());
+        if record.has_filter("PASS".as_bytes()) == false {
             continue;
         }
         for allele in record.alleles() {
