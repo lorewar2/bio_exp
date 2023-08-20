@@ -371,6 +371,7 @@ pub fn get_data_for_ml (chromosone: &str, start: usize, end: usize, thread_id: u
     let mut position_base = start;
     let mut error_index = 0;
     let error_locations = get_error_bases_from_himut_vcf (); //chromosone, location, ref allele, alt allele
+    println!("{:?}", error_locations);
     // get the error index of required chromosone
     loop {
         if error_locations[error_index].0.eq(&chromosone) && error_locations[error_index].1 > start {
