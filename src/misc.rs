@@ -377,7 +377,6 @@ pub fn get_data_for_ml (chromosone: &str, start: usize, end: usize, thread_id: u
         if error_locations[error_index].0.eq(&chromosone) && error_locations[error_index].1 > start {
             break;
         }
-        println!("{:?}", error_locations[error_index]);
         error_index += 1;
     }
     'bigloop: loop {
