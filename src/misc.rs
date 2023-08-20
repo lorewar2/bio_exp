@@ -379,6 +379,7 @@ pub fn get_data_for_ml (chromosone: &str, start: usize, end: usize, thread_id: u
         }
         error_index += 1;
     }
+    let chromosone = format!("chr{}", chromosone);
     'bigloop: loop {
         if position_base % 1000 == 0 {
             println!("Thread ID: {} Position {}", thread_id, position_base);
