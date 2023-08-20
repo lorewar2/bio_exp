@@ -13,14 +13,14 @@ const GAP_OPEN: i32 = -2;
 const GAP_EXTEND: i32 = 0;
 const MATCH: i32 = 2;
 const MISMATCH: i32 = -2;
-const NTHREADS: usize = 1;
+const NTHREADS: usize = 100;
 
 fn main() {
     //concancate_files();
     // make a vector to hold the children which are spawned.
     //new_poa_tester();
     let mut children = vec![];
-    let chromosone = "chr2";
+    let chromosone = "chr1";
     let total_start = 10_000_000;
     let total_end = 245_000_000;
     let one_thread_allocation = (total_end - total_start) / NTHREADS;
