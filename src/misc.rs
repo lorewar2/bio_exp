@@ -104,6 +104,7 @@ pub fn debug_saving_loading_graphs (chromosone: &str, start: usize, end: usize, 
                     aligner.global(&sub_read.as_bytes().to_vec()).add_to_graph();
                 }
                 let node_num = aligner.graph().node_count();
+                println!("num of nodes = {}", node_num);
                 if node_num > MAX_NODES_IN_POA {
                     println!("NUM OF NODES {} TOO BIG, SKIPPING", node_num);
                     skip_thousand = true;
@@ -120,6 +121,7 @@ pub fn debug_saving_loading_graphs (chromosone: &str, start: usize, end: usize, 
             // save the graph 
             save_the_graph(calculated_graph, &"test".to_string());
             // load the graph
+            println!("before loading the graph");
             let reloaded_graph = load_the_graph("test_graph.txt".to_string());
             // consensus from reloaded graph 
             let (reloaded_consensus, reloaded_topology) = get_consensus_from_graph(&reloaded_graph);
