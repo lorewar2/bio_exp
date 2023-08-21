@@ -52,7 +52,6 @@ pub fn new_poa_tester () {
         }
         index += 1;
     }
-    //let test_graph = aligner.graph();
 }
 
 pub fn debug_saving_loading_graphs (chromosone: &str, start: usize, end: usize, thread_id: usize) {
