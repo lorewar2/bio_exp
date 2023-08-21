@@ -379,7 +379,6 @@ pub fn get_data_for_ml (chromosone: &str, start: usize, end: usize, thread_id: u
         }
         error_index += 1;
     }
-    let chromosone = format!("chr{}", chromosone);
     'bigloop: loop {
         if position_base % 1000 == 0 {
             println!("Thread ID: {} Position {}", thread_id, position_base);
@@ -452,18 +451,18 @@ pub fn get_data_for_ml (chromosone: &str, start: usize, end: usize, thread_id: u
 }
 
 pub fn concancate_files () {
-    let mut output = File::create("result/ml_file").unwrap();
+    let mut output = File::create("result/chr1_ml_file").unwrap();
     let mut input_vec = vec![];
-    // for i in 0..100 {
-    //     if (i == 83) || (i == 84) {
-    //     }
-    //     else {
-    //         input_vec.push(format!("data/{}_mldata.txt", i));
-    //         println!("{}", i);
-    //     }
-    // }
-    input_vec.push("data/chr1.txt");
-    input_vec.push("data/chr21.txt");
+    for i in 0..100 {
+        if (i == 13) || (i == 16) || (i == 24)|| (i == 31)|| (i == 32)|| (i == 33)|| (i == 41)|| (i == 47)|| (i == 48) || (i == 55) || (i == 64) || (i == 66) || (i == 6) || (i == 74) || (i == 82) || (i == 83) || (i == 8) || (i == 90) || (i == 91) || (i == 98) || (i == 99){
+        }
+        else {
+            input_vec.push(format!("data/{}_mldata.txt", i));
+            println!("{}", i);
+        }
+    }
+    //input_vec.push("data/chr1.txt");
+    //input_vec.push("data/chr21.txt");
 
     //let inputs = vec!["data/0_mldata.txt", "data/1_mldata.txt", "data/2_mldata.txt", "data/3_mldata.txt", "data/4_mldata.txt", "data/5_mldata.txt", "data/7_mldata.txt", "data/8_mldata.txt", "data/9_mldata.txt", "data/10_mldata.txt", "data/11_mldata.txt"];
     for i in input_vec {
@@ -1667,7 +1666,7 @@ pub fn get_error_bases_from_himut_vcf () -> Vec<(String, usize, char, char)> {
         }
         let temp_str = record.desc();
         let mut split_text_iter = (temp_str.split(":")).into_iter();
-        let chromosone = split_text_iter.next().unwrap();
+        let chromosone = format!("chr{}", split_text_iter.next().unwrap());
         error_locus_vec.push((chromosone.to_string(), record.pos() as usize, allele_vec[0], allele_vec[1]));
     }
     println!("number of errors = {}", error_locus_vec.len());
