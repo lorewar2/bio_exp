@@ -311,6 +311,12 @@ fn load_the_graph (file_name: String) -> Graph<u8, i32, Directed, usize> {
                             },
                         None => {println!("required node was {}, not available", start_node);},
                     };
+                    if start_node > max_node_index {
+                        max_node_index = start_node;
+                    }
+                    if end_node > max_node_index {
+                        max_node_index = end_node;
+                    }
                 }
             }
             index += 1;
@@ -344,13 +350,6 @@ fn load_the_graph (file_name: String) -> Graph<u8, i32, Directed, usize> {
     for (_, node_edge) in node_edge_list.iter().enumerate() {
         for edge in &node_edge.2 {
             // skip if it is a deleted node or > max index
-            if edge.0 > max_node_index || node_edge.0 > max_node_index {
-                println!("skiiping nodes {} {}", edge.0, node_edge.0);
-                continue;
-            }
-            if node_edge.0 == 3 {
-                println!("whatt 3 -> {}", edge.0);
-            }
             graph.add_edge(NodeIndex::new(node_edge.0), NodeIndex::new(edge.0), edge.1 as i32);
         }
     }
