@@ -356,7 +356,9 @@ fn load_the_graph (file_name: String) -> Graph<u8, i32, Directed, usize> {
     }
     //graph.add_node(weight);
     // show graph 
-    //println!("{}", Dot::new(&graph.map(|_, n| (*n) as char, |_, e| *e)));
+    let write_string = format!("{}", Dot::new(&graph.map(|_, n| (*n) as char, |_, e| *e)));
+    let write_path = format!("./result/loaded_graph.txt");
+    write_string_to_newfile(&write_path, &write_string);
     graph
 }
 
