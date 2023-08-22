@@ -112,9 +112,6 @@ pub fn debug_saving_loading_graphs (chromosone: &str, start: usize, end: usize, 
                 }
                 sequence_number += 1;
                 println!("Thread {}: Sequence {} processed", thread_id, sequence_number);
-                if sequence_number > 10 {
-                    break;
-                }
             }
             let (calculated_consensus, calculated_topology) = aligner.poa.consensus(); //just poa
             let calculated_graph: &Graph<u8, i32, Directed, usize> = aligner.graph();
@@ -238,7 +235,6 @@ fn load_the_graph (file_name: String) -> Graph<u8, i32, Directed, usize> {
                     }
                     let required_index = match node_edge_list.iter().position(|r| r.0 == start_node) {
                         Some(x) => {
-                            
                                 x
                             },
                         None => {
@@ -257,7 +253,7 @@ fn load_the_graph (file_name: String) -> Graph<u8, i32, Directed, usize> {
     let mut graph: Graph<u8, i32, Directed, usize> = Graph::with_capacity(node_capacity, edge_capacity);
     
     // add the nodes first
-    for index in 0..max_node_index {
+    for index in 0..max_node_index + 1 {
         match node_edge_list.iter().position(|r| r.0 == index) {
             Some(x) => {
                 graph.add_node(node_edge_list[x].1 as u8);
@@ -267,9 +263,6 @@ fn load_the_graph (file_name: String) -> Graph<u8, i32, Directed, usize> {
                 graph.add_node(0);
             }
         }
-    }
-    for node_edge in &node_edge_list {
-        graph.add_node(node_edge.0 as u8);
     }
     // add the edges
     for (_, node_edge) in node_edge_list.iter().enumerate() {
@@ -643,6 +636,9 @@ fn get_consensus_from_graph(graph: &Graph<u8, i32, Directed, usize>) -> (Vec<u8>
             if weight_score_edge > best_weight_score_edge{
                 best_weight_score_edge = weight_score_edge;
             }
+            if node.index() == 23408 {
+                println!("neighbours {}", neighbour_node.index());
+            }
         }
         //save score and traceback
         if best_weight_score_edge.0 as f64 + best_weight_score_edge.1 > max_score{
@@ -663,7 +659,7 @@ fn get_consensus_from_graph(graph: &Graph<u8, i32, Directed, usize>) -> (Vec<u8>
             pos = next_in_path[pos];
             continue;
         }
-        println!("current {}", pos);
+        //println!("current {} {}", pos, next_in_path[pos]);
         consensus_started = true;
         topopos.push(pos as usize);
         output.push(graph.raw_nodes()[pos].weight);

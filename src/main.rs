@@ -20,7 +20,7 @@ fn main() {
     // make a vector to hold the children which are spawned.
     //new_poa_tester();
     let mut children = vec![];
-    let chromosone = "chr21";
+    let chromosone = "chr2";
     let total_start = 14_000_000;
     let total_end = 40_000_000;
     let one_thread_allocation = (total_end - total_start) / NTHREADS;
