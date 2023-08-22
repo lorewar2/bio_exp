@@ -124,9 +124,11 @@ pub fn debug_saving_loading_graphs (chromosone: &str, start: usize, end: usize, 
             println!("before loading the graph");
             let reloaded_graph = load_the_graph("test_graph.txt".to_string());
             // consensus from reloaded graph 
+            println!("before getting consensus");
             let (reloaded_consensus, reloaded_topology) = get_consensus_from_graph(&reloaded_graph);
             // original graph result
             // match the calculated consensus to the original consensus and get the required indices
+            println!("before getting quality");
             let quality_output = get_consensus_quality_scores(sub_reads.len(), &calculated_consensus, &calculated_topology, &calculated_graph);
             // match the calculated consensus to the original consensus and get the required indices
             let calc_cons_id = get_redone_consensus_matched_positions(&seq_name_qual_and_errorpos.0, &calculated_consensus);
