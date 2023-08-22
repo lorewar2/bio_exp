@@ -328,9 +328,9 @@ fn load_the_graph (file_name: String) -> Graph<u8, i32, Directed, usize> {
     for index in 0..max_node_index + 1 {
         match node_edge_list.iter().position(|r| r.0 == index) {
             Some(x) => {
-                graph.add_node(node_edge_list[x].1 as u8);
+                let ret_index = graph.add_node(node_edge_list[x].1 as u8);
                 if index == 3 {
-                    println!("3 == {} {:?}", node_edge_list[x].1 as u8,node_edge_list[x]);
+                    println!("3 == {} {} {:?}", ret_index.index(), node_edge_list[x].1 as u8, node_edge_list[x]);
                 }
             },
             None => {
