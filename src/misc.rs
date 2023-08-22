@@ -40,6 +40,75 @@ const BAND_SIZE: i32 = 1000;
 const MAX_NODES_IN_POA: usize = 55_000;
 const SKIP_SCORE: isize = 40_000;
 
+
+fn get_consensus_from_graph(graph: &Graph<u8, i32, Directed, usize>) -> (Vec<u8>, Vec<usize>) {
+    let mut output: Vec<u8> = vec![];
+    let mut topopos: Vec<usize> = vec![];
+    let mut topo = Topo::new(graph);
+    let mut topo_indices = Vec::new();
+    let mut max_index = 0;
+    let mut max_score = 0.0;
+
+    while let Some(node) = topo.next(graph) {
+        topo_indices.push(node);
+        if max_index < node.index(){
+            max_index = node.index();
+        }
+    }
+    topo_indices.reverse();
+    //define score and nextinpath vectors with capacity of num nodes.
+    let mut weight_scores: Vec<i32> = vec![0; max_index + 1];
+    let mut scores: Vec<f64> = vec![0.0; max_index + 1];
+    let mut next_in_path: Vec<usize> = vec![0; max_index + 1];
+    //iterate thorugh the nodes in revere
+    for node in topo_indices{
+        let mut best_weight_score_edge: (i32, f64, usize) = (-1 , -1.0, 123456789);
+        let mut neighbour_nodes = graph.neighbors_directed(node, Outgoing);
+        if node.index() == 3 {
+            println!("available");
+        }
+        while let Some(neighbour_node) = neighbour_nodes.next() {
+            let mut edges = graph.edges_connecting(node, neighbour_node);
+            let mut weight: i32 = 0;
+            while let Some(edge) = edges.next() {
+                weight += edge.weight().clone();
+            }
+            let weight_score_edge = (weight, scores[neighbour_node.index()], neighbour_node.index());
+            if weight_score_edge > best_weight_score_edge{
+                best_weight_score_edge = weight_score_edge;
+            }
+            if node.index() == 3 {
+                println!("neighbours {}", neighbour_node.index());
+            }
+        }
+        //save score and traceback
+        if best_weight_score_edge.0 as f64 + best_weight_score_edge.1 > max_score{
+            max_score = best_weight_score_edge.0 as f64 + best_weight_score_edge.1;
+        }
+        scores[node.index()] = best_weight_score_edge.0 as f64 + best_weight_score_edge.1;
+        next_in_path[node.index()] = best_weight_score_edge.2;
+        weight_scores[node.index()] = best_weight_score_edge.0;
+    }
+    let mut pos = scores.iter().position(|&r| r == max_score).unwrap();
+    //calculate the start weight score
+    let mut consensus_started: bool = false;
+    let weight_average = scores[pos] / scores.len() as f64;
+    let weight_threshold = weight_average as i32 / 2; 
+    while pos != 123456789 {
+        //continue if starting weight score is too low
+        if consensus_started == false && weight_scores[pos] < weight_threshold {
+            pos = next_in_path[pos];
+            continue;
+        }
+        //println!("current {} {}", pos, next_in_path[pos]);
+        consensus_started = true;
+        topopos.push(pos as usize);
+        output.push(graph.raw_nodes()[pos].weight);
+        pos = next_in_path[pos];
+    }
+    (output, topopos)
+}
+
 pub fn new_poa_tester () {
     let seqvec = get_random_sequences_from_generator(RANDOM_SEQUENCE_LENGTH, NUMBER_OF_RANDOM_SEQUENCES, SEED);
     println!("Processing seq 1");
@@ -257,7 +326,6 @@ fn load_the_graph (file_name: String) -> Graph<u8, i32, Directed, usize> {
     // add the nodes first & save a list of deleted nodes
     //let mut deleted_nodes = vec![];
     for index in 0..max_node_index + 1 {
-        
         match node_edge_list.iter().position(|r| r.0 == index) {
             Some(x) => {
                 graph.add_node(node_edge_list[x].1 as u8);
@@ -279,6 +347,9 @@ fn load_the_graph (file_name: String) -> Graph<u8, i32, Directed, usize> {
             if edge.0 > max_node_index || node_edge.0 > max_node_index {
                 println!("skiiping nodes {} {}", edge.0, node_edge.0);
                 continue;
+            }
+            if node_edge.0 == 3 {
+                println!("whatt 3 -> {}", edge.0);
             }
             graph.add_edge(NodeIndex::new(node_edge.0), NodeIndex::new(edge.0), edge.1 as i32);
         }
@@ -614,71 +685,6 @@ pub fn pipeline_load_graph_get_topological_parallel_bases (chromosone: &str, sta
             index_thread += 1;
         }
     }
-}
-
-fn get_consensus_from_graph(graph: &Graph<u8, i32, Directed, usize>) -> (Vec<u8>, Vec<usize>) {
-    let mut output: Vec<u8> = vec![];
-    let mut topopos: Vec<usize> = vec![];
-    let mut topo = Topo::new(graph);
-    let mut topo_indices = Vec::new();
-    let mut max_index = 0;
-    let mut max_score = 0.0;
-
-    while let Some(node) = topo.next(graph) {
-        topo_indices.push(node);
-        if max_index < node.index(){
-            max_index = node.index();
-        }
-    }
-    topo_indices.reverse();
-    //define score and nextinpath vectors with capacity of num nodes.
-    let mut weight_scores: Vec<i32> = vec![0; max_index + 1];
-    let mut scores: Vec<f64> = vec![0.0; max_index + 1];
-    let mut next_in_path: Vec<usize> = vec![0; max_index + 1];
-    //iterate thorugh the nodes in revere
-    for node in topo_indices{
-        let mut best_weight_score_edge: (i32, f64, usize) = (-1 , -1.0, 123456789);
-        let mut neighbour_nodes = graph.neighbors_directed(node, Outgoing);
-        while let Some(neighbour_node) = neighbour_nodes.next() {
-            let mut edges = graph.edges_connecting(node, neighbour_node);
-            let mut weight: i32 = 0;
-            while let Some(edge) = edges.next() {
-                weight += edge.weight().clone();
-            }
-            let weight_score_edge = (weight, scores[neighbour_node.index()], neighbour_node.index());
-            if weight_score_edge > best_weight_score_edge{
-                best_weight_score_edge = weight_score_edge;
-            }
-            if node.index() == 3 {
-                println!("neighbours {}", neighbour_node.index());
-            }
-        }
-        //save score and traceback
-        if best_weight_score_edge.0 as f64 + best_weight_score_edge.1 > max_score{
-            max_score = best_weight_score_edge.0 as f64 + best_weight_score_edge.1;
-        }
-        scores[node.index()] = best_weight_score_edge.0 as f64 + best_weight_score_edge.1;
-        next_in_path[node.index()] = best_weight_score_edge.2;
-        weight_scores[node.index()] = best_weight_score_edge.0;
-    }
-    let mut pos = scores.iter().position(|&r| r == max_score).unwrap();
-    //calculate the start weight score
-    let mut consensus_started: bool = false;
-    let weight_average = scores[pos] / scores.len() as f64;
-    let weight_threshold = weight_average as i32 / 2; 
-    while pos != 123456789 {
-        //continue if starting weight score is too low
-        if consensus_started == false && weight_scores[pos] < weight_threshold {
-            pos = next_in_path[pos];
-            continue;
-        }
-        //println!("current {} {}", pos, next_in_path[pos]);
-        consensus_started = true;
-        topopos.push(pos as usize);
-        output.push(graph.raw_nodes()[pos].weight);
-        pos = next_in_path[pos];
-    }
-    (output, topopos)
 }
 
 pub fn pipeline_save_the_graphs (chromosone: &str, start: usize, end: usize, thread_id: usize) {
