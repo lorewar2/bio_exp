@@ -257,6 +257,7 @@ fn load_the_graph (file_name: String) -> Graph<u8, i32, Directed, usize> {
                 graph.add_node(node_edge_list[x].1 as u8);
             },
             None => {
+                println!("{} not available, making none node", index);
                 graph.add_node(0);
             }
         }
