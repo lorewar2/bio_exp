@@ -657,6 +657,7 @@ fn get_consensus_from_graph(graph: &Graph<u8, i32, Directed, usize>) -> (Vec<u8>
             pos = next_in_path[pos];
             continue;
         }
+        println!("current {}", pos);
         consensus_started = true;
         topopos.push(pos as usize);
         output.push(graph.raw_nodes()[pos].weight);
