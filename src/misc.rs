@@ -208,7 +208,6 @@ fn load_the_graph (file_name: String) -> Graph<u8, i32, Directed, usize> {
         for line in read_to_string(&read_path).unwrap().lines() {
             //println!("{}", line);
             let line_parts: Vec<&str> = line.split(" ").collect();
-            // do nothing for number of nodes
             if index != 0 {
                 // node definition
                 if line_parts.len() == 10 {
@@ -238,17 +237,13 @@ fn load_the_graph (file_name: String) -> Graph<u8, i32, Directed, usize> {
                     if start_node == 23408 {
                         println!("23408 edges {} {}", end_node, edge_weight);    
                     }
-                    let required_index = match node_edge_list.iter().position(|r| r.0 == start_node) {
+                    match node_edge_list.iter().position(|r| r.0 == start_node) {
                         Some(x) => {
-                                x
+                                node_edge_list[x].2.push((end_node, edge_weight));
+                                edge_capacity += 1;
                             },
-                        None => {
-                            println!("required node was {}, not available", start_node);
-                            0
-                            },
+                        None => {println!("required node was {}, not available", start_node);},
                     };
-                    node_edge_list[required_index].2.push((end_node, edge_weight));
-                    edge_capacity += 1;
                 }
             }
             index += 1;
