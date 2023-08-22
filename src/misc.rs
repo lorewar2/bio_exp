@@ -196,7 +196,6 @@ fn save_the_graph (graph: &Graph<u8, i32, Directed, usize>, file_name: &String) 
 
 fn load_the_graph (file_name: String) -> Graph<u8, i32, Directed, usize> {
     let mut node_edge_list: Vec<(usize, char, Vec<(usize, usize)>)> = vec![]; // node number, base, connected nodes
-    let mut node_capacity = 0;
     let mut edge_capacity = 0;
     let mut max_node_index = 0;
     // check if available, populate node_edge_list from file
@@ -214,7 +213,6 @@ fn load_the_graph (file_name: String) -> Graph<u8, i32, Directed, usize> {
                     let start_node = line_parts[4].parse::<usize>().unwrap();
                     let chars: Vec<char> = line_parts[8].chars().collect();
                     node_edge_list.push((start_node, chars[2], vec![]));
-                    node_capacity += 1;
                     if start_node > max_node_index {
                         max_node_index = start_node;
                     }
@@ -234,8 +232,8 @@ fn load_the_graph (file_name: String) -> Graph<u8, i32, Directed, usize> {
                     let chars: Vec<char> = line_parts[10].chars().collect();
                     let edge_weight = chars[1].to_string().parse::<usize>().unwrap();
                     // find the start node in the node edge list, add the thing
-                    if start_node == 23408 {
-                        println!("23408 edges {} {}", end_node, edge_weight);    
+                    if start_node == 3 {
+                        println!("3 edges {} {}", end_node, edge_weight);    
                     }
                     match node_edge_list.iter().position(|r| r.0 == start_node) {
                         Some(x) => {
@@ -254,19 +252,23 @@ fn load_the_graph (file_name: String) -> Graph<u8, i32, Directed, usize> {
         return Graph::default();
     }
     // make the graph from the vector
-    let mut graph: Graph<u8, i32, Directed, usize> = Graph::with_capacity(node_capacity, edge_capacity);
+    let mut graph: Graph<u8, i32, Directed, usize> = Graph::with_capacity(max_node_index + 1, edge_capacity);
     
     // add the nodes first & save a list of deleted nodes
-    let mut deleted_nodes = vec![];
+    //let mut deleted_nodes = vec![];
     for index in 0..max_node_index + 1 {
+        
         match node_edge_list.iter().position(|r| r.0 == index) {
             Some(x) => {
                 graph.add_node(node_edge_list[x].1 as u8);
+                if index == 3 {
+                    println!("3 == {} {:?}", node_edge_list[x].1 as u8,node_edge_list[x]);
+                }
             },
             None => {
                 println!("{} not available, making none node", index);
                 graph.add_node(0);
-                deleted_nodes.push(index);
+                //deleted_nodes.push(index);
             }
         }
     }
@@ -274,7 +276,8 @@ fn load_the_graph (file_name: String) -> Graph<u8, i32, Directed, usize> {
     for (_, node_edge) in node_edge_list.iter().enumerate() {
         for edge in &node_edge.2 {
             // skip if it is a deleted node or > max index
-            if deleted_nodes.contains(&edge.0) || deleted_nodes.contains(&node_edge.0) || edge.0 > max_node_index || node_edge.0 > max_node_index {
+            if edge.0 > max_node_index || node_edge.0 > max_node_index {
+                println!("skiiping nodes {} {}", edge.0, node_edge.0);
                 continue;
             }
             graph.add_edge(NodeIndex::new(node_edge.0), NodeIndex::new(edge.0), edge.1 as i32);
@@ -646,7 +649,7 @@ fn get_consensus_from_graph(graph: &Graph<u8, i32, Directed, usize>) -> (Vec<u8>
             if weight_score_edge > best_weight_score_edge{
                 best_weight_score_edge = weight_score_edge;
             }
-            if node.index() == 23408 {
+            if node.index() == 3 {
                 println!("neighbours {}", neighbour_node.index());
             }
         }
