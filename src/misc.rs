@@ -220,8 +220,8 @@ fn load_the_graph (file_name: String) -> Graph<u8, i32, Directed, usize> {
                         max_node_index = start_node;
                     }
                 }
-                index += 1;
             }
+            index += 1;
         }
         let mut index = 0;
         for line in read_to_string(&read_path).unwrap().lines() {
@@ -261,7 +261,8 @@ fn load_the_graph (file_name: String) -> Graph<u8, i32, Directed, usize> {
     // make the graph from the vector
     let mut graph: Graph<u8, i32, Directed, usize> = Graph::with_capacity(node_capacity, edge_capacity);
     
-    // add the nodes first
+    // add the nodes first & save a list of deleted nodes
+    let mut deleted_nodes = vec![];
     for index in 0..max_node_index + 1 {
         match node_edge_list.iter().position(|r| r.0 == index) {
             Some(x) => {
@@ -270,12 +271,17 @@ fn load_the_graph (file_name: String) -> Graph<u8, i32, Directed, usize> {
             None => {
                 println!("{} not available, making none node", index);
                 graph.add_node(0);
+                deleted_nodes.push(index);
             }
         }
     }
     // add the edges
     for (_, node_edge) in node_edge_list.iter().enumerate() {
         for edge in &node_edge.2 {
+            // skip if it is a deleted node or > max index
+            if deleted_nodes.contains(&edge.0) || deleted_nodes.contains(&node_edge.0) || edge.0 > max_node_index || node_edge.0 > max_node_index {
+                continue;
+            }
             graph.add_edge(NodeIndex::new(node_edge.0), NodeIndex::new(edge.0), edge.1 as i32);
         }
     }
