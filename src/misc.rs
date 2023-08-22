@@ -204,15 +204,12 @@ fn load_the_graph (file_name: String) -> Graph<u8, i32, Directed, usize> {
         // read the file
         let mut index = 0;
         let read_path = format!("{}/{}", INTERMEDIATE_PATH, file_name);
-        for line in read_to_string(read_path).unwrap().lines() {
+        // first popopulate the node list
+        for line in read_to_string(&read_path).unwrap().lines() {
             //println!("{}", line);
             let line_parts: Vec<&str> = line.split(" ").collect();
             // do nothing for number of nodes
-            if index == 0 {
-
-            }
-            // put the values in node edge list
-            else {
+            if index != 0 {
                 // node definition
                 if line_parts.len() == 10 {
                     let start_node = line_parts[4].parse::<usize>().unwrap();
@@ -223,6 +220,14 @@ fn load_the_graph (file_name: String) -> Graph<u8, i32, Directed, usize> {
                         max_node_index = start_node;
                     }
                 }
+                index += 1;
+            }
+        }
+        let mut index = 0;
+        for line in read_to_string(&read_path).unwrap().lines() {
+            //println!("{}", line);
+            let line_parts: Vec<&str> = line.split(" ").collect();
+            if index != 0 {
                 // edge definition
                 if line_parts.len() == 12 {
                     let start_node = line_parts[4].parse::<usize>().unwrap();
@@ -248,6 +253,10 @@ fn load_the_graph (file_name: String) -> Graph<u8, i32, Directed, usize> {
             }
             index += 1;
         }
+    }
+    else {
+        println!("file not available, skipping");
+        return Graph::default();
     }
     // make the graph from the vector
     let mut graph: Graph<u8, i32, Directed, usize> = Graph::with_capacity(node_capacity, edge_capacity);
