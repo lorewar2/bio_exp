@@ -188,58 +188,58 @@ pub fn debug_saving_loading_graphs (chromosone: &str, start: usize, end: usize, 
             // load the graph
             // println!("before loading the graph");
             let reloaded_graph = load_the_graph("test_graph.txt".to_string());
-            // // consensus from reloaded graph 
-            // println!("before getting consensus");
-            // let (reloaded_consensus, reloaded_topology) = get_consensus_from_graph(&reloaded_graph);
-            // // original graph result
-            // // match the calculated consensus to the original consensus and get the required indices
-            // println!("before getting quality");
-            // let quality_output = get_consensus_quality_scores(sub_reads.len(), &calculated_consensus, &calculated_topology, &calculated_graph);
-            // // match the calculated consensus to the original consensus and get the required indices
-            // let calc_cons_id = get_redone_consensus_matched_positions(&seq_name_qual_and_errorpos.0, &calculated_consensus);
-            // for (index, pacbio_base) in seq_name_qual_and_errorpos.0.as_bytes().to_vec().iter().enumerate() {
-            //     let pacbio_char = *pacbio_base as char;
-            //     let quality_vec;
-            //     let parallel_quality;
-            //     if calc_cons_id[index] != usize::MAX {
-            //         //calculated_char = calculated_consensus[calc_cons_id[index]];
-            //         quality_vec = quality_output.1[calc_cons_id[index]].clone();
-            //         parallel_quality = quality_output.0[calc_cons_id[index]] as usize;
-            //     }
-            //     else {
-            //         //calculated_char = 'x' as u8;
-            //         quality_vec = vec![1, 1, 1, 1];
-            //         parallel_quality = 0;
-            //     }
-            //     println!("{} {} {} {} {:?}", "original", pacbio_char, parallel_quality, (sub_reads.len() - 1) ,quality_vec);
-            //     if index > 10 {
-            //         break;
-            //     }
-            // } 
-            // // reloaded graph result
-            // // match the calculated consensus to the original consensus and get the required indices
-            // let quality_output = get_consensus_quality_scores(sub_reads.len(), &reloaded_consensus, &reloaded_topology, &reloaded_graph);
-            // // match the calculated consensus to the original consensus and get the required indices
-            // let calc_cons_id = get_redone_consensus_matched_positions(&seq_name_qual_and_errorpos.0, &reloaded_consensus);
-            // for (index, pacbio_base) in seq_name_qual_and_errorpos.0.as_bytes().to_vec().iter().enumerate() {
-            //     let pacbio_char = *pacbio_base as char;
-            //     let quality_vec;
-            //     let parallel_quality;
-            //     if calc_cons_id[index] != usize::MAX {
-            //         //calculated_char = calculated_consensus[calc_cons_id[index]];
-            //         quality_vec = quality_output.1[calc_cons_id[index]].clone();
-            //         parallel_quality = quality_output.0[calc_cons_id[index]] as usize;
-            //     }
-            //     else {
-            //         //calculated_char = 'x' as u8;
-            //         quality_vec = vec![1, 1, 1, 1];
-            //         parallel_quality = 0;
-            //     }
-            //     println!("{} {} {} {} {:?}", "reloaded", pacbio_char, parallel_quality, (sub_reads.len() - 1) ,quality_vec);
-            //     if index > 10 {
-            //         break;
-            //     }
-            // }
+            // consensus from reloaded graph 
+            println!("before getting consensus");
+            let (reloaded_consensus, reloaded_topology) = get_consensus_from_graph(&reloaded_graph);
+            // original graph result
+            // match the calculated consensus to the original consensus and get the required indices
+            println!("before getting quality");
+            let quality_output = get_consensus_quality_scores(sub_reads.len(), &calculated_consensus, &calculated_topology, &calculated_graph);
+            // match the calculated consensus to the original consensus and get the required indices
+            let calc_cons_id = get_redone_consensus_matched_positions(&seq_name_qual_and_errorpos.0, &calculated_consensus);
+            for (index, pacbio_base) in seq_name_qual_and_errorpos.0.as_bytes().to_vec().iter().enumerate() {
+                let pacbio_char = *pacbio_base as char;
+                let quality_vec;
+                let parallel_quality;
+                if calc_cons_id[index] != usize::MAX {
+                    //calculated_char = calculated_consensus[calc_cons_id[index]];
+                    quality_vec = quality_output.1[calc_cons_id[index]].clone();
+                    parallel_quality = quality_output.0[calc_cons_id[index]] as usize;
+                }
+                else {
+                    //calculated_char = 'x' as u8;
+                    quality_vec = vec![1, 1, 1, 1];
+                    parallel_quality = 0;
+                }
+                println!("{} {} {} {} {:?}", "original", pacbio_char, parallel_quality, (sub_reads.len() - 1) ,quality_vec);
+                if index > 10 {
+                    break;
+                }
+            } 
+            // reloaded graph result
+            // match the calculated consensus to the original consensus and get the required indices
+            let quality_output = get_consensus_quality_scores(sub_reads.len(), &reloaded_consensus, &reloaded_topology, &reloaded_graph);
+            // match the calculated consensus to the original consensus and get the required indices
+            let calc_cons_id = get_redone_consensus_matched_positions(&seq_name_qual_and_errorpos.0, &reloaded_consensus);
+            for (index, pacbio_base) in seq_name_qual_and_errorpos.0.as_bytes().to_vec().iter().enumerate() {
+                let pacbio_char = *pacbio_base as char;
+                let quality_vec;
+                let parallel_quality;
+                if calc_cons_id[index] != usize::MAX {
+                    //calculated_char = calculated_consensus[calc_cons_id[index]];
+                    quality_vec = quality_output.1[calc_cons_id[index]].clone();
+                    parallel_quality = quality_output.0[calc_cons_id[index]] as usize;
+                }
+                else {
+                    //calculated_char = 'x' as u8;
+                    quality_vec = vec![1, 1, 1, 1];
+                    parallel_quality = 0;
+                }
+                println!("{} {} {} {} {:?}", "reloaded", pacbio_char, parallel_quality, (sub_reads.len() - 1) ,quality_vec);
+                if index > 10 {
+                    break;
+                }
+            }
             index_thread += 1;
         }
         if all_skipped {
@@ -337,8 +337,8 @@ fn load_the_graph (file_name: String) -> Graph<u8, i32, Directed, usize> {
                 graph.add_node(node_loader[x].1);
             },
             None => {
-                println!("{} not available, making none node", index);
-                graph.add_node(0);
+                println!("{} not available", index);
+                //graph.add_node(0);
             }
         }
     }
