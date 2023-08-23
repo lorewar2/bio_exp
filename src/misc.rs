@@ -187,7 +187,7 @@ pub fn debug_saving_loading_graphs (chromosone: &str, start: usize, end: usize, 
             save_the_graph(calculated_graph, &"test".to_string());
             // load the graph
             // println!("before loading the graph");
-            // let reloaded_graph = load_the_graph("test_graph.txt".to_string());
+            let reloaded_graph = load_the_graph("test_graph.txt".to_string());
             // // consensus from reloaded graph 
             // println!("before getting consensus");
             // let (reloaded_consensus, reloaded_topology) = get_consensus_from_graph(&reloaded_graph);
@@ -258,75 +258,68 @@ pub fn write_string_to_newfile (file_name: &String, input_string: &String) {
 
 fn save_the_graph (graph: &Graph<u8, i32, Directed, usize>, file_name: &String) {
     let mut write_string = "".to_string();
-    //let write_path = format!("{}/{}_graph.txt", INTERMEDIATE_PATH, file_name);
-    let mut node_saver: Vec<(usize, char, Vec<usize>)> = vec![];
+    let write_path = format!("{}/{}_graph.txt", INTERMEDIATE_PATH, file_name);
     let mut node_iterator = graph.node_indices();
     while let Some(node) = node_iterator.next() {
         let node_index = node.index();
         let base = graph.raw_nodes()[node_index].weight;
-        let mut neighbours = vec![];
+        let mut neighbours:Vec<(usize, usize)> = vec![];
         let mut neighbour_nodes = graph.neighbors_directed(node, Outgoing);
         let mut neighbour_string = "".to_string();
         while let Some(neighbour_node) = neighbour_nodes.next() {
-            neighbours.push(neighbour_node.index());
-            neighbour_string = format!("{} {}", neighbour_string, neighbour_node.index());
+            let mut edges = graph.edges_connecting(node, neighbour_node);
+            let mut weight: i32 = 0;
+            while let Some(edge) = edges.next() {
+                weight += edge.weight().clone();
+            }
+            neighbours.push((neighbour_node.index(), weight as usize));
+            neighbour_string = format!("{} {}:{}", neighbour_string, neighbour_node.index(), weight);
         }
-        node_saver.push((node_index, base as char, neighbours.clone()));
-        let temp_string = format!("{} {} {}", node_index, base, neighbour_string);
-        write_string = format!("{}/n{}", write_string, temp_string.clone());
+        let temp_string = format!("{} {}{}", node_index, base, neighbour_string);
+        write_string = format!("{}\n{}", write_string, temp_string.clone());
     };
     println!("{}", write_string);
-    //write_string_to_newfile(&write_path, &write_string);
+    write_string_to_newfile(&write_path, &write_string);
 }
 
 fn load_the_graph (file_name: String) -> Graph<u8, i32, Directed, usize> {
-    let mut node_edge_list: Vec<(usize, char, Vec<(usize, usize)>)> = vec![]; // node number, base, connected nodes
     let mut edge_capacity = 0;
     let mut max_node_index = 0;
+    let mut node_loader: Vec<(usize, u8, Vec<(usize, usize)>)> = vec![];
     // check if available, populate node_edge_list from file
     if check_file_availability(&file_name, INTERMEDIATE_PATH) == true {
         // read the file
         let read_path = format!("{}/{}", INTERMEDIATE_PATH, file_name);
         // first popopulate the node list
         for line in read_to_string(&read_path).unwrap().lines() {
-            //println!("{}", line);
             let line_parts: Vec<&str> = line.split(" ").collect();
             // node definition
-            if line_parts.len() == 10 {
-                let start_node = line_parts[4].parse::<usize>().unwrap();
-                let chars: Vec<char> = line_parts[8].chars().collect();
-                node_edge_list.push((start_node, chars[2], vec![]));
-                if start_node > max_node_index {
-                    max_node_index = start_node;
+            if line_parts.len() >= 2 {
+                let mut node_index = 0;
+                let mut base = 0;
+                let mut neighbours = vec![];
+                let mut iter_index = 0;
+                let mut line_part_iterator = line_parts.iter();
+                while let Some(line_part) = line_part_iterator.next() {
+                    if iter_index == 0 {
+                        node_index = line_part.parse::<usize>().unwrap();
+                        if node_index > max_node_index {
+                            max_node_index = node_index;
+                        }
+                    }
+                    else if iter_index == 1 {
+                        base = line_part.parse::<u8>().unwrap();
+                    }
+                    else {
+                        let neighbour_weight: Vec<&str> = line_part.split(":").collect();
+                        let neighbour = neighbour_weight[0].parse::<usize>().unwrap();
+                        let weight = neighbour_weight[1].parse::<usize>().unwrap();
+                        neighbours.push((neighbour, weight));
+                        edge_capacity += 1;
+                    }
+                    iter_index += 1;
                 }
-            }
-        }
-        for line in read_to_string(&read_path).unwrap().lines() {
-            //println!("{}", line);
-            let line_parts: Vec<&str> = line.split(" ").collect();
-            // edge definition
-            if line_parts.len() == 12 {
-                let start_node = line_parts[4].parse::<usize>().unwrap();
-                let end_node = line_parts[6].parse::<usize>().unwrap();
-                let chars: Vec<char> = line_parts[10].chars().collect();
-                let edge_weight = chars[1].to_string().parse::<usize>().unwrap();
-                // find the start node in the node edge list, add the thing
-                if start_node == 3 {
-                    println!("3 edges {} {}", end_node, edge_weight);    
-                }
-                match node_edge_list.iter().position(|r| r.0 == start_node) {
-                    Some(x) => {
-                            node_edge_list[x].2.push((end_node, edge_weight));
-                            edge_capacity += 1;
-                        },
-                    None => {println!("required node was {}, not available", start_node);},
-                };
-                if start_node > max_node_index {
-                    max_node_index = start_node;
-                }
-                if end_node > max_node_index {
-                    max_node_index = end_node;
-                }
+                node_loader.push((node_index, base, neighbours.clone()));
             }
         }
     }
@@ -337,35 +330,28 @@ fn load_the_graph (file_name: String) -> Graph<u8, i32, Directed, usize> {
     // make the graph from the vector
     let mut graph: Graph<u8, i32, Directed, usize> = Graph::with_capacity(max_node_index + 1, edge_capacity);
     
-    // add the nodes first & save a list of deleted nodes
-    //let mut deleted_nodes = vec![];
+    // add the nodes first
     for index in 0..max_node_index + 1 {
-        match node_edge_list.iter().position(|r| r.0 == index) {
+        match node_loader.iter().position(|r| r.0 == index) {
             Some(x) => {
-                let ret_index = graph.add_node(node_edge_list[x].1 as u8);
-                if index == 3 {
-                    println!("3 == {} {} {:?}", ret_index.index(), node_edge_list[x].1 as u8, node_edge_list[x]);
-                }
+                graph.add_node(node_loader[x].1);
             },
             None => {
                 println!("{} not available, making none node", index);
                 graph.add_node(0);
-                //deleted_nodes.push(index);
             }
         }
     }
     // add the edges
-    for (_, node_edge) in node_edge_list.iter().enumerate() {
-        for edge in &node_edge.2 {
-            // skip if it is a deleted node or > max index
-            graph.add_edge(NodeIndex::new(node_edge.0), NodeIndex::new(edge.0), edge.1 as i32);
+    for node in node_loader{
+        for edge in node.2 {
+            graph.add_edge(NodeIndex::new(node.0), NodeIndex::new(edge.0), edge.1 as i32);
         }
     }
-    //graph.add_node(weight);
     // show graph 
-    let write_string = format!("{}", Dot::new(&graph.map(|_, n| (*n) as char, |_, e| *e)));
-    let write_path = format!("./result/loaded_graph.txt");
-    write_string_to_newfile(&write_path, &write_string);
+    //let write_string = format!("{}", Dot::new(&graph.map(|_, n| (*n) as char, |_, e| *e)));
+    //let write_path = format!("./result/loaded_graph.txt");
+    //write_string_to_newfile(&write_path, &write_string);
     graph
 }
 
