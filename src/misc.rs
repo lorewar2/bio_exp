@@ -258,8 +258,23 @@ pub fn write_string_to_newfile (file_name: &String, input_string: &String) {
 }
 
 fn save_the_graph (graph: &Graph<u8, i32, Directed, usize>, file_name: &String) {
-    let write_string = format!("{}\n{:?}", graph.node_count(), Dot::new(&graph.map(|_, n| (*n) as char, |_, e| *e)));
+    let mut write_string = "".to_string();
     let write_path = format!("{}/{}_graph.txt", INTERMEDIATE_PATH, file_name);
+    let mut node_saver: Vec<(usize, char, Vec<usize>)> = vec![];
+    let mut node_iterator = graph.node_indices();
+    while let Some(node) = node_iterator.next() {
+        let node_index = node.index();
+        let base = graph.raw_nodes()[node_index].weight;
+        let mut neighbours = vec![];
+        let mut neighbour_nodes = graph.neighbors_directed(node, Outgoing);
+        while let Some(neighbour_node) = neighbour_nodes.next() {
+            neighbours.push(neighbour_node.index());
+        }
+        node_saver.push((node_index, base as char, neighbours.clone()));
+        let temp_string = format!("{} {} {}", 1, 1, 1);
+        write_string = format!("{}/n{}", write_string, temp_string);
+    };
+    
     write_string_to_newfile(&write_path, &write_string);
 }
 
@@ -270,56 +285,48 @@ fn load_the_graph (file_name: String) -> Graph<u8, i32, Directed, usize> {
     // check if available, populate node_edge_list from file
     if check_file_availability(&file_name, INTERMEDIATE_PATH) == true {
         // read the file
-        let mut index = 0;
         let read_path = format!("{}/{}", INTERMEDIATE_PATH, file_name);
         // first popopulate the node list
         for line in read_to_string(&read_path).unwrap().lines() {
             //println!("{}", line);
             let line_parts: Vec<&str> = line.split(" ").collect();
-            if index != 0 {
-                // node definition
-                if line_parts.len() == 10 {
-                    let start_node = line_parts[4].parse::<usize>().unwrap();
-                    let chars: Vec<char> = line_parts[8].chars().collect();
-                    node_edge_list.push((start_node, chars[2], vec![]));
-                    if start_node > max_node_index {
-                        max_node_index = start_node;
-                    }
+            // node definition
+            if line_parts.len() == 10 {
+                let start_node = line_parts[4].parse::<usize>().unwrap();
+                let chars: Vec<char> = line_parts[8].chars().collect();
+                node_edge_list.push((start_node, chars[2], vec![]));
+                if start_node > max_node_index {
+                    max_node_index = start_node;
                 }
             }
-            index += 1;
         }
-        let mut index = 0;
         for line in read_to_string(&read_path).unwrap().lines() {
             //println!("{}", line);
             let line_parts: Vec<&str> = line.split(" ").collect();
-            if index != 0 {
-                // edge definition
-                if line_parts.len() == 12 {
-                    let start_node = line_parts[4].parse::<usize>().unwrap();
-                    let end_node = line_parts[6].parse::<usize>().unwrap();
-                    let chars: Vec<char> = line_parts[10].chars().collect();
-                    let edge_weight = chars[1].to_string().parse::<usize>().unwrap();
-                    // find the start node in the node edge list, add the thing
-                    if start_node == 3 {
-                        println!("3 edges {} {}", end_node, edge_weight);    
-                    }
-                    match node_edge_list.iter().position(|r| r.0 == start_node) {
-                        Some(x) => {
-                                node_edge_list[x].2.push((end_node, edge_weight));
-                                edge_capacity += 1;
-                            },
-                        None => {println!("required node was {}, not available", start_node);},
-                    };
-                    if start_node > max_node_index {
-                        max_node_index = start_node;
-                    }
-                    if end_node > max_node_index {
-                        max_node_index = end_node;
-                    }
+            // edge definition
+            if line_parts.len() == 12 {
+                let start_node = line_parts[4].parse::<usize>().unwrap();
+                let end_node = line_parts[6].parse::<usize>().unwrap();
+                let chars: Vec<char> = line_parts[10].chars().collect();
+                let edge_weight = chars[1].to_string().parse::<usize>().unwrap();
+                // find the start node in the node edge list, add the thing
+                if start_node == 3 {
+                    println!("3 edges {} {}", end_node, edge_weight);    
+                }
+                match node_edge_list.iter().position(|r| r.0 == start_node) {
+                    Some(x) => {
+                            node_edge_list[x].2.push((end_node, edge_weight));
+                            edge_capacity += 1;
+                        },
+                    None => {println!("required node was {}, not available", start_node);},
+                };
+                if start_node > max_node_index {
+                    max_node_index = start_node;
+                }
+                if end_node > max_node_index {
+                    max_node_index = end_node;
                 }
             }
-            index += 1;
         }
     }
     else {
@@ -540,21 +547,9 @@ pub fn get_data_for_ml (chromosone: &str, start: usize, end: usize, thread_id: u
 
 pub fn concancate_files () {
     let mut output = File::create("result/chr1_ml_file").unwrap();
-    let mut input_vec = vec![];
-    for i in 0..100 {
-        if (i == 13) || (i == 16) || (i == 24)|| (i == 31)|| (i == 32)|| (i == 33)|| (i == 41)|| (i == 47)|| (i == 48) || (i == 55) || (i == 64) || (i == 66) || (i == 6) || (i == 74) || (i == 82) || (i == 83) || (i == 8) || (i == 90) || (i == 91) || (i == 98) || (i == 99){
-        }
-        else {
-            input_vec.push(format!("data/{}_mldata.txt", i));
-            println!("{}", i);
-        }
-    }
-    //input_vec.push("data/chr1.txt");
-    //input_vec.push("data/chr21.txt");
-
-    //let inputs = vec!["data/0_mldata.txt", "data/1_mldata.txt", "data/2_mldata.txt", "data/3_mldata.txt", "data/4_mldata.txt", "data/5_mldata.txt", "data/7_mldata.txt", "data/8_mldata.txt", "data/9_mldata.txt", "data/10_mldata.txt", "data/11_mldata.txt"];
-    for i in input_vec {
-        let mut input = File::open(i).unwrap();
+    let paths = read_dir("data/chr1_data/{}_mldata.txt").unwrap();
+    for path in paths {
+        let mut input = File::open(path.unwrap().path()).unwrap();
         io::copy(&mut input, &mut output).unwrap();
     }
     println!("done");
