@@ -1682,7 +1682,8 @@ pub fn get_error_bases_from_himut_vcf () -> Vec<(String, usize, char, char)> {
     error_locus_vec
 }
 
-fn get_error_quality_score_count (error_locus_vec: Vec<(String, usize, char, char)>) {
+pub fn get_error_quality_score_count () {
+    let error_locus_vec = get_error_bases_from_himut_vcf ();
     let mut quality_score_count: Vec<usize> = vec![0; 94];
     // read the merged mapped sorted bam file
     let path = &"data/merged.bam";

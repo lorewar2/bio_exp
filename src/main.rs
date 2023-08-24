@@ -6,7 +6,7 @@ mod generator;
 mod misc;
 mod quality;
 use std::thread;
-use crate::misc::get_quality_score_count_confident_error;
+use crate::misc::get_error_quality_score_count;
 
 const SEED: u64 = 2;
 const GAP_OPEN: i32 = -2;
@@ -16,7 +16,7 @@ const MISMATCH: i32 = -2;
 const NTHREADS: usize = 1;
 
 fn main() {
-    get_quality_score_count_confident_error();
+    get_error_quality_score_count();
     //concancate_files();
     // make a vector to hold the children which are spawned.
     //new_poa_tester();
