@@ -6,7 +6,7 @@ mod generator;
 mod misc;
 mod quality;
 use std::thread;
-use crate::misc::debug_saving_loading_graphs;
+use crate::misc::get_quality_score_count_confident_error;
 
 const SEED: u64 = 2;
 const GAP_OPEN: i32 = -2;
@@ -16,6 +16,7 @@ const MISMATCH: i32 = -2;
 const NTHREADS: usize = 1;
 
 fn main() {
+    get_quality_score_count_confident_error();
     //concancate_files();
     // make a vector to hold the children which are spawned.
     //new_poa_tester();
@@ -32,7 +33,7 @@ fn main() {
             let start = total_start + one_thread_allocation * i;
             let end = start + one_thread_allocation;
             println!("Thread number {} started, {} from {} to {}..", chromosone, i, start, end);
-            debug_saving_loading_graphs (chromosone, start, end, i);
+            //debug_saving_loading_graphs (chromosone, start, end, i);
         }));
     }
     for child in children {

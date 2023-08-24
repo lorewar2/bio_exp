@@ -263,7 +263,7 @@ fn save_the_graph (graph: &Graph<u8, i32, Directed, usize>, file_name: &String) 
     while let Some(node) = node_iterator.next() {
         let node_index = node.index();
         let base = graph.raw_nodes()[node_index].weight;
-        let mut neighbours:Vec<(usize, usize)> = vec![];
+        let mut neighbours:Vec<(usize, i32)> = vec![];
         let mut neighbour_nodes = graph.neighbors_directed(node, Outgoing);
         let mut neighbour_string = "".to_string();
         while let Some(neighbour_node) = neighbour_nodes.next() {
@@ -272,7 +272,7 @@ fn save_the_graph (graph: &Graph<u8, i32, Directed, usize>, file_name: &String) 
             while let Some(edge) = edges.next() {
                 weight += edge.weight().clone();
             }
-            neighbours.push((neighbour_node.index(), weight as usize));
+            neighbours.push((neighbour_node.index(), weight));
             neighbour_string = format!("{} {}:{}", neighbour_string, neighbour_node.index(), weight);
         }
         let temp_string = format!("{} {}{}", node_index, base, neighbour_string);
@@ -285,7 +285,7 @@ fn save_the_graph (graph: &Graph<u8, i32, Directed, usize>, file_name: &String) 
 fn load_the_graph (file_name: String) -> Graph<u8, i32, Directed, usize> {
     let mut edge_capacity = 0;
     let mut max_node_index = 0;
-    let mut node_loader: Vec<(usize, u8, Vec<(usize, usize)>)> = vec![];
+    let mut node_loader: Vec<(usize, u8, Vec<(usize, i32)>)> = vec![];
     // check if available, populate node_edge_list from file
     if check_file_availability(&file_name, INTERMEDIATE_PATH) == true {
         // read the file
@@ -313,7 +313,7 @@ fn load_the_graph (file_name: String) -> Graph<u8, i32, Directed, usize> {
                     else {
                         let neighbour_weight: Vec<&str> = line_part.split(":").collect();
                         let neighbour = neighbour_weight[0].parse::<usize>().unwrap();
-                        let weight = neighbour_weight[1].parse::<usize>().unwrap();
+                        let weight = neighbour_weight[1].parse::<i32>().unwrap();
                         neighbours.push((neighbour, weight));
                         edge_capacity += 1;
                     }
@@ -345,13 +345,13 @@ fn load_the_graph (file_name: String) -> Graph<u8, i32, Directed, usize> {
     // add the edges
     for node in node_loader{
         for edge in node.2 {
-            graph.add_edge(NodeIndex::new(node.0), NodeIndex::new(edge.0), edge.1 as i32);
+            graph.add_edge(NodeIndex::new(node.0), NodeIndex::new(edge.0), edge.1);
         }
     }
     // show graph 
-    //let write_string = format!("{}", Dot::new(&graph.map(|_, n| (*n) as char, |_, e| *e)));
-    //let write_path = format!("./result/loaded_graph.txt");
-    //write_string_to_newfile(&write_path, &write_string);
+    let write_string = format!("{}", Dot::new(&graph.map(|_, n| (*n) as char, |_, e| *e)));
+    let write_path = format!("./result/loaded_graph.txt");
+    write_string_to_newfile(&write_path, &write_string);
     graph
 }
 
