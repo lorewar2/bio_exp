@@ -16,6 +16,7 @@ use rust_htslib::faidx;
 use std::{fs::OpenOptions, io::{prelude::*}};
 use std::io::BufReader;
 use std::fs::File;
+use std::fs::remove_file;
 use std::io::SeekFrom;
 use std::time::Instant;
 use std::fs::read_dir;
@@ -36,7 +37,7 @@ const DATA_PATH: &str = "/data1/hifi_consensus/try2/";
 const READ_BAM_PATH: &str = "/data1/hifi_consensus/try2/merged.bam";
 const INTERMEDIATE_PATH: &str = "result/intermediate";
 const CONFIDENT_PATH: &str = "/data1/GiaB_benchmark/HG001_GRCh38_1_22_v4.2.1_benchmark.bed";
-const BAND_SIZE: i32 = 1000;
+const BAND_SIZE: i32 = 100;
 const MAX_NODES_IN_POA: usize = 55_000;
 const SKIP_SCORE: isize = 40_000;
 
@@ -252,6 +253,10 @@ pub fn debug_saving_loading_graphs (chromosone: &str, start: usize, end: usize, 
 pub fn write_string_to_newfile (file_name: &String, input_string: &String) {
     let path = std::path::Path::new(&file_name);
     let prefix = path.parent().unwrap();
+    match remove_file(path) {
+        Ok(_) => {},
+        Err(_) => {}
+    };
     create_dir_all(prefix).unwrap();
     let mut file = OpenOptions::new().create(true).write(true).open(file_name).unwrap();
     writeln!(file, "{}", input_string).expect("result file cannot be written");
