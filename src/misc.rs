@@ -38,7 +38,7 @@ const READ_BAM_PATH: &str = "/data1/hifi_consensus/try2/merged.bam";
 const INTERMEDIATE_PATH: &str = "result/intermediate";
 const CONFIDENT_PATH: &str = "/data1/GiaB_benchmark/HG001_GRCh38_1_22_v4.2.1_benchmark.bed";
 const BAND_SIZE: i32 = 100;
-const MAX_NODES_IN_POA: usize = 55_000;
+const MAX_NODES_IN_POA: usize = 75_000;
 const SKIP_SCORE: isize = 40_000;
 
 fn get_consensus_from_graph(graph: &Graph<u8, i32, Directed, usize>) -> (Vec<u8>, Vec<usize>) {
@@ -56,7 +56,6 @@ fn get_consensus_from_graph(graph: &Graph<u8, i32, Directed, usize>) -> (Vec<u8>
         }
     }
     topo_indices.reverse();
-    println!("redone topo {:?}", topo_indices);
     //define score and nextinpath vectors with capacity of num nodes.
     let mut weight_scores: Vec<i32> = vec![0; max_index + 1];
     let mut scores: Vec<f64> = vec![0.0; max_index + 1];
@@ -65,9 +64,6 @@ fn get_consensus_from_graph(graph: &Graph<u8, i32, Directed, usize>) -> (Vec<u8>
     for node in topo_indices{
         let mut best_weight_score_edge: (i32, f64, usize) = (-1 , -1.0, 123456789);
         let mut neighbour_nodes = graph.neighbors_directed(node, Outgoing);
-        if node.index() == 3 {
-            println!("available");
-        }
         while let Some(neighbour_node) = neighbour_nodes.next() {
             let mut edges = graph.edges_connecting(node, neighbour_node);
             let mut weight: i32 = 0;
@@ -77,9 +73,6 @@ fn get_consensus_from_graph(graph: &Graph<u8, i32, Directed, usize>) -> (Vec<u8>
             let weight_score_edge = (weight, scores[neighbour_node.index()], neighbour_node.index());
             if weight_score_edge > best_weight_score_edge{
                 best_weight_score_edge = weight_score_edge;
-            }
-            if node.index() == 3 {
-                println!("neighbours {}", neighbour_node.index());
             }
         }
         //save score and traceback
@@ -284,7 +277,6 @@ fn save_the_graph (graph: &Graph<u8, i32, Directed, usize>, file_name: &String) 
         let temp_string = format!("{} {}{}", node_index, base, neighbour_string);
         write_string = format!("{}\n{}", write_string, temp_string.clone());
     };
-    println!("{}", write_string);
     write_string_to_newfile(&write_path, &write_string);
 }
 
@@ -1425,26 +1417,18 @@ fn check_the_scores_and_change_alignment (seqvec: Vec<String>, pacbio_consensus:
     }
     pacbio_backward = tempseq.iter().cloned().collect::<String>().as_bytes().to_vec();
     // check the forward scores for 2 sequences
-    let mut index = 0;
     for seq in &seqvec {
         let (_, score) = pairwise(&pacbio_forward, &seq.as_bytes().to_vec(), 4, -4, -4, -2, 0);
         println!("forward score: {}", score);
         forward_score += score;
-        if index > 0 {
-            break;
-        }
-        index += 1;
+        break;
     }
     // check the backward scores for 2 sequences
-    index = 0;
     for seq in &seqvec {
         let (_, score) = pairwise(&pacbio_backward, &seq.as_bytes().to_vec(), 4, -4, -4, -2, 0);
         println!("backward score: {}", score);
         backward_score += score;
-        if index > 0 {
-            break;
-        }
-        index += 1;
+        break;
     }
     if forward_score < SKIP_SCORE && backward_score < SKIP_SCORE {
         return vec![];

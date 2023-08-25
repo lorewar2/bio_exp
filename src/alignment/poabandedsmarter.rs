@@ -521,7 +521,6 @@ impl BandedPoa {
             }
         }
         topo_indices.reverse();
-        println!("original indices {:?}", topo_indices);
         //define score and nextinpath vectors with capacity of num nodes.
         let mut weight_scores: Vec<i32> = vec![0; max_index + 1];
         let mut scores: Vec<f64> = vec![0.0; max_index + 1];
