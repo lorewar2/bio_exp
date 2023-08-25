@@ -55,6 +55,7 @@ fn get_consensus_from_graph(graph: &Graph<u8, i32, Directed, usize>) -> (Vec<u8>
         }
     }
     topo_indices.reverse();
+    println!("redone topo {:?}", topo_indices);
     //define score and nextinpath vectors with capacity of num nodes.
     let mut weight_scores: Vec<i32> = vec![0; max_index + 1];
     let mut scores: Vec<f64> = vec![0.0; max_index + 1];
@@ -181,8 +182,8 @@ pub fn debug_saving_loading_graphs (chromosone: &str, start: usize, end: usize, 
                 sequence_number += 1;
                 println!("Thread {}: Sequence {} processed", thread_id, sequence_number);
             }
-            let (calculated_consensus, calculated_topology) = aligner.poa.consensus(); //just poa
             let calculated_graph: &Graph<u8, i32, Directed, usize> = aligner.graph();
+            let (calculated_consensus, calculated_topology) = get_consensus_from_graph(&calculated_graph);
             // save the graph 
             save_the_graph(calculated_graph, &"test".to_string());
             // load the graph
@@ -1675,7 +1676,7 @@ pub fn get_error_bases_from_himut_vcf () -> Vec<(String, usize, char, char)> {
         }
         let temp_str = record.desc();
         let mut split_text_iter = (temp_str.split(":")).into_iter();
-        let chromosone = format!("chr{}", split_text_iter.next().unwrap());
+        let chromosone = format!("{}", split_text_iter.next().unwrap());
         error_locus_vec.push((chromosone.to_string(), record.pos() as usize, allele_vec[0], allele_vec[1]));
     }
     println!("number of errors = {}", error_locus_vec.len());
