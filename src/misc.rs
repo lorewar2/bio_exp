@@ -1555,7 +1555,7 @@ pub fn write_string_to_file (file_name: &String, input_string: &String) {
     let prefix = path.parent().unwrap();
     create_dir_all(prefix).unwrap();
     let mut file = OpenOptions::new().create(true).append(true).open(file_name).unwrap();
-    writeln!(file, "{}", input_string).expect("result file cannot be written");
+    write!(file, "{}", input_string).expect("result file cannot be written");
 }
 
 pub fn get_zoomed_graph_section (normal_graph: &Graph<u8, i32, Directed, usize>, focus_node: &usize)-> String {
@@ -1655,7 +1655,10 @@ pub fn get_error_bases_from_himut_vcf () -> Vec<(String, usize, char, char)> {
         let record = record_result.expect("Fail to read record");
         let mut allele_vec: Vec<char> = vec![];
         // only pass filters are acceptedß
-        if record.has_filter("PASS".as_bytes()) == false {
+        if (record.has_filter("PASS".as_bytes()) == true) || (record.has_filter("LowBQ".as_bytes()) == true) {
+
+        }
+        else {
             continue;
         }
         for allele in record.alleles() {
