@@ -450,7 +450,7 @@ pub fn pipeline_process_all_ccs_file_poa (chromosone: &str, start: usize, end: u
 pub fn get_data_for_ml (chromosone: &str, start: usize, end: usize, thread_id: usize) {
     let mut position_base = start;
     let mut error_index = 0;
-    let error_locations = get_error_bases_from_himut_vcf (); //chromosone, location, ref allele, alt allele
+    let (error_locations, _) = get_error_bases_from_himut_vcf (); //chromosone, location, ref allele, alt allele
     //println!("{:?}", error_locations);
     // get the error index of required chromosone
     loop {
@@ -506,8 +506,8 @@ pub fn get_data_for_ml (chromosone: &str, start: usize, end: usize, thread_id: u
             // write data
             let write_string = format!("{} {} {} {} {} {}", position_base, error, threebase_context, base, quality, parallel_stuff);
             check_strings.push((write_string.clone(), error));
-            let write_file = format!("result/{}_mldata.txt", thread_id);
-            write_string_to_file(&write_file, &write_string);
+            //let write_file = format!("result/{}_mldata.txt", thread_id);
+            //write_string_to_file(&write_file, &write_string);
         }
         // write the files if not wrong errors
         let write_file = format!("result/{}_mldata.txt", thread_id);
@@ -531,8 +531,8 @@ pub fn get_data_for_ml (chromosone: &str, start: usize, end: usize, thread_id: u
 }
 
 pub fn concancate_files () {
-    let mut output = File::create("result/chr1_ml_file").unwrap();
-    let paths = read_dir("data/chr1_data/").unwrap();
+    let mut output = File::create("result/chr21_ml_file").unwrap();
+    let paths = read_dir("data/chr21/").unwrap();
     for path in paths {
         let mut input = File::open(path.unwrap().path()).unwrap();
         io::copy(&mut input, &mut output).unwrap();
@@ -774,7 +774,7 @@ pub fn test_graphs() {
 pub fn get_quality_score_count_confident_error () {
     let mut quality_score_count: Vec<usize> = vec![0; 94];
     // get the error locations
-    let error_locations = get_error_bases_from_himut_vcf (); //chromosone, location, ref allele, alt allele
+    let (error_locations, _) = get_error_bases_from_himut_vcf (); //chromosone, location, ref allele, alt allele
     let confident_locations = get_confident_locations_from_file ();
     for confident_location in &confident_locations {
         for error_location in &error_locations {
@@ -885,7 +885,7 @@ fn get_confident_locations_from_file () -> Vec<(String, usize, usize)> {
 pub fn get_quality_score_count_topology_cut_errors (start: usize, end: usize, thread_id: usize) {
     let mut quality_score_count: Vec<usize> = vec![0; 94];
     let chromosone = format!("{}{}", String::from("chr"), 21);
-    let error_locations = get_error_bases_from_himut_vcf (); //chromosone, location, ref allele, alt allele
+    let (error_locations, _) = get_error_bases_from_himut_vcf (); //chromosone, location, ref allele, alt allele
     // go through the error locations
     let mut index = 0;
     for error_location in error_locations {
@@ -1028,7 +1028,7 @@ fn get_redone_consensus_matched_positions (pacbio_consensus: &String, calculated
 
 pub fn pipeline_redo_poa_get_topological_quality_score (chromosone: &str, start: usize, end: usize, thread_id: usize) {
     // get the error locations
-    let error_locations = get_error_bases_from_himut_vcf (); //chromosone, location, ref allele, alt allele
+    let (error_locations, _) = get_error_bases_from_himut_vcf (); //chromosone, location, ref allele, alt allele
     // go through the error locations
     let mut index = 0;
     let time_instant = Instant::now();
@@ -1646,7 +1646,8 @@ fn modify_dot_graph_with_highlight (mut dot: String, focus_node: &usize) -> Stri
     dot
 }
 
-pub fn get_error_bases_from_himut_vcf () -> Vec<(String, usize, char, char)> {
+pub fn get_error_bases_from_himut_vcf () -> (Vec<(String, usize, char, char)>, Vec<(String, usize)>) {
+    let mut germline_skip_location_vec: Vec<(String, usize)> = vec![]; //chromosone, position
     let mut error_locus_vec: Vec<(String, usize, char, char)> = vec![]; //chromosone, position, ref, alt
     let path = &"data/test.vcf";
     let mut bcf = Reader::from_path(path).expect("Error opening file.");
@@ -1655,28 +1656,32 @@ pub fn get_error_bases_from_himut_vcf () -> Vec<(String, usize, char, char)> {
         let record = record_result.expect("Fail to read record");
         let mut allele_vec: Vec<char> = vec![];
         // only pass filters are acceptedß
-        if (record.has_filter("PASS".as_bytes()) == true) || (record.has_filter("LowBQ".as_bytes()) == true) {
-
-        }
-        else {
-            continue;
-        }
-        for allele in record.alleles() {
-            for c in allele {
-                allele_vec.push(char::from(*c));
-            }
-        }
         let temp_str = record.desc();
         let mut split_text_iter = (temp_str.split(":")).into_iter();
         let chromosone = format!("{}", split_text_iter.next().unwrap());
-        error_locus_vec.push((chromosone.to_string(), record.pos() as usize, allele_vec[0], allele_vec[1]));
+
+        if (record.has_filter("PASS".as_bytes()) == true) || (record.has_filter("LowBQ".as_bytes()) == true) {
+            for allele in record.alleles() {
+                for c in allele {
+                    allele_vec.push(char::from(*c));
+                }
+            }
+            let temp_str = record.desc();
+            let mut split_text_iter = (temp_str.split(":")).into_iter();
+            let chromosone = format!("{}", split_text_iter.next().unwrap());
+            error_locus_vec.push((chromosone.to_string(), record.pos() as usize, allele_vec[0], allele_vec[1]));
+        }
+        else {
+            germline_skip_location_vec.push((chromosone.to_string(), record.pos() as usize));
+            continue;
+        }
     }
     println!("number of errors = {}", error_locus_vec.len());
-    error_locus_vec
+    (error_locus_vec, germline_skip_location_vec)
 }
 
 pub fn get_error_quality_score_count () {
-    let error_locus_vec = get_error_bases_from_himut_vcf ();
+    let (error_locus_vec , _) = get_error_bases_from_himut_vcf ();
     let mut quality_score_count: Vec<usize> = vec![0; 94];
     // read the merged mapped sorted bam file
     let mut bam_reader = BamIndexedReader::from_path(READ_BAM_PATH).unwrap();
