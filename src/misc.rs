@@ -1,3 +1,6 @@
+extern crate bio;
+use bio::alignment::pairwise::banded::Aligner as BandedDP;
+
 use crate::alignment::pairwise::pairwise;
 use crate::alignment::poabandedsmarter::Aligner;
 use crate::alignment::poamemory::Aligner as AlignerMemory;
@@ -35,11 +38,86 @@ const THREE_BASE_CONTEXT_READ_LENGTH: usize = 2;
 const NUM_OF_ITER_FOR_ZOOMED_GRAPHS: usize = 4;
 const DATA_PATH: &str = "/data1/hifi_consensus/try2/";
 const READ_BAM_PATH: &str = "/data1/hifi_consensus/try2/merged.bam";
-const INTERMEDIATE_PATH: &str = "result/intermediate";
+const INTERMEDIATE_PATH: &str = "/data1/hifi_consensus/quality_data/intermediate";
 const CONFIDENT_PATH: &str = "/data1/GiaB_benchmark/HG001_GRCh38_1_22_v4.2.1_benchmark.bed";
 const BAND_SIZE: i32 = 100;
 const MAX_NODES_IN_POA: usize = 75_000;
-const SKIP_SCORE: isize = 40_000;
+const SKIP_SCORE: i32 = 40_000;
+
+pub fn pipeline_save_the_graphs (chromosone: &str, start: usize, end: usize, thread_id: usize) {
+    let mut big_file_skip_count = 0;
+    let mut index_thread = 0;
+    let mut skip_thousand = false;
+    let mut skip_index = 0;
+    'bigloop: for process_location in start..end {
+        // skip thousand when same found
+        if skip_thousand {
+            skip_index += 1;
+            if skip_index > 5000 {
+                skip_thousand = false;
+                skip_index = 0;
+            }
+            else {
+                continue;
+            }
+        }
+        println!("NEW LOCATION, Thread {}: Chr {} Loc {}, tasks_done {} skipped {}", thread_id, chromosone, process_location, index_thread, big_file_skip_count);
+        // get the string and the name
+        let seq_name_qual_and_errorpos_vec = get_corrosponding_seq_name_location_quality_from_bam(process_location, &chromosone.to_string(), &'X');
+        let mut all_skipped = true;
+        for seq_name_qual_and_errorpos in &seq_name_qual_and_errorpos_vec {
+            println!("Thread {}: Chr {} Loc {} Processing ccs file: {}", thread_id, chromosone, process_location, seq_name_qual_and_errorpos.1);
+            // check if the graph is already available
+            let check_file = format!("{}_graph.txt", &seq_name_qual_and_errorpos.1);
+            if check_file_availability(&check_file, INTERMEDIATE_PATH) {
+                println!("Thread {}: File Available, skipping", thread_id);
+                continue;
+            }
+            // if not available do poa and make a file
+            // find the subreads of that ccs
+            let mut sub_reads = get_the_subreads_by_name_sam(&seq_name_qual_and_errorpos.1);
+            // skip if no subreads, errors and stuff
+            if sub_reads.len() == 0 {
+                continue;
+            }
+            all_skipped = false;
+            // filter out the long reads and rearrange the reads
+            sub_reads = reverse_complement_filter_and_rearrange_subreads(&sub_reads);
+            // reverse if score is too low
+            sub_reads = check_the_scores_and_change_alignment(sub_reads, &seq_name_qual_and_errorpos.0);
+            if sub_reads.len() == 0 {
+                skip_thousand = true;
+                continue 'bigloop;
+            }
+
+            sub_reads.insert(0, seq_name_qual_and_errorpos.0.clone());
+            // do poa with the read and subreads, get the poa and consensus
+            let mut sequence_number: usize = 0;
+            let mut aligner = Aligner::new(MATCH, MISMATCH, GAP_OPEN, &sub_reads[0].as_bytes().to_vec(), BAND_SIZE);
+            
+            for sub_read in &sub_reads {
+                if sequence_number != 0 {
+                    aligner.global(&sub_read.as_bytes().to_vec()).add_to_graph();
+                }
+                let node_num = aligner.graph().node_count();
+                if node_num > MAX_NODES_IN_POA {
+                    println!("NUM OF NODES {} TOO BIG, SKIPPING TOTAL SKIPPED: {} ", node_num, big_file_skip_count + 1);
+                    big_file_skip_count += 1;
+                    skip_thousand = true;
+                    continue 'bigloop;
+                }
+                sequence_number += 1;
+                println!("Thread {}: Sequence {} processed", thread_id, sequence_number);
+            }
+            let calculated_graph: &Graph<u8, i32, Directed, usize> = aligner.graph();
+            save_the_graph(calculated_graph, &seq_name_qual_and_errorpos.1);
+            index_thread += 1;
+        }
+        if all_skipped {
+            skip_thousand = true;
+        }
+    }
+}
 
 fn get_consensus_from_graph(graph: &Graph<u8, i32, Directed, usize>) -> (Vec<u8>, Vec<usize>) {
     let mut output: Vec<u8> = vec![];
@@ -666,92 +744,6 @@ pub fn pipeline_load_graph_get_topological_parallel_bases (chromosone: &str, sta
             index_thread += 1;
         }
     }
-}
-
-pub fn pipeline_save_the_graphs (chromosone: &str, start: usize, end: usize, thread_id: usize) {
-    let mut big_file_skip_count = 0;
-    let mut index_thread = 0;
-    let mut skip_thousand = false;
-    let mut skip_index = 0;
-    'bigloop: for process_location in start..end {
-        // skip thousand when same found
-        if skip_thousand {
-            skip_index += 1;
-            if skip_index > 5000 {
-                skip_thousand = false;
-                skip_index = 0;
-            }
-            else {
-                continue;
-            }
-        }
-        println!("NEW LOCATION, Thread {}: Chr {} Loc {}, tasks_done {} skipped {}", thread_id, chromosone, process_location, index_thread, big_file_skip_count);
-        // get the string and the name
-        let seq_name_qual_and_errorpos_vec = get_corrosponding_seq_name_location_quality_from_bam(process_location, &chromosone.to_string(), &'X');
-        let mut all_skipped = true;
-        for seq_name_qual_and_errorpos in &seq_name_qual_and_errorpos_vec {
-            println!("Thread {}: Chr {} Loc {} Processing ccs file: {}", thread_id, chromosone, process_location, seq_name_qual_and_errorpos.1);
-            // check if the graph is already available
-            let check_file = format!("{}_graph.txt", &seq_name_qual_and_errorpos.1);
-            if check_file_availability(&check_file, INTERMEDIATE_PATH) {
-                println!("Thread {}: File Available, skipping", thread_id);
-                continue;
-            }
-            // if not available do poa and make a file
-            // find the subreads of that ccs
-            let mut sub_reads = get_the_subreads_by_name_sam(&seq_name_qual_and_errorpos.1);
-            // skip if no subreads, errors and stuff
-            if sub_reads.len() == 0 {
-                continue;
-            }
-            all_skipped = false;
-            // filter out the long reads and rearrange the reads
-            sub_reads = reverse_complement_filter_and_rearrange_subreads(&sub_reads);
-            // reverse if score is too low
-            sub_reads = check_the_scores_and_change_alignment(sub_reads, &seq_name_qual_and_errorpos.0);
-            if sub_reads.len() == 0 {
-                skip_thousand = true;
-                continue 'bigloop;
-            }
-
-            sub_reads.insert(0, seq_name_qual_and_errorpos.0.clone());
-            // do poa with the read and subreads, get the poa and consensus
-            let mut sequence_number: usize = 0;
-            let mut aligner = Aligner::new(MATCH, MISMATCH, GAP_OPEN, &sub_reads[0].as_bytes().to_vec(), BAND_SIZE);
-            
-            for sub_read in &sub_reads {
-                if sequence_number != 0 {
-                    aligner.global(&sub_read.as_bytes().to_vec()).add_to_graph();
-                }
-                let node_num = aligner.graph().node_count();
-                if node_num > MAX_NODES_IN_POA {
-                    println!("NUM OF NODES {} TOO BIG, SKIPPING", node_num);
-                    big_file_skip_count += 1;
-                    skip_thousand = true;
-                    continue 'bigloop;
-                }
-                sequence_number += 1;
-                println!("Thread {}: Sequence {} processed", thread_id, sequence_number);
-                if sequence_number > 10 {
-                    break;
-                }
-            }
-            let calculated_graph: &Graph<u8, i32, Directed, usize> = aligner.graph();
-            save_the_graph(calculated_graph, &seq_name_qual_and_errorpos.1);
-            index_thread += 1;
-        }
-        if all_skipped {
-            skip_thousand = true;
-        }
-    }
-}
-
-pub fn test_banded_pairwise () {
-    let seqvec = get_random_sequences_from_generator(RANDOM_SEQUENCE_LENGTH, NUMBER_OF_RANDOM_SEQUENCES, SEED);
-    let sequence1: Vec<u8> = seqvec[0].bytes().collect();
-    let sequence2: Vec<u8> = seqvec[1].bytes().collect();
-    let (_, full_score) = pairwise(&sequence1, &sequence2, MATCH, MISMATCH, GAP_OPEN, GAP_EXTEND, 3);
-    println!("full score: {}", full_score);
 }
 
 pub fn test_graphs() {
@@ -1418,14 +1410,24 @@ fn check_the_scores_and_change_alignment (seqvec: Vec<String>, pacbio_consensus:
     pacbio_backward = tempseq.iter().cloned().collect::<String>().as_bytes().to_vec();
     // check the forward scores for 2 sequences
     for seq in &seqvec {
-        let (_, score) = pairwise(&pacbio_forward, &seq.as_bytes().to_vec(), 4, -4, -4, -2, 0);
+        let score_func = |a: u8, b: u8| if a == b { 1i32 } else { -1i32 };
+        let k = 8; // kmer match length
+        let w = 20; // Window size for creating the band
+        let mut aligner = BandedDP::new(-5, -1, score_func, k, w);
+        let alignment = aligner.local(&pacbio_forward, &seq.as_bytes().to_vec());
+        let score = alignment.score;
         println!("forward score: {}", score);
         forward_score += score;
         break;
     }
     // check the backward scores for 2 sequences
     for seq in &seqvec {
-        let (_, score) = pairwise(&pacbio_backward, &seq.as_bytes().to_vec(), 4, -4, -4, -2, 0);
+        let score_func = |a: u8, b: u8| if a == b { 1i32 } else { -1i32 };
+        let k = 8; // kmer match length
+        let w = 20; // Window size for creating the band
+        let mut aligner = BandedDP::new(-5, -1, score_func, k, w);
+        let alignment = aligner.local(&pacbio_backward, &seq.as_bytes().to_vec());
+        let score = alignment.score;
         println!("backward score: {}", score);
         backward_score += score;
         break;
