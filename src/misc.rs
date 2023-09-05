@@ -915,17 +915,15 @@ fn reverse_complement_filter_and_rearrange_subreads (original_subreads: &Vec<Str
     seqvec.sort_by_key(|seq| seq.len());
     //drop the sequences which are > 1.8x median size
     let median_size: f32 = seqvec[(seqvec.len() / 2) - 1].len() as f32;
-    if seqvec.len() > 5 {
-        let mut drop_index = seqvec.len();
-        for index in (seqvec.len() / 2)..(seqvec.len() - 1) {
-            if seqvec[index].len() as f32 > (median_size * 1.5) {
-                drop_index = index;
-                break;
-            }
+    let mut drop_index = seqvec.len();
+    for index in (seqvec.len() / 2)..(seqvec.len() - 1) {
+        if seqvec[index].len() as f32 > (median_size * 1.5) {
+            drop_index = index;
+            break;
         }
-        for _ in drop_index..seqvec.len() {
-            seqvec.pop();
-        }
+    }
+    for _ in drop_index..seqvec.len() {
+        seqvec.pop();
     }
     // rearrange the seq vector median first and rest according mediand size difference
     seqvec.sort_by(|a, b| ((a.len() as f32 - median_size).abs()).partial_cmp(&(b.len() as f32 - median_size).abs()).unwrap());
