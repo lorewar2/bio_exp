@@ -7,7 +7,7 @@ use crate::generator::simple::get_random_sequences_from_generator;
 use crate::alignment::poahomopolymer::Poa;
 use crate::quality::topology_cut::base_quality_score_calculation;
 use crate::quality::topology_cut::get_parallel_nodes_with_topology_cut;
-use crate::quality::topology_cut::get_consensus_quality_scores;
+use crate::quality::topology_cut::get_consensus_parallel_bases;
 use petgraph::{Graph, Directed, graph::NodeIndex};
 use petgraph::dot::Dot;
 use petgraph::visit::Topo;
@@ -43,20 +43,91 @@ const BAND_SIZE: i32 = 100;
 const MAX_NODES_IN_POA: usize = 75_000;
 const SKIP_SCORE: i32 = 6_000;
 
-pub fn new_poa_tester () {
-    let seqvec = get_random_sequences_from_generator(RANDOM_SEQUENCE_LENGTH, NUMBER_OF_RANDOM_SEQUENCES, SEED);
-    println!("Processing seq 1");
-    let mut aligner = Aligner::new(MATCH, MISMATCH, GAP_OPEN, &seqvec[0].as_bytes().to_vec(), 200);
-    let mut index = 0;
-    for seq in &seqvec {
-        if index != 0 {
-            println!("Processing seq {}", index + 1);
-            aligner.global(&seq.as_bytes().to_vec()).add_to_graph();
+pub fn pipeline_load_graph_get_topological_parallel_bases (chromosone: &str, start: usize, end: usize, thread_id: usize) {
+    let mut index_thread = 0;
+    for process_location in start..end {
+        println!("Thread {}: Chr {} Loc {}, tasks_done {}", thread_id, chromosone, process_location, index_thread);
+        // get the string and the name
+        let seq_name_qual_and_errorpos_vec = get_corrosponding_seq_name_location_quality_from_bam(process_location, &chromosone.to_string(), &'X');
+        for seq_name_qual_and_errorpos in &seq_name_qual_and_errorpos_vec {
+            println!("Thread {}: Processing ccs file: {}", thread_id, seq_name_qual_and_errorpos.1);
+            // check if the css file is already available
+            if check_file_availability(&seq_name_qual_and_errorpos.1, INTERMEDIATE_PATH) {
+                println!("Thread {}: Required CSS File Available, skipping..", thread_id);
+                continue;
+            }
+            // check if graph is available, if available load all the data
+            let check_file = format!("{}_graph.txt", &seq_name_qual_and_errorpos.1);
+            if check_file_availability(&check_file, INTERMEDIATE_PATH) {
+                println!("Thread {}: Required File not Available, Graph Available, processing..", thread_id);
+            }
+            // if both not available
+            else {
+                println!("Thread {}: Nothing is available, continuing..", thread_id);
+                continue;
+            }
+            // find the subreads of that ccs
+            let sub_reads = get_the_subreads_by_name_sam(&seq_name_qual_and_errorpos.1);
+            // skip if no subreads, errors and stuff
+            if sub_reads.len() == 0 {
+                continue;
+            }
+            let calculated_graph = load_the_graph(check_file);
+            let (calculated_consensus, calculated_topology) = get_consensus_from_graph(&calculated_graph); //just poa
+            let parallel_bases_vec = get_consensus_parallel_bases(sub_reads.len(), &calculated_consensus, &calculated_topology, &calculated_graph);
+            // match the calculated consensus to the original consensus and get the required indices
+            let calc_cons_id = get_redone_consensus_matched_positions(&seq_name_qual_and_errorpos.0, &calculated_consensus);
+            for (index, pacbio_base) in seq_name_qual_and_errorpos.0.as_bytes().to_vec().iter().enumerate() {
+                let pacbio_char = *pacbio_base as char;
+                let parallel_bases;
+                if calc_cons_id[index] != usize::MAX {
+                    parallel_bases = parallel_bases_vec[calc_cons_id[index]].clone();
+                }
+                else {
+                    parallel_bases = vec![1, 1, 1, 1];
+                }
+                let write_string = format!("{} {} {:?}", pacbio_char, (sub_reads.len() - 1), parallel_bases);
+                println!("{}", write_string);
+                //let write_file = format!("{}/{}", INTERMEDIATE_PATH, &seq_name_qual_and_errorpos.1);
+                //write_string_to_file(&write_file, &write_string);
+            } 
+            index_thread += 1;
         }
-        index += 1;
     }
-    let graph = aligner.graph();
-    println!("{}", Dot::new(&graph.map(|_, n| (*n) as char, |_, e| *e)));
+}
+
+fn get_redone_consensus_matched_positions (pacbio_consensus: &String, calculated_consensus: &Vec<u8>) -> Vec<usize> {
+    let mut consensus_matched_indices: Vec<usize> = vec![];
+    let pacbio_consensus_vec: Vec<u8> = pacbio_consensus.bytes().collect();
+    let score_func = |a: u8, b: u8| if a == b { 2i32 } else { -2i32 };
+    let k = 8; // kmer match length
+    let w = 20; // Window size for creating the band
+    let mut aligner = BandedDP::new(-2, -2, score_func, k, w);
+    let alignment = aligner.global(&calculated_consensus, &pacbio_consensus_vec);
+    let temp_score = alignment.score;
+    //let (alignment, temp_score) = pairwise(&calculated_consensus, &pacbio_consensus_vec, MATCH, MISMATCH, GAP_OPEN, GAP_EXTEND, 0);
+    let mut calc_index = 0;
+    for op in alignment.operations {
+        match op {
+            bio::alignment::AlignmentOperation::Match => {
+                consensus_matched_indices.push(calc_index);
+                calc_index += 1;
+            },
+            bio::alignment::AlignmentOperation::Subst => {
+                consensus_matched_indices.push(usize::MAX);
+                calc_index += 1;
+            },
+            bio::alignment::AlignmentOperation::Del => {
+                consensus_matched_indices.push(usize::MAX);
+            },
+            bio::alignment::AlignmentOperation::Ins => {
+                calc_index += 1;
+            },
+            _ => {},
+        }
+    }
+    println!("score {}", temp_score);
+    consensus_matched_indices
 }
 
 pub fn pipeline_save_the_graphs (chromosone: &str, start: usize, end: usize, thread_id: usize) {
@@ -194,132 +265,6 @@ fn get_consensus_from_graph(graph: &Graph<u8, i32, Directed, usize>) -> (Vec<u8>
         pos = next_in_path[pos];
     }
     (output, topopos)
-}
-
-pub fn debug_saving_loading_graphs (chromosone: &str, start: usize, end: usize, thread_id: usize) {
-    let mut index_thread = 0;
-    let mut skip_thousand = false;
-    let mut skip_index = 0;
-    'bigloop: for process_location in start..end {
-        // skip thousand when same found
-        if skip_thousand {
-            skip_index += 1;
-            if skip_index > 10000 {
-                skip_thousand = false;
-                skip_index = 0;
-            }
-            else {
-                continue;
-            }
-        }
-        println!("Thread {}: Chr {} Loc {}, tasks_done {}", thread_id, chromosone, process_location, index_thread);
-        // get the string and the name
-        let seq_name_qual_and_errorpos_vec = get_corrosponding_seq_name_location_quality_from_bam(process_location, &chromosone.to_string(), &'X');
-        let mut all_skipped = true;
-        for seq_name_qual_and_errorpos in &seq_name_qual_and_errorpos_vec {
-            println!("Thread {}: Processing ccs file: {}", thread_id, seq_name_qual_and_errorpos.1);
-            // check if the file is already available
-            if check_file_availability(&seq_name_qual_and_errorpos.1, INTERMEDIATE_PATH) {
-                println!("Thread {}: File Available, skipping", thread_id);
-                continue;
-            }
-            // if not available do poa and make a file
-            // find the subreads of that ccs
-            let mut sub_reads = get_the_subreads_by_name_sam(&seq_name_qual_and_errorpos.1);
-            // skip if no subreads, errors and stuff
-            if sub_reads.len() == 0 {
-                continue;
-            }
-            all_skipped = false;
-            // filter out the long reads and rearrange the reads
-            sub_reads = reverse_complement_filter_and_rearrange_subreads(&sub_reads);
-            // reverse if score is too low
-            sub_reads = check_the_scores_and_change_alignment(sub_reads, &seq_name_qual_and_errorpos.0);
-
-            sub_reads.insert(0, seq_name_qual_and_errorpos.0.clone());
-            // do poa with the read and subreads, get the poa and consensus
-            let mut sequence_number: usize = 0;
-            let mut aligner = Aligner::new(MATCH, MISMATCH, GAP_OPEN, &sub_reads[0].as_bytes().to_vec(), BAND_SIZE);
-            
-            for sub_read in &sub_reads {
-                if sequence_number != 0 {
-                    aligner.global(&sub_read.as_bytes().to_vec()).add_to_graph();
-                }
-                let node_num = aligner.graph().node_count();
-                println!("num of nodes = {}", node_num);
-                if node_num > MAX_NODES_IN_POA {
-                    println!("NUM OF NODES {} TOO BIG, SKIPPING", node_num);
-                    skip_thousand = true;
-                    continue 'bigloop;
-                }
-                sequence_number += 1;
-                println!("Thread {}: Sequence {} processed", thread_id, sequence_number);
-            }
-            let calculated_graph: &Graph<u8, i32, Directed, usize> = aligner.graph();
-            let (calculated_consensus, calculated_topology) = get_consensus_from_graph(&calculated_graph);
-            // save the graph 
-            save_the_graph(calculated_graph, &"test".to_string());
-            // load the graph
-            // println!("before loading the graph");
-            let reloaded_graph = load_the_graph("test_graph.txt".to_string());
-            // consensus from reloaded graph 
-            println!("before getting consensus");
-            let (reloaded_consensus, reloaded_topology) = get_consensus_from_graph(&reloaded_graph);
-            // original graph result
-            // match the calculated consensus to the original consensus and get the required indices
-            println!("before getting quality");
-            let quality_output = get_consensus_quality_scores(sub_reads.len(), &calculated_consensus, &calculated_topology, &calculated_graph);
-            // match the calculated consensus to the original consensus and get the required indices
-            let calc_cons_id = get_redone_consensus_matched_positions(&seq_name_qual_and_errorpos.0, &calculated_consensus);
-            for (index, pacbio_base) in seq_name_qual_and_errorpos.0.as_bytes().to_vec().iter().enumerate() {
-                let pacbio_char = *pacbio_base as char;
-                let quality_vec;
-                let parallel_quality;
-                if calc_cons_id[index] != usize::MAX {
-                    //calculated_char = calculated_consensus[calc_cons_id[index]];
-                    quality_vec = quality_output.1[calc_cons_id[index]].clone();
-                    parallel_quality = quality_output.0[calc_cons_id[index]] as usize;
-                }
-                else {
-                    //calculated_char = 'x' as u8;
-                    quality_vec = vec![1, 1, 1, 1];
-                    parallel_quality = 0;
-                }
-                println!("{} {} {} {} {:?}", "original", pacbio_char, parallel_quality, (sub_reads.len() - 1) ,quality_vec);
-                if index > 10 {
-                    break;
-                }
-            } 
-            // reloaded graph result
-            // match the calculated consensus to the original consensus and get the required indices
-            let quality_output = get_consensus_quality_scores(sub_reads.len(), &reloaded_consensus, &reloaded_topology, &reloaded_graph);
-            // match the calculated consensus to the original consensus and get the required indices
-            let calc_cons_id = get_redone_consensus_matched_positions(&seq_name_qual_and_errorpos.0, &reloaded_consensus);
-            for (index, pacbio_base) in seq_name_qual_and_errorpos.0.as_bytes().to_vec().iter().enumerate() {
-                let pacbio_char = *pacbio_base as char;
-                let quality_vec;
-                let parallel_quality;
-                if calc_cons_id[index] != usize::MAX {
-                    //calculated_char = calculated_consensus[calc_cons_id[index]];
-                    quality_vec = quality_output.1[calc_cons_id[index]].clone();
-                    parallel_quality = quality_output.0[calc_cons_id[index]] as usize;
-                }
-                else {
-                    //calculated_char = 'x' as u8;
-                    quality_vec = vec![1, 1, 1, 1];
-                    parallel_quality = 0;
-                }
-                println!("{} {} {} {} {:?}", "reloaded", pacbio_char, parallel_quality, (sub_reads.len() - 1) ,quality_vec);
-                if index > 10 {
-                    break;
-                }
-            }
-            index_thread += 1;
-        }
-        if all_skipped {
-            skip_thousand = true;
-        }
-    }
 }
 
 pub fn write_string_to_newfile (file_name: &String, input_string: &String) {
@@ -496,24 +441,21 @@ pub fn pipeline_process_all_ccs_file_poa (chromosone: &str, start: usize, end: u
             let (calculated_consensus, calculated_topology) = aligner.poa.consensus(); //just poa
             let calculated_graph: &Graph<u8, i32, Directed, usize> = aligner.graph();
             // match the calculated consensus to the original consensus and get the required indices
-            let quality_output = get_consensus_quality_scores(sub_reads.len(), &calculated_consensus, &calculated_topology, &calculated_graph);
+            let quality_output = get_consensus_parallel_bases(sub_reads.len(), &calculated_consensus, &calculated_topology, &calculated_graph);
             // match the calculated consensus to the original consensus and get the required indices
             let calc_cons_id = get_redone_consensus_matched_positions(&seq_name_qual_and_errorpos.0, &calculated_consensus);
             for (index, pacbio_base) in seq_name_qual_and_errorpos.0.as_bytes().to_vec().iter().enumerate() {
                 let pacbio_char = *pacbio_base as char;
                 let quality_vec;
-                let parallel_quality;
                 if calc_cons_id[index] != usize::MAX {
                     //calculated_char = calculated_consensus[calc_cons_id[index]];
-                    quality_vec = quality_output.1[calc_cons_id[index]].clone();
-                    parallel_quality = quality_output.0[calc_cons_id[index]] as usize;
+                    quality_vec = quality_output[calc_cons_id[index]].clone();
                 }
                 else {
                     //calculated_char = 'x' as u8;
                     quality_vec = vec![1, 1, 1, 1];
-                    parallel_quality = 0;
                 }
-                let write_string = format!("{} {} {} {:?}", pacbio_char, parallel_quality, (sub_reads.len() - 1) ,quality_vec);
+                let write_string = format!("{} {} {:?}", pacbio_char, (sub_reads.len() - 1) ,quality_vec);
                 println!("{}", write_string);
                 let write_file = format!("{}/{}", INTERMEDIATE_PATH, &seq_name_qual_and_errorpos.1);
                 write_string_to_file(&write_file, &write_string);
@@ -631,151 +573,6 @@ pub fn concancate_files () {
         io::copy(&mut input, &mut output).unwrap();
     }
     println!("done");
-}
-
-pub fn test_poa_topology_thing (chromosone: &str, start: usize, end: usize, thread_id: usize) {
-    let mut index_thread = 0;
-    for process_location in start..end {
-        // skip thousand when same found
-        println!("Thread {}: Chr {} Loc {}, tasks_done {}", thread_id, chromosone, process_location, index_thread);
-        // get the string and the name
-        let seq_name_qual_and_errorpos_vec = get_corrosponding_seq_name_location_quality_from_bam(process_location, &chromosone.to_string(), &'X');
-        for seq_name_qual_and_errorpos in &seq_name_qual_and_errorpos_vec {
-            /*if seq_name_qual_and_errorpos.1 == "m64125_201110_063134/75368608/ccs" {
-                println!("FOUND!!!!!!");
-            }
-            else {
-                continue;
-            }*/
-            println!("Thread {}: Processing ccs file: {}", thread_id, seq_name_qual_and_errorpos.1);
-            // find the subreads of that ccs
-            let mut sub_reads = get_the_subreads_by_name_sam(&seq_name_qual_and_errorpos.1);
-            // skip if no subreads, errors and stuff
-            if sub_reads.len() == 0 {
-                continue;
-            }
-            // filter out the long reads and rearrange the reads
-            sub_reads = reverse_complement_filter_and_rearrange_subreads(&sub_reads);
-            // reverse if score is too low
-            sub_reads = check_the_scores_and_change_alignment(sub_reads, &seq_name_qual_and_errorpos.0);
-            sub_reads.insert(0, seq_name_qual_and_errorpos.0.clone());
-            // do poa with the read and subreads, get the poa and consensus
-            let mut sequence_number: usize = 0;
-            let mut aligner = Aligner::new(MATCH, MISMATCH, GAP_OPEN, &sub_reads[0].as_bytes().to_vec(), BAND_SIZE);
-    
-            for sub_read in &sub_reads {
-                if sequence_number != 0 {
-                    aligner.global(&sub_read.as_bytes().to_vec()).add_to_graph();
-                }
-                sequence_number += 1;
-                println!("Thread {}: Sequence {} processed", thread_id, sequence_number);
-                if sequence_number > 10 {
-                    break;
-                }
-            }
-            let (calculated_consensus, calculated_topology) = aligner.poa.consensus(); //just poa
-            let calculated_graph: &Graph<u8, i32, Directed, usize> = aligner.graph();
-            // match the calculated consensus to the original consensus and get the required indices
-            let quality_output = get_consensus_quality_scores(sub_reads.len(), &calculated_consensus, &calculated_topology, &calculated_graph);
-            // match the calculated consensus to the original consensus and get the required indices
-            let calc_cons_id = get_redone_consensus_matched_positions(&seq_name_qual_and_errorpos.0, &calculated_consensus);
-            for (index, pacbio_base) in seq_name_qual_and_errorpos.0.as_bytes().to_vec().iter().enumerate() {
-                let pacbio_char = *pacbio_base as char;
-                let quality_vec;
-                let parallel_quality;
-                if calc_cons_id[index] != usize::MAX {
-                    //calculated_char = calculated_consensus[calc_cons_id[index]];
-                    quality_vec = quality_output.1[calc_cons_id[index]].clone();
-                    parallel_quality = quality_output.0[calc_cons_id[index]] as usize;
-                }
-                else {
-                    //calculated_char = 'x' as u8;
-                    quality_vec = vec![1, 1, 1, 1];
-                    parallel_quality = 0;
-                }
-                let write_string = format!("{} {} {} {:?}", pacbio_char, parallel_quality, (sub_reads.len() - 1) ,quality_vec);
-                println!("{}", write_string);
-                //let write_file = format!("{}/{}", INTERMEDIATE_PATH, &seq_name_qual_and_errorpos.1);
-                //write_string_to_file(&write_file, &write_string);
-            } 
-            index_thread += 1;
-        }
-    }
-}
-
-pub fn pipeline_load_graph_get_topological_parallel_bases (chromosone: &str, start: usize, end: usize, thread_id: usize) {
-    let mut index_thread = 0;
-    for process_location in start..end {
-        println!("Thread {}: Chr {} Loc {}, tasks_done {}", thread_id, chromosone, process_location, index_thread);
-        // get the string and the name
-        let seq_name_qual_and_errorpos_vec = get_corrosponding_seq_name_location_quality_from_bam(process_location, &chromosone.to_string(), &'X');
-        for seq_name_qual_and_errorpos in &seq_name_qual_and_errorpos_vec {
-            println!("Thread {}: Processing ccs file: {}", thread_id, seq_name_qual_and_errorpos.1);
-            // check if the css file is already available
-            if check_file_availability(&seq_name_qual_and_errorpos.1, INTERMEDIATE_PATH) {
-                println!("Thread {}: Required CSS File Available, skipping..", thread_id);
-                continue;
-            }
-            // check if graph is available, if available load all the data
-            let check_file = format!("{}_graph.txt", &seq_name_qual_and_errorpos.1);
-            if check_file_availability(&check_file, INTERMEDIATE_PATH) {
-                println!("Thread {}: Required File not Available, Graph Available, processing..", thread_id);
-            }
-            // if both not available
-            else {
-                println!("Thread {}: Nothing is available, continuing..", thread_id);
-                continue;
-            }
-            // find the subreads of that ccs
-            let sub_reads = get_the_subreads_by_name_sam(&seq_name_qual_and_errorpos.1);
-            // skip if no subreads, errors and stuff
-            if sub_reads.len() == 0 {
-                continue;
-            }
-            let calculated_graph = load_the_graph(check_file);
-            let (calculated_consensus, calculated_topology) = get_consensus_from_graph(&calculated_graph); //just poa
-            let quality_output = get_consensus_quality_scores(sub_reads.len(), &calculated_consensus, &calculated_topology, &calculated_graph);
-            // match the calculated consensus to the original consensus and get the required indices
-            let calc_cons_id = get_redone_consensus_matched_positions(&seq_name_qual_and_errorpos.0, &calculated_consensus);
-            for (index, pacbio_base) in seq_name_qual_and_errorpos.0.as_bytes().to_vec().iter().enumerate() {
-                let pacbio_char = *pacbio_base as char;
-                let quality_vec;
-                let parallel_quality;
-                if calc_cons_id[index] != usize::MAX {
-                    //calculated_char = calculated_consensus[calc_cons_id[index]];
-                    quality_vec = quality_output.1[calc_cons_id[index]].clone();
-                    parallel_quality = quality_output.0[calc_cons_id[index]] as usize;
-                }
-                else {
-                    //calculated_char = 'x' as u8;
-                    quality_vec = vec![1, 1, 1, 1];
-                    parallel_quality = 0;
-                }
-                let write_string = format!("{} {} {} {:?}", pacbio_char, parallel_quality, (sub_reads.len() - 1) ,quality_vec);
-                println!("{}", write_string);
-                //let write_file = format!("{}/{}", INTERMEDIATE_PATH, &seq_name_qual_and_errorpos.1);
-                //write_string_to_file(&write_file, &write_string);
-            } 
-            index_thread += 1;
-        }
-    }
-}
-
-pub fn test_graphs() {
-    let seqvec = get_random_sequences_from_generator(RANDOM_SEQUENCE_LENGTH, NUMBER_OF_RANDOM_SEQUENCES, SEED);
-    println!("Processing seq 1");
-    let mut aligner = Aligner::new(MATCH, MISMATCH, GAP_OPEN, &seqvec[0].as_bytes().to_vec(), 200);
-    let mut index = 0;
-    for seq in &seqvec {
-        if index != 0 {
-            println!("Processing seq {}", index + 1);
-            aligner.global(&seq.as_bytes().to_vec()).add_to_graph();
-        }
-        index += 1;
-    }
-    let test_graph = aligner.graph();
-    save_the_graph(test_graph, &"test.txt".to_string());
-    load_the_graph("test.txt".to_string());
 }
 
 pub fn get_quality_score_count_confident_error () {
@@ -1003,34 +800,6 @@ fn check_file_availability (file_name: &str, search_path: &str) -> bool {
         Err(_) => {false},
     };
     file_available
-}
-
-fn get_redone_consensus_matched_positions (pacbio_consensus: &String, calculated_consensus: &Vec<u8>) -> Vec<usize> {
-    let mut consensus_matched_indices: Vec<usize> = vec![];
-    let pacbio_consensus_vec: Vec<u8> = pacbio_consensus.bytes().collect();
-    let (alignment, temp_score) = pairwise(&calculated_consensus, &pacbio_consensus_vec, MATCH, MISMATCH, GAP_OPEN, GAP_EXTEND, 0);
-    let mut calc_index = 0;
-    for op in alignment {
-        match op as char {
-            'm' => {
-                consensus_matched_indices.push(calc_index);
-                calc_index += 1;
-            },
-            's' => {
-                consensus_matched_indices.push(usize::MAX);
-                calc_index += 1;
-            },
-            'd' => {
-                consensus_matched_indices.push(usize::MAX);
-            },
-            'i' => {
-                calc_index += 1;
-            },
-            _ => {},
-        }
-    }
-    println!("score {}", temp_score);
-    consensus_matched_indices
 }
 
 pub fn pipeline_redo_poa_get_topological_quality_score (chromosone: &str, start: usize, end: usize, thread_id: usize) {

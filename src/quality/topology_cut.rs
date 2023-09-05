@@ -10,8 +10,7 @@ const PRINT_ALL: bool = false;
 const USEPACBIODATA: bool = true;
 const NUM_OF_ITER_FOR_PARALLEL: usize = 15;
 
-pub fn get_consensus_quality_scores(seq_num: usize, consensus: &Vec<u8>, topology: &Vec<usize>, graph: &Graph<u8, i32, Directed, usize>) -> (Vec<f64>, Vec<Vec<usize>>) {
-    let mut quality_scores: Vec<f64> = vec![];
+pub fn get_consensus_parallel_bases (seq_num: usize, consensus: &Vec<u8>, topology: &Vec<usize>, graph: &Graph<u8, i32, Directed, usize>) -> Vec<Vec<usize>> {
     let mut base_count_vec: Vec<Vec<usize>> = vec![];
     //run all the consensus through get indices
     for i in 0..consensus.len() {
@@ -30,11 +29,10 @@ pub fn get_consensus_quality_scores(seq_num: usize, consensus: &Vec<u8>, topolog
             target_node_child = Some(topology[i + 1]);
         }
         let (parallel_nodes, parallel_num_incoming_seq, _) = get_parallel_nodes_with_topology_cut (skip_nodes, seq_num,  topology[i], target_node_parent, target_node_child, graph);
-        let (temp_quality_score, _, temp_base_counts, _) = base_quality_score_calculation (seq_num, parallel_nodes, parallel_num_incoming_seq, consensus[i], graph);
-        quality_scores.push(temp_quality_score);
-        base_count_vec.push(temp_base_counts);
+        let base_counts = get_base_counts (parallel_nodes, parallel_num_incoming_seq, graph);
+        base_count_vec.push(base_counts);
     }
-    (quality_scores, base_count_vec)
+    base_count_vec
 }
 
 pub fn get_parallel_nodes_with_topology_cut (skip_nodes: Vec<usize>, total_seq: usize, target_node: usize, target_node_parent: Option<usize>, target_node_child: Option<usize>, graph: &Graph<u8, i32, Directed, usize>) -> (Vec<usize>, Vec<usize>, Vec<String>) {
@@ -301,6 +299,38 @@ fn get_xiterations_direction_nodes (direction: Direction ,iteration: usize, mut 
         direction_node_list = get_xiterations_direction_nodes (direction, iteration - 1, direction_node_list, direction_neighbour.index(), graph);
     }
     direction_node_list
+}
+
+fn get_base_counts(indices_of_parallel_nodes: Vec<usize>, seq_through_parallel_nodes: Vec<usize>, graph: &Graph<u8, i32, Directed, usize>) -> Vec<usize> {
+    let base_counts: Vec<usize>;
+    let mut base_a_count = 0;
+    let mut base_c_count = 0;
+    let mut base_g_count = 0;
+    let mut base_t_count = 0;
+    //find out how many sequences run through each base
+    //match the indices to the base and ++
+    for index in 0..indices_of_parallel_nodes.len() {
+        match graph.raw_nodes()[indices_of_parallel_nodes[index]].weight {
+            65 => {
+                base_a_count += seq_through_parallel_nodes[index];
+            },
+            67 => {
+                base_c_count += seq_through_parallel_nodes[index];
+            },
+            71 => {
+                base_g_count += seq_through_parallel_nodes[index];
+            },
+            84 => {
+                base_t_count += seq_through_parallel_nodes[index];
+            },
+            _ => {
+                //nothing
+                },
+        }
+    }
+    // save the base counts for debug
+    base_counts = [base_a_count, base_c_count, base_g_count, base_t_count].to_vec();
+    base_counts
 }
 
 pub fn base_quality_score_calculation (mut total_seq: usize, indices_of_parallel_nodes: Vec<usize>, seq_through_parallel_nodes: Vec<usize>, base: u8, graph: &Graph<u8, i32, Directed, usize>) -> (f64, bool, Vec<usize>, Vec<String>) {
