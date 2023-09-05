@@ -45,10 +45,24 @@ const SKIP_SCORE: i32 = 6_000;
 
 pub fn pipeline_load_graph_get_topological_parallel_bases (chromosone: &str, start: usize, end: usize, thread_id: usize) {
     let mut index_thread = 0;
+    let mut skip_thousand = false;
+    let mut skip_index = 0;
     for process_location in start..end {
+        // skip thousand when same found
+        if skip_thousand {
+            skip_index += 1;
+            if skip_index > 5000 {
+                skip_thousand = false;
+                skip_index = 0;
+            }
+            else {
+                continue;
+            }
+        }
         println!("Thread {}: Chr {} Loc {}, tasks_done {}", thread_id, chromosone, process_location, index_thread);
         // get the string and the name
         let seq_name_qual_and_errorpos_vec = get_corrosponding_seq_name_location_quality_from_bam(process_location, &chromosone.to_string(), &'X');
+        let mut all_skipped = true;
         for seq_name_qual_and_errorpos in &seq_name_qual_and_errorpos_vec {
             println!("Thread {}: Processing ccs file: {}", thread_id, seq_name_qual_and_errorpos.1);
             // check if the css file is already available
@@ -66,6 +80,7 @@ pub fn pipeline_load_graph_get_topological_parallel_bases (chromosone: &str, sta
                 println!("Thread {}: Nothing is available, continuing..", thread_id);
                 continue;
             }
+            all_skipped = false;
             // find the subreads of that ccs
             let sub_reads = get_the_subreads_by_name_sam(&seq_name_qual_and_errorpos.1);
             // skip if no subreads, errors and stuff
@@ -87,11 +102,14 @@ pub fn pipeline_load_graph_get_topological_parallel_bases (chromosone: &str, sta
                     parallel_bases = vec![1, 1, 1, 1];
                 }
                 let write_string = format!("{} {} {:?}", pacbio_char, (sub_reads.len() - 1), parallel_bases);
-                println!("{}", write_string);
-                //let write_file = format!("{}/{}", INTERMEDIATE_PATH, &seq_name_qual_and_errorpos.1);
-                //write_string_to_file(&write_file, &write_string);
+                //println!("{}", write_string);
+                let write_file = format!("{}/{}", INTERMEDIATE_PATH, &seq_name_qual_and_errorpos.1);
+                write_string_to_file(&write_file, &write_string);
             } 
             index_thread += 1;
+        }
+        if all_skipped {
+            skip_thousand = true;
         }
     }
 }
