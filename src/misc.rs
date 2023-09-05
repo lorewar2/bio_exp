@@ -3,7 +3,6 @@ use bio::alignment::pairwise::banded::Aligner as BandedDP;
 
 use crate::alignment::pairwise::pairwise;
 use crate::alignment::poabandedsmarter::Aligner;
-use crate::alignment::poamemory::Aligner as AlignerMemory;
 use crate::generator::simple::get_random_sequences_from_generator;
 use crate::alignment::poahomopolymer::Poa;
 use crate::quality::topology_cut::base_quality_score_calculation;
@@ -27,13 +26,13 @@ use std::fs::create_dir_all;
 use std::{io};
 use std::fs::read_to_string;
 
-const SEED: u64 = 2;
+const SEED: u64 = 3;
 const GAP_OPEN: i32 = -2;
 const GAP_EXTEND: i32 = 0;
 const MATCH: i32 = 2;
 const MISMATCH: i32 = -2;
-const RANDOM_SEQUENCE_LENGTH: usize = 200;
-const NUMBER_OF_RANDOM_SEQUENCES: usize = 10;
+const RANDOM_SEQUENCE_LENGTH: usize = 6;
+const NUMBER_OF_RANDOM_SEQUENCES: usize = 20;
 const THREE_BASE_CONTEXT_READ_LENGTH: usize = 2;
 const NUM_OF_ITER_FOR_ZOOMED_GRAPHS: usize = 4;
 const DATA_PATH: &str = "/data1/hifi_consensus/try2/";
@@ -42,7 +41,23 @@ const INTERMEDIATE_PATH: &str = "/data1/hifi_consensus/quality_data/intermediate
 const CONFIDENT_PATH: &str = "/data1/GiaB_benchmark/HG001_GRCh38_1_22_v4.2.1_benchmark.bed";
 const BAND_SIZE: i32 = 100;
 const MAX_NODES_IN_POA: usize = 75_000;
-const SKIP_SCORE: i32 = 40_000;
+const SKIP_SCORE: i32 = 6_000;
+
+pub fn new_poa_tester () {
+    let seqvec = get_random_sequences_from_generator(RANDOM_SEQUENCE_LENGTH, NUMBER_OF_RANDOM_SEQUENCES, SEED);
+    println!("Processing seq 1");
+    let mut aligner = Aligner::new(MATCH, MISMATCH, GAP_OPEN, &seqvec[0].as_bytes().to_vec(), 200);
+    let mut index = 0;
+    for seq in &seqvec {
+        if index != 0 {
+            println!("Processing seq {}", index + 1);
+            aligner.global(&seq.as_bytes().to_vec()).add_to_graph();
+        }
+        index += 1;
+    }
+    let graph = aligner.graph();
+    println!("{}", Dot::new(&graph.map(|_, n| (*n) as char, |_, e| *e)));
+}
 
 pub fn pipeline_save_the_graphs (chromosone: &str, start: usize, end: usize, thread_id: usize) {
     let mut big_file_skip_count = 0;
@@ -138,7 +153,7 @@ fn get_consensus_from_graph(graph: &Graph<u8, i32, Directed, usize>) -> (Vec<u8>
     let mut weight_scores: Vec<i32> = vec![0; max_index + 1];
     let mut scores: Vec<f64> = vec![0.0; max_index + 1];
     let mut next_in_path: Vec<usize> = vec![0; max_index + 1];
-    //iterate thorugh the nodes in revere
+    //iterate thorugh the nodes in reverse
     for node in topo_indices{
         let mut best_weight_score_edge: (i32, f64, usize) = (-1 , -1.0, 123456789);
         let mut neighbour_nodes = graph.neighbors_directed(node, Outgoing);
@@ -179,20 +194,6 @@ fn get_consensus_from_graph(graph: &Graph<u8, i32, Directed, usize>) -> (Vec<u8>
         pos = next_in_path[pos];
     }
     (output, topopos)
-}
-
-pub fn new_poa_tester () {
-    let seqvec = get_random_sequences_from_generator(RANDOM_SEQUENCE_LENGTH, NUMBER_OF_RANDOM_SEQUENCES, SEED);
-    println!("Processing seq 1");
-    let mut aligner = AlignerMemory::new(MATCH, MISMATCH, GAP_OPEN, &seqvec[0].as_bytes().to_vec(), 200);
-    let mut index = 0;
-    for seq in &seqvec {
-        if index != 0 {
-            println!("Processing seq {}", index + 1);
-            aligner.global(&seq.as_bytes().to_vec()).add_to_graph();
-        }
-        index += 1;
-    }
 }
 
 pub fn debug_saving_loading_graphs (chromosone: &str, start: usize, end: usize, thread_id: usize) {
@@ -528,18 +529,32 @@ pub fn pipeline_process_all_ccs_file_poa (chromosone: &str, start: usize, end: u
 pub fn get_data_for_ml (chromosone: &str, start: usize, end: usize, thread_id: usize) {
     let mut position_base = start;
     let mut error_index = 0;
-    let (error_locations, _) = get_error_bases_from_himut_vcf (); //chromosone, location, ref allele, alt allele
+    let mut skip_index = 0;
+    let (error_locations, skip_locations) = get_error_bases_from_himut_vcf (); //chromosone, location, ref allele, alt allele
     //println!("{:?}", error_locations);
-    // get the error index of required chromosone
+    // get the error index of required chromosone and position
     loop {
         if error_locations[error_index].0.eq(&chromosone) && error_locations[error_index].1 > start {
             break;
         }
         error_index += 1;
     }
+    // get the skip index of required chromosone and position
+    loop {
+        if skip_locations[skip_index].0.eq(&chromosone) && skip_locations[skip_index].1 > start {
+            break;
+        }
+        skip_index += 1;
+    }
     'bigloop: loop {
         if position_base % 1000 == 0 {
             println!("Thread ID: {} Position {}", thread_id, position_base);
+        }
+        // if it is a skip location continue 
+        if skip_locations[skip_index].0.eq(&chromosone) && skip_locations[skip_index].1 == position_base {
+            skip_index += 1;
+            position_base += 1;
+            continue;
         }
         let seq_name_qual_and_errorpos_vec = get_corrosponding_seq_name_location_quality_from_bam(position_base, &chromosone.to_string(), &'X');
         println!("thread {} length = {} position = {} ", thread_id, seq_name_qual_and_errorpos_vec.len(), position_base);
