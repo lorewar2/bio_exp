@@ -64,20 +64,20 @@ pub fn pipeline_load_graph_get_topological_parallel_bases (chromosone: &str, sta
         let seq_name_qual_and_errorpos_vec = get_corrosponding_seq_name_location_quality_from_bam(process_location, &chromosone.to_string(), &'X');
         let mut all_skipped = true;
         for seq_name_qual_and_errorpos in &seq_name_qual_and_errorpos_vec {
-            println!("Thread {}: Processing ccs file: {}", thread_id, seq_name_qual_and_errorpos.1);
+            //println!("Thread {}: Processing ccs file: {}", thread_id, seq_name_qual_and_errorpos.1);
             // check if the css file is already available
             if check_file_availability(&seq_name_qual_and_errorpos.1, INTERMEDIATE_PATH) {
-                println!("Thread {}: Required CSS File Available, skipping..", thread_id);
+                //println!("Thread {}: Required CSS File Available, skipping..", thread_id);
                 continue;
             }
             // check if graph is available, if available load all the data
             let check_file = format!("{}_graph.txt", &seq_name_qual_and_errorpos.1);
             if check_file_availability(&check_file, INTERMEDIATE_PATH) {
-                println!("Thread {}: Required File not Available, Graph Available, processing..", thread_id);
+                //println!("Thread {}: Required File not Available, Graph Available, processing..", thread_id);
             }
             // if both not available
             else {
-                println!("Thread {}: Nothing is available, continuing..", thread_id);
+                //println!("Thread {}: Nothing is available, continuing..", thread_id);
                 continue;
             }
             all_skipped = false;
@@ -214,7 +214,8 @@ pub fn pipeline_save_the_graphs (chromosone: &str, start: usize, end: usize, thr
                 println!("Thread {}: Sequence {} processed", thread_id, sequence_number);
             }
             let calculated_graph: &Graph<u8, i32, Directed, usize> = aligner.graph();
-            save_the_graph(calculated_graph, &seq_name_qual_and_errorpos.1);
+            let consensus = aligner.consensus();
+            //save_the_graph(calculated_graph, &seq_name_qual_and_errorpos.1);
             index_thread += 1;
         }
         if all_skipped {

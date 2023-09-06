@@ -252,6 +252,48 @@ impl Aligner {
     }
     pub fn graph(&self) -> &POAGraph {
         &self.poa.graph
+    } 
+    /// Return the consensus sequence generated from the POA graph.
+    pub fn consensus(&self) -> Vec<u8> {
+        let mut consensus: Vec<u8> = vec![];
+        let max_index = self.poa.graph.node_count();
+        let mut weight_score_next_vec: Vec<(i32, i32, usize)> = vec![(0, 0, 0); max_index + 1];
+        let mut topo = Topo::new(&self.poa.graph);
+        // go through the nodes topologically
+        while let Some(node) = topo.next(&self.poa.graph) {
+            let mut best_weight_score_next: (i32, i32, usize) = (0, 0, usize::MAX);
+            let mut neighbour_nodes = self.poa.graph.neighbors_directed(node, Incoming);
+            // go through the incoming neighbour nodes
+            while let Some(neighbour_node) = neighbour_nodes.next() {
+                let mut weight = 0;
+                let neighbour_index = neighbour_node.index();
+                let neighbour_score = weight_score_next_vec[neighbour_index].1;
+                let mut edges = self.poa.graph.edges_connecting(neighbour_node, node);
+                while let Some(edge) = edges.next() {
+                    weight += edge.weight().clone();
+                }
+                let current_node_score = weight + neighbour_score;
+                // save the neighbour node with the highest weight and score as best
+                if (weight, current_node_score, neighbour_index) > best_weight_score_next {
+                    best_weight_score_next = (weight, current_node_score, neighbour_index);
+                }
+            }
+            weight_score_next_vec[node.index()] = best_weight_score_next;
+        }
+        // get the index of the max scored node (end of consensus)
+        let mut pos = weight_score_next_vec
+            .iter()
+            .enumerate()
+            .max_by_key(|(_, &value)| value.1)
+            .map(|(idx, _)| idx)
+            .unwrap();
+        // go through weight_score_next_vec appending to the consensus
+        while pos != usize::MAX {
+            consensus.push(self.poa.graph.raw_nodes()[pos].weight);
+            pos = weight_score_next_vec[pos].2;
+        }
+        consensus.reverse();
+        consensus
     }
 }
 
