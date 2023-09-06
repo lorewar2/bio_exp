@@ -20,7 +20,6 @@ use std::io::BufReader;
 use std::fs::File;
 use std::fs::remove_file;
 use std::io::SeekFrom;
-use std::time::Instant;
 use std::fs::read_dir;
 use std::fs::create_dir_all;
 use std::{io};
@@ -42,6 +41,85 @@ const CONFIDENT_PATH: &str = "/data1/GiaB_benchmark/HG001_GRCh38_1_22_v4.2.1_ben
 const BAND_SIZE: i32 = 100;
 const MAX_NODES_IN_POA: usize = 75_000;
 const SKIP_SCORE: i32 = 6_000;
+
+pub fn list_corrected_errors_comparing_with_ref (chromosone: &str, start: usize, end: usize, thread_id: usize) {
+    // get the error locations
+    let (error_locations, _) = get_error_bases_from_himut_vcf (); //chromosone, location, ref allele, alt allele
+    // go through the error locations
+    for error_location in error_locations {
+        if (error_location.0 == chromosone) && (error_location.1 < start) {
+            continue;
+        }
+        if (error_location.0 != chromosone) && (error_location.1 > end) {
+            break;
+        }
+        println!("Thread ID: {}, Error position {}:{} ref allele: {} alt allele: {}", thread_id, error_location.0, error_location.1, error_location.2, error_location.3);
+        // find the ccs which are in that error
+        let seq_name_qual_and_errorpos_vec = get_corrosponding_seq_name_location_quality_from_bam(error_location.1, &error_location.0, &error_location.3);
+        for seq_name_qual_and_errorpos in seq_name_qual_and_errorpos_vec {
+            println!("Processing ccs file: {}", seq_name_qual_and_errorpos.1);
+            // find the subreads of that ccs
+            let mut sub_reads = get_the_subreads_by_name_sam(&seq_name_qual_and_errorpos.1);
+            // skip if no subreads, errors and stuff
+            if sub_reads.len() == 0 {
+                continue;
+            }
+            // filter out the long reads and rearrange the reads
+            sub_reads = reverse_complement_filter_and_rearrange_subreads(&sub_reads);
+            // reverse the sub reads if score is low, very low probability
+            sub_reads = check_the_scores_and_change_alignment(sub_reads, &seq_name_qual_and_errorpos.0);
+            
+            sub_reads.insert(0, seq_name_qual_and_errorpos.0.clone());
+            // do poa with the read and subreads, get the poa and consensus
+            let mut sequence_number: usize = 0;
+            let mut aligner = Aligner::new(MATCH, MISMATCH, GAP_OPEN, &sub_reads[0].as_bytes().to_vec(), BAND_SIZE);
+            
+            for sub_read in &sub_reads {
+                if sequence_number != 0 {
+                    aligner.global(&sub_read.as_bytes().to_vec()).add_to_graph();
+                }
+                sequence_number += 1;
+                println!("Sequence {} processed", sequence_number);
+            }
+            let (calculated_consensus, calculated_topology) = aligner.poa.consensus();
+            let calculated_graph: &Graph<u8, i32, Directed, usize> = aligner.graph();
+            // check if fixed by poa
+            let pacbio_error_pos_node_index = seq_name_qual_and_errorpos.3;
+            let position = get_redone_consensus_error_position(&seq_name_qual_and_errorpos.0, &calculated_consensus, seq_name_qual_and_errorpos.3);
+            
+            // calculate the quality score of the location
+            let skip_nodes: Vec<usize> = calculated_topology[0 .. position + 1].to_vec();
+            let target_node_parent;
+            let target_node_child;
+            if position == 0 {
+                target_node_parent = None;
+            }
+            else {
+                target_node_parent = Some(calculated_topology[position - 1]);
+            }
+            if (position + 1) >= calculated_consensus.len() {
+                target_node_child = None;
+            }
+            else {
+                target_node_child = Some(calculated_topology[position + 1]);
+            }
+            let (parallel_nodes, parallel_num_incoming_seq, _) = get_parallel_nodes_with_topology_cut (skip_nodes, sequence_number,  calculated_topology[position], target_node_parent, target_node_child, calculated_graph);
+            let (_, _, parallel_bases, _) = base_quality_score_calculation (sequence_number, parallel_nodes, parallel_num_incoming_seq, calculated_consensus[position], calculated_graph);
+            // do everything here 
+            println!("Error position {}:{} ref allele: {} alt allele: {}", error_location.0, error_location.1, error_location.2, error_location.3);
+            println!("BY POA: [{} -> {}]", seq_name_qual_and_errorpos.0.as_bytes()[pacbio_error_pos_node_index] as char, calculated_consensus[position] as char);
+            let pos = parallel_bases.iter().enumerate().max_by_key(|(_, &value)| value).map(|(idx, _)| idx).unwrap();
+            let base = match pos {
+                0 => {"A"},
+                1 => {"C"},
+                2 => {"G"},
+                3 => {"T"},
+                _ => {"A"},
+            };
+            println!("BY TOPO: [{} -> {}]", seq_name_qual_and_errorpos.0.as_bytes()[pacbio_error_pos_node_index] as char, base);
+        }
+    }
+}
 
 pub fn pipeline_load_graph_get_topological_parallel_bases (chromosone: &str, start: usize, end: usize, thread_id: usize) {
     let mut index_thread = 0;
@@ -214,8 +292,7 @@ pub fn pipeline_save_the_graphs (chromosone: &str, start: usize, end: usize, thr
                 println!("Thread {}: Sequence {} processed", thread_id, sequence_number);
             }
             let calculated_graph: &Graph<u8, i32, Directed, usize> = aligner.graph();
-            let consensus = aligner.consensus();
-            //save_the_graph(calculated_graph, &seq_name_qual_and_errorpos.1);
+            save_the_graph(calculated_graph, &seq_name_qual_and_errorpos.1);
             index_thread += 1;
         }
         if all_skipped {
@@ -819,89 +896,6 @@ fn check_file_availability (file_name: &str, search_path: &str) -> bool {
         Err(_) => {false},
     };
     file_available
-}
-
-pub fn pipeline_redo_poa_get_topological_quality_score (chromosone: &str, start: usize, end: usize, thread_id: usize) {
-    // get the error locations
-    let (error_locations, _) = get_error_bases_from_himut_vcf (); //chromosone, location, ref allele, alt allele
-    // go through the error locations
-    let mut index = 0;
-    let time_instant = Instant::now();
-    for error_location in error_locations {
-        if (error_location.0 == chromosone) && (error_location.1 < start) {
-            continue;
-        }
-        if (error_location.0 != chromosone) && (error_location.1 > end) {
-            break;
-        }
-        println!("Thread ID: {}, Error position {}:{} ref allele: {} alt allele: {}", thread_id, error_location.0, error_location.1, error_location.2, error_location.3);
-        // find the ccs which are in that error
-        let seq_name_qual_and_errorpos_vec = get_corrosponding_seq_name_location_quality_from_bam(error_location.1, &error_location.0, &error_location.3);
-        for seq_name_qual_and_errorpos in seq_name_qual_and_errorpos_vec {
-            println!("Processing ccs file: {}", seq_name_qual_and_errorpos.1);
-            // find the subreads of that ccs
-            let mut sub_reads = get_the_subreads_by_name_sam(&seq_name_qual_and_errorpos.1);
-            // skip if no subreads, errors and stuff
-            if sub_reads.len() == 0 {
-                continue;
-            }
-            // filter out the long reads and rearrange the reads
-            sub_reads = reverse_complement_filter_and_rearrange_subreads(&sub_reads);
-            // reverse the sub reads if score is low, very low probability
-            //sub_reads = check_the_scores_and_change_alignment(sub_reads, &seq_name_qual_and_errorpos.0);
-            
-            sub_reads.insert(0, seq_name_qual_and_errorpos.0.clone());
-            println!("CURRENT BAND SIZE = {}", BAND_SIZE);
-            // do poa with the read and subreads, get the poa and consensus
-            let mut sequence_number: usize = 0;
-            let mut aligner = Aligner::new(MATCH, MISMATCH, GAP_OPEN, &sub_reads[0].as_bytes().to_vec(), BAND_SIZE);
-            
-            for sub_read in &sub_reads {
-                if sequence_number != 0 {
-                    aligner.global(&sub_read.as_bytes().to_vec()).add_to_graph();
-                }
-                sequence_number += 1;
-                println!("Sequence {} processed", sequence_number);
-            }
-            let (calculated_consensus, calculated_topology) = aligner.poa.consensus(); //just poa
-            let calculated_graph: &Graph<u8, i32, Directed, usize> = aligner.graph();
-            // check if fixed (check the consensus location which is matched to the read error location)
-            let pacbio_error_pos_node_index = seq_name_qual_and_errorpos.3;
-            println!("BASE {} ", seq_name_qual_and_errorpos.0.as_bytes()[pacbio_error_pos_node_index] as char);
-            let position = get_redone_consensus_error_position(&seq_name_qual_and_errorpos.0, &calculated_consensus, seq_name_qual_and_errorpos.3);
-            //match calculated_topology.iter().position(|r| *r == seq_name_qual_and_errorpos.3) {
-            //    Some(x) => {position = x;},
-            //    None => {position = get_redone_consensus_error_position(&seq_name_qual_and_errorpos.0, &calculated_consensus, seq_name_qual_and_errorpos.3);},
-            //}
-            println!("pacbio position {} calculated position {},", seq_name_qual_and_errorpos.3, position);
-            // calculate the quality score of the location
-            let skip_nodes: Vec<usize> = calculated_topology[0 .. position + 1].to_vec();
-            let target_node_parent;
-            let target_node_child;
-            if position == 0 {
-                target_node_parent = None;
-            }
-            else {
-                target_node_parent = Some(calculated_topology[position - 1]);
-            }
-            if (position + 1) >= calculated_consensus.len() {
-                target_node_child = None;
-            }
-            else {
-                target_node_child = Some(calculated_topology[position + 1]);
-            }
-            let (parallel_nodes, parallel_num_incoming_seq, _) = get_parallel_nodes_with_topology_cut (skip_nodes, sequence_number,  calculated_topology[position], target_node_parent, target_node_child, calculated_graph);
-            let (calculated_quality_score, _, parallel_bases, _) = base_quality_score_calculation (sequence_number, parallel_nodes, parallel_num_incoming_seq, calculated_consensus[position], calculated_graph);
-            let write_string = format!("Error position {}:{} ref allele: {} alt allele: {}\nPacbio base: \t{} quality: {}\nCalculated base: \t{} quality: {}\nParallel Bases: ACGT:{:?}\n\n", error_location.0, error_location.1, error_location.2, error_location.3, error_location.3, seq_name_qual_and_errorpos.2, calculated_consensus[position] as char, calculated_quality_score, parallel_bases);
-            let write_file = format!("result/quality_{}.txt", thread_id);
-            write_string_to_file(&write_file, &write_string);
-            let write_string = format!("{}\n{}\n\n", write_string, get_zoomed_graph_section(calculated_graph, &calculated_topology[position]));
-            let write_file = format!("result/graph_{}.txt", thread_id);
-            write_string_to_file(&write_file, &write_string);
-            index += 1;
-            println!("Thread {} task done, total time:{:?} total tasks:{}", thread_id, time_instant.elapsed() ,index);
-        }
-    }
 }
 
 fn reverse_complement_filter_and_rearrange_subreads (original_subreads: &Vec<String>) -> Vec<String> {
