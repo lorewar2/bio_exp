@@ -192,6 +192,50 @@ pub fn pipeline_load_graph_get_topological_parallel_bases (chromosone: &str, sta
     }
 }
 
+fn get_redone_consensus_error_position (pacbio_consensus: &String, calculated_consensus: &Vec<u8>, pacbio_error_position: usize) -> usize {
+    let mut consensus_match_invalid_indices: Vec<usize> = vec![];
+    let mut aligned_pacbio_scores_vec: Vec<usize> = vec![];
+    let mut aligned_pacbio_bases:Vec<u8> = vec![];
+    let pacbio_consensus_vec: Vec<u8> = pacbio_consensus.bytes().collect();
+    let score_func = |a: u8, b: u8| if a == b { 2i32 } else { -2i32 };
+    let k = 8; // kmer match length
+    let w = 20; // Window size for creating the band
+    let mut aligner = BandedDP::new(-2, -2, score_func, k, w);
+    let alignment = aligner.global(&calculated_consensus, &pacbio_consensus_vec);
+    let mut pacbio_index = 0;
+    let mut calc_index = 0;
+    let mut calc_error_position: usize = 0;
+    for op in alignment.operations {
+        match op {
+            bio::alignment::AlignmentOperation::Match => {
+                pacbio_index += 1;
+                calc_index += 1;
+            },
+            bio::alignment::AlignmentOperation::Subst => {
+                aligned_pacbio_bases.push(pacbio_consensus_vec[pacbio_index]);
+                consensus_match_invalid_indices.push(calc_index);
+                pacbio_index += 1;
+                calc_index += 1;
+            },
+            bio::alignment::AlignmentOperation::Del => {
+                pacbio_index += 1;
+            },
+            bio::alignment::AlignmentOperation::Ins => {
+                consensus_match_invalid_indices.push(calc_index);
+                aligned_pacbio_bases.push(126);
+                aligned_pacbio_scores_vec.push(33);
+                calc_index += 1;
+            },
+            _ => {},
+        }
+        if pacbio_error_position == pacbio_index {
+            calc_error_position = calc_index
+        }
+    }
+    println!("Pacbio error position {} corrosponds to calculated error position {}", pacbio_error_position, calc_error_position);
+    calc_error_position
+}
+
 fn get_redone_consensus_matched_positions (pacbio_consensus: &String, calculated_consensus: &Vec<u8>) -> Vec<usize> {
     let mut consensus_matched_indices: Vec<usize> = vec![];
     let pacbio_consensus_vec: Vec<u8> = pacbio_consensus.bytes().collect();
@@ -1143,46 +1187,6 @@ fn get_the_subreads_by_name_bam (error_chr: &String, error_pos: usize, full_name
     println!("new count = {}", index);
     
     subread_vec
-}
-
-fn get_redone_consensus_error_position (pacbio_consensus: &String, calculated_consensus: &Vec<u8>, pacbio_error_position: usize) -> usize {
-    let mut consensus_match_invalid_indices: Vec<usize> = vec![];
-    let pacbio_consensus_vec: Vec<u8> = pacbio_consensus.bytes().collect();
-    let mut aligned_pacbio_scores_vec: Vec<usize> = vec![];
-    let mut aligned_pacbio_bases:Vec<u8> = vec![];
-    let (alignment, _) = pairwise(&calculated_consensus, &pacbio_consensus_vec, MATCH, MISMATCH, GAP_OPEN, GAP_EXTEND, 0);
-    let mut pacbio_index = 0;
-    let mut calc_index = 0;
-    let mut calc_error_position: usize = 0;
-    for op in alignment {
-        match op as char {
-            'm' => {
-                pacbio_index += 1;
-                calc_index += 1;
-            },
-            's' => {
-                aligned_pacbio_bases.push(pacbio_consensus_vec[pacbio_index]);
-                consensus_match_invalid_indices.push(calc_index);
-                pacbio_index += 1;
-                calc_index += 1;
-            },
-            'd' => {
-                pacbio_index += 1;
-            },
-            'i' => {
-                consensus_match_invalid_indices.push(calc_index);
-                aligned_pacbio_bases.push(126);
-                aligned_pacbio_scores_vec.push(33);
-                calc_index += 1;
-            },
-            _ => {},
-        }
-        if pacbio_error_position == pacbio_index {
-            calc_error_position = calc_index
-        }
-    }
-    println!("Pacbio error position {} corrosponds to calculated error position {}", pacbio_error_position, calc_error_position);
-    calc_error_position
 }
 
 fn check_the_scores_and_change_alignment (seqvec: Vec<String>, pacbio_consensus: &String) -> Vec<String> {
