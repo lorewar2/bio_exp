@@ -43,8 +43,12 @@ const MAX_NODES_IN_POA: usize = 75_000;
 const SKIP_SCORE: i32 = 6_000;
 
 pub fn list_corrected_errors_comparing_with_ref (chromosone: &str, start: usize, end: usize, thread_id: usize) {
+    let mut poa_fix_count = 0;
+    let mut topo_fix_count = 0;
+    let mut total_count = 0;
     // get the error locations
     let (error_locations, _) = get_error_bases_from_himut_vcf (); //chromosone, location, ref allele, alt allele
+    println!("{} {}", error_locations[0].0, chromosone);
     // go through the error locations
     for error_location in error_locations {
         if (error_location.0 == chromosone) && (error_location.1 < start) {
@@ -86,7 +90,7 @@ pub fn list_corrected_errors_comparing_with_ref (chromosone: &str, start: usize,
             // check if fixed by poa
             let pacbio_error_pos_node_index = seq_name_qual_and_errorpos.3;
             let position = get_redone_consensus_error_position(&seq_name_qual_and_errorpos.0, &calculated_consensus, seq_name_qual_and_errorpos.3);
-            
+
             // calculate the quality score of the location
             let skip_nodes: Vec<usize> = calculated_topology[0 .. position + 1].to_vec();
             let target_node_parent;
@@ -105,18 +109,25 @@ pub fn list_corrected_errors_comparing_with_ref (chromosone: &str, start: usize,
             }
             let (parallel_nodes, parallel_num_incoming_seq, _) = get_parallel_nodes_with_topology_cut (skip_nodes, sequence_number,  calculated_topology[position], target_node_parent, target_node_child, calculated_graph);
             let (_, _, parallel_bases, _) = base_quality_score_calculation (sequence_number, parallel_nodes, parallel_num_incoming_seq, calculated_consensus[position], calculated_graph);
-            // do everything here 
+            // do everything here
+            total_count += 1;
             println!("Error position {}:{} ref allele: {} alt allele: {}", error_location.0, error_location.1, error_location.2, error_location.3);
-            println!("BY POA: [{} -> {}]", seq_name_qual_and_errorpos.0.as_bytes()[pacbio_error_pos_node_index] as char, calculated_consensus[position] as char);
+            if error_location.2 == calculated_consensus[position] as char {
+                poa_fix_count += 1;
+            }
+            println!("BY POA: [{} -> {}] fixed {}/{}", seq_name_qual_and_errorpos.0.as_bytes()[pacbio_error_pos_node_index] as char, calculated_consensus[position] as char, poa_fix_count, total_count);
             let pos = parallel_bases.iter().enumerate().max_by_key(|(_, &value)| value).map(|(idx, _)| idx).unwrap();
             let base = match pos {
-                0 => {"A"},
-                1 => {"C"},
-                2 => {"G"},
-                3 => {"T"},
-                _ => {"A"},
+                0 => {'A'},
+                1 => {'C'},
+                2 => {'G'},
+                3 => {'T'},
+                _ => {'A'},
             };
-            println!("BY TOPO: [{} -> {}]", seq_name_qual_and_errorpos.0.as_bytes()[pacbio_error_pos_node_index] as char, base);
+            if error_location.2 == base {
+                topo_fix_count += 1;
+            }
+            println!("BY TOPO: [{} -> {}] fixed {}/{}", seq_name_qual_and_errorpos.0.as_bytes()[pacbio_error_pos_node_index] as char, base, topo_fix_count, total_count);
         }
     }
 }
