@@ -48,14 +48,18 @@ pub fn list_corrected_errors_comparing_with_ref (chromosone: &str, start: usize,
     let mut total_count = 0;
     // get the error locations
     let (error_locations, _) = get_error_bases_from_himut_vcf (); //chromosone, location, ref allele, alt allele
-    println!("{} {}", error_locations[0].0, chromosone);
     // go through the error locations
     for error_location in error_locations {
-        if (error_location.0 == chromosone) && (error_location.1 < start) {
-            continue;
+        if error_location.0 == chromosone{
+            if error_location.1 < start {
+                continue;
+            }
+            if error_location.1 > end {
+                break;
+            }
         }
-        if (error_location.0 != chromosone) && (error_location.1 > end) {
-            break;
+        else {
+            continue;
         }
         println!("Thread ID: {}, Error position {}:{} ref allele: {} alt allele: {}", thread_id, error_location.0, error_location.1, error_location.2, error_location.3);
         // find the ccs which are in that error
