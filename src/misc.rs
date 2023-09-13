@@ -46,11 +46,15 @@ pub fn list_corrected_errors_comparing_with_ref (chromosone: &str, start: usize,
     let mut poa_fix_count = 0;
     let mut topo_fix_count = 0;
     let mut total_count = 0;
+    let thread_id_chr = format!("chr{}", thread_id);
     // get the error locations
     let (error_locations, _) = get_error_bases_from_himut_vcf (); //chromosone, location, ref allele, alt allele
     // go through the error locations
     for error_location in error_locations {
-        if error_location.0 == chromosone{
+        if error_location.0 != thread_id_chr {
+            continue;
+        }
+        /*if error_location.0 == chromosone{
             if error_location.1 < start {
                 continue;
             }
@@ -60,7 +64,7 @@ pub fn list_corrected_errors_comparing_with_ref (chromosone: &str, start: usize,
         }
         else {
             continue;
-        }
+        }*/
         // get the three base context
         let mut fai_reader = faidx::Reader::from_path(&"/data1/GiaB_benchmark/GRCh38.fa").unwrap();
         let threebase_context = read_fai_file(error_location.1 - 1, &chromosone.to_string(), &mut fai_reader);
@@ -119,6 +123,7 @@ pub fn list_corrected_errors_comparing_with_ref (chromosone: &str, start: usize,
             // do everything here
             total_count += 1;
             let error_string = format!("{} -> {}", threebase_context, error_location.3);
+            println!("{}", error_string);
             let write_file = format!("result/{}_error_data.txt", thread_id);
             write_string_to_file(&write_file, &error_string);
             if error_location.2 == calculated_consensus[position] as char {
