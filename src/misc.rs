@@ -61,6 +61,9 @@ pub fn list_corrected_errors_comparing_with_ref (chromosone: &str, start: usize,
         else {
             continue;
         }
+        // get the three base context
+        let mut fai_reader = faidx::Reader::from_path(&"/data1/GiaB_benchmark/GRCh38.fa").unwrap();
+        let threebase_context = read_fai_file(error_location.1 - 1, &chromosone.to_string(), &mut fai_reader);
         println!("Thread ID: {}, Error position {}:{} ref allele: {} alt allele: {}", thread_id, error_location.0, error_location.1, error_location.2, error_location.3);
         // find the ccs which are in that error
         let seq_name_qual_and_errorpos_vec = get_corrosponding_seq_name_location_quality_from_bam(error_location.1, &error_location.0, &error_location.3);
@@ -115,11 +118,12 @@ pub fn list_corrected_errors_comparing_with_ref (chromosone: &str, start: usize,
             let (_, _, parallel_bases, _) = base_quality_score_calculation (sequence_number, parallel_nodes, parallel_num_incoming_seq, calculated_consensus[position], calculated_graph);
             // do everything here
             total_count += 1;
-            println!("Error position {}:{} ref allele: {} alt allele: {}", error_location.0, error_location.1, error_location.2, error_location.3);
+            println!("Normal_Output {} -> {}", threebase_context, error_location.3);
             if error_location.2 == calculated_consensus[position] as char {
                 poa_fix_count += 1;
+                println!("POA_Output {} -> {} -> {}", threebase_context, error_location.3, error_location.2);
             }
-            println!("BY POA: [{} -> {}] fixed {}/{}", seq_name_qual_and_errorpos.0.as_bytes()[pacbio_error_pos_node_index] as char, calculated_consensus[position] as char, poa_fix_count, total_count);
+            
             let pos = parallel_bases.iter().enumerate().max_by_key(|(_, &value)| value).map(|(idx, _)| idx).unwrap();
             let base = match pos {
                 0 => {'A'},
@@ -130,7 +134,10 @@ pub fn list_corrected_errors_comparing_with_ref (chromosone: &str, start: usize,
             };
             if error_location.2 == base {
                 topo_fix_count += 1;
+                println!("TOPO_Output {} -> {} -> {}", threebase_context, error_location.3, error_location.2);
             }
+            println!("Error position {}:{} ref allele: {} alt allele: {}", error_location.0, error_location.1, error_location.2, error_location.3);
+            println!("BY POA: [{} -> {}] fixed {}/{}", seq_name_qual_and_errorpos.0.as_bytes()[pacbio_error_pos_node_index] as char, calculated_consensus[position] as char, poa_fix_count, total_count);
             println!("BY TOPO: [{} -> {}] fixed {}/{}", seq_name_qual_and_errorpos.0.as_bytes()[pacbio_error_pos_node_index] as char, base, topo_fix_count, total_count);
         }
     }
@@ -194,7 +201,7 @@ pub fn pipeline_load_graph_get_topological_parallel_bases (chromosone: &str, sta
                 else {
                     parallel_bases = vec![1, 1, 1, 1];
                 }
-                let write_string = format!("{} {} {:?}", pacbio_char, (sub_reads.len() - 1), parallel_bases);
+                let write_string = format!("{} {} {:?}\n", pacbio_char, (sub_reads.len() - 1), parallel_bases);
                 //println!("{}", write_string);
                 let write_file = format!("{}/{}", INTERMEDIATE_PATH, &seq_name_qual_and_errorpos.1);
                 write_string_to_file(&write_file, &write_string);
