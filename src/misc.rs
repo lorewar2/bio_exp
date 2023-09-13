@@ -118,10 +118,14 @@ pub fn list_corrected_errors_comparing_with_ref (chromosone: &str, start: usize,
             let (_, _, parallel_bases, _) = base_quality_score_calculation (sequence_number, parallel_nodes, parallel_num_incoming_seq, calculated_consensus[position], calculated_graph);
             // do everything here
             total_count += 1;
-            println!("Normal_Output {} -> {}", threebase_context, error_location.3);
+            let error_string = format!("{} -> {}", threebase_context, error_location.3);
+            let write_file = format!("result/{}_error_data.txt", thread_id);
+            write_string_to_file(&write_file, &error_string);
             if error_location.2 == calculated_consensus[position] as char {
                 poa_fix_count += 1;
-                println!("POA_Output {} -> {} -> {}", threebase_context, error_location.3, error_location.2);
+                let poa_fix_string = format!("{} -> {} -> {}", threebase_context, error_location.3, error_location.2);
+                let write_file = format!("result/{}_poa_data.txt", thread_id);
+                write_string_to_file(&write_file, &poa_fix_string);
             }
             
             let pos = parallel_bases.iter().enumerate().max_by_key(|(_, &value)| value).map(|(idx, _)| idx).unwrap();
@@ -134,7 +138,9 @@ pub fn list_corrected_errors_comparing_with_ref (chromosone: &str, start: usize,
             };
             if error_location.2 == base {
                 topo_fix_count += 1;
-                println!("TOPO_Output {} -> {} -> {}", threebase_context, error_location.3, error_location.2);
+                let topo_fix_string = format!("{} -> {} -> {}", threebase_context, error_location.3, error_location.2);
+                let write_file = format!("result/{}_topo_data.txt", thread_id);
+                write_string_to_file(&write_file, &topo_fix_string);
             }
             println!("Error position {}:{} ref allele: {} alt allele: {}", error_location.0, error_location.1, error_location.2, error_location.3);
             println!("BY POA: [{} -> {}] fixed {}/{}", seq_name_qual_and_errorpos.0.as_bytes()[pacbio_error_pos_node_index] as char, calculated_consensus[position] as char, poa_fix_count, total_count);
