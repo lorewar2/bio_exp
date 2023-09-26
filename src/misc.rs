@@ -42,6 +42,19 @@ const BAND_SIZE: i32 = 100;
 const MAX_NODES_IN_POA: usize = 75_000;
 const SKIP_SCORE: i32 = 6_000;
 
+pub fn create_list_of_errors (chromosone: &str, start: usize, end: usize, thread_id: usize) {
+    // get the error locations
+    let (error_locations, _) = get_error_bases_from_himut_vcf (); //chromosone, location, ref allele, alt allele
+    for error_location in error_locations {
+        if error_location.0 != chromosone {
+            continue;
+        }
+        let error_string = format!("{} {}", error_location.1, error_location.3);
+        let write_file = format!("/data1/hifi_consensus/unfiltered_data/{}_error_data.txt", chromosone);
+        write_string_to_file(&write_file, &error_string);
+    }
+}
+
 pub fn list_corrected_errors_comparing_with_ref (chromosone: &str, start: usize, end: usize, thread_id: usize) {
     let mut poa_fix_count = 0;
     let mut topo_fix_count = 0;
@@ -67,7 +80,7 @@ pub fn list_corrected_errors_comparing_with_ref (chromosone: &str, start: usize,
         }*/
         // get the three base context
         let mut fai_reader = faidx::Reader::from_path(&"/data1/GiaB_benchmark/GRCh38.fa").unwrap();
-        let threebase_context = read_fai_file(error_location.1 - 1, &chromosone.to_string(), &mut fai_reader);
+        let threebase_context = read_fai_file(error_location.1 - 1, &thread_id_chr, &mut fai_reader);
         println!("Thread ID: {}, Error position {}:{} ref allele: {} alt allele: {}", thread_id, error_location.0, error_location.1, error_location.2, error_location.3);
         // find the ccs which are in that error
         let seq_name_qual_and_errorpos_vec = get_corrosponding_seq_name_location_quality_from_bam(error_location.1, &error_location.0, &error_location.3);

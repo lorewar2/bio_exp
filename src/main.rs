@@ -7,20 +7,21 @@ mod misc;
 mod quality;
 use std::thread;
 use crate::misc::list_corrected_errors_comparing_with_ref;
+use crate::misc::create_list_of_errors;
 
 const SEED: u64 = 2;
 const GAP_OPEN: i32 = -2;
 const GAP_EXTEND: i32 = 0;
 const MATCH: i32 = 2;
 const MISMATCH: i32 = -2;
-const NTHREADS: usize = 32;
+const NTHREADS: usize = 1;
 
 fn main() {
     //get_quality_score_count_confident_error();
     // make a vector to hold the children which are spawned.
     //new_poa_tester();
     let mut children = vec![];
-    let chromosone = "chr2";
+    let chromosone = "chr1";
     let total_start = 5_000_000;
     let total_end = 240_000_000;
     let one_thread_allocation = (total_end - total_start) / NTHREADS;
@@ -33,7 +34,7 @@ fn main() {
             let end = start + one_thread_allocation;
             println!("Thread number {} started, {} from {} to {}..", chromosone, i, start, end);
             //pipeline_load_graph_get_topological_parallel_bases(chromosone, start, end, i);
-            list_corrected_errors_comparing_with_ref (chromosone, start, end, i);
+            create_list_of_errors (chromosone, start, end, i);
         }));
     }
     for child in children {
