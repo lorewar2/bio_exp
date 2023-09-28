@@ -6,8 +6,7 @@ mod generator;
 mod misc;
 mod quality;
 use std::thread;
-use crate::misc::list_corrected_errors_comparing_with_ref;
-use crate::misc::create_list_of_errors;
+use crate::misc::get_all_data_for_ml;
 
 const SEED: u64 = 2;
 const GAP_OPEN: i32 = -2;
@@ -34,7 +33,7 @@ fn main() {
             let end = start + one_thread_allocation;
             println!("Thread number {} started, {} from {} to {}..", chromosone, i, start, end);
             //pipeline_load_graph_get_topological_parallel_bases(chromosone, start, end, i);
-            create_list_of_errors (chromosone, start, end, i);
+            get_all_data_for_ml (chromosone, start, end, i);
         }));
     }
     for child in children {

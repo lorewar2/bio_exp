@@ -42,20 +42,61 @@ const BAND_SIZE: i32 = 100;
 const MAX_NODES_IN_POA: usize = 75_000;
 const SKIP_SCORE: i32 = 6_000;
 
-pub fn create_list_of_errors (chromosone: &str, start: usize, end: usize, thread_id: usize) {
+pub fn get_all_data_for_ml (chromosone: &str, start: usize, end: usize, thread_id: usize) {
+    let mut position_base = start;
+    'bigloop: loop {
+        if position_base % 1000 == 0 {
+            println!("Thread ID: {} Position {}", thread_id, position_base);
+        }
+        let seq_name_qual_and_errorpos_vec = get_corrosponding_seq_name_location_quality_from_bam(position_base, &chromosone.to_string(), &'X');
+        // get the three base context
+        let mut threebase_context = "".to_string();
+        if seq_name_qual_and_errorpos_vec.len() > 0 {
+            let mut fai_reader = faidx::Reader::from_path(&"/data1/GiaB_benchmark/GRCh38.fa").unwrap();
+            threebase_context = read_fai_file(position_base - 1, &chromosone.to_string(), &mut fai_reader);
+        }
+        //println!("thread {} length = {} position = {} ", thread_id, seq_name_qual_and_errorpos_vec.len(), position_base);
+        for seq_name_qual_and_errorpos in &seq_name_qual_and_errorpos_vec {
+            let base = seq_name_qual_and_errorpos.0.as_bytes()[seq_name_qual_and_errorpos.3] as char;
+            let quality = seq_name_qual_and_errorpos.2;
+            // error is here
+            let parallel_stuff;
+            // check if the file is already available
+            if check_file_availability(&seq_name_qual_and_errorpos.1, INTERMEDIATE_PATH) {
+                let available_file_path = format!("{}/{}", INTERMEDIATE_PATH, seq_name_qual_and_errorpos.1);
+                let temp_quality_score = get_quality_scores_from_file(&available_file_path, seq_name_qual_and_errorpos.3);
+                parallel_stuff = temp_quality_score.2;
+            }
+            else {
+                //println!("Thread: {} Skipping this file (not available) {} ", thread_id, seq_name_qual_and_errorpos.1);
+                continue;
+            }
+            // write data
+            let write_string = format!("{} {} {} {} {}", position_base, threebase_context, base, quality, parallel_stuff);
+            let write_file = format!("result/{}_mldata.txt", thread_id);
+            write_string_to_file(&write_file, &write_string);
+        }
+        position_base += 1;
+        if position_base > end {
+            break 'bigloop;
+        }
+    }
+}
+
+pub fn create_list_of_errors (chromosone: &str, _start: usize, _end: usize, _thread_id: usize) {
     // get the error locations
     let (error_locations, _) = get_error_bases_from_himut_vcf (); //chromosone, location, ref allele, alt allele
     for error_location in error_locations {
         if error_location.0 != chromosone {
             continue;
         }
-        let error_string = format!("{} {}", error_location.1, error_location.3);
+        let error_string = format!("{} {}\n", error_location.1, error_location.3);
         let write_file = format!("/data1/hifi_consensus/unfiltered_data/{}_error_data.txt", chromosone);
         write_string_to_file(&write_file, &error_string);
     }
 }
 
-pub fn list_corrected_errors_comparing_with_ref (chromosone: &str, start: usize, end: usize, thread_id: usize) {
+pub fn list_corrected_errors_comparing_with_ref (_chromosone: &str, _start: usize, _end: usize, thread_id: usize) {
     let mut poa_fix_count = 0;
     let mut topo_fix_count = 0;
     let mut total_count = 0;
