@@ -16,11 +16,9 @@ const MISMATCH: i32 = -2;
 const NTHREADS: usize = 1;
 
 fn main() {
-    //get_quality_score_count_confident_error();
     // make a vector to hold the children which are spawned.
-    //new_poa_tester();
     let mut children = vec![];
-    let chromosone = "chr1";
+    let chromosone = "chr2";
     let total_start = 5_000_000;
     let total_end = 240_000_000;
     let one_thread_allocation = (total_end - total_start) / NTHREADS;
@@ -32,7 +30,6 @@ fn main() {
             let start = total_start + one_thread_allocation * i;
             let end = start + one_thread_allocation;
             println!("Thread number {} started, {} from {} to {}..", chromosone, i, start, end);
-            //pipeline_load_graph_get_topological_parallel_bases(chromosone, start, end, i);
             get_all_data_for_ml (chromosone, start, end, i);
         }));
     }

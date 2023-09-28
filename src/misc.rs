@@ -38,6 +38,8 @@ const DATA_PATH: &str = "/data1/hifi_consensus/try2/";
 const READ_BAM_PATH: &str = "/data1/hifi_consensus/try2/merged.bam";
 const INTERMEDIATE_PATH: &str = "/data1/hifi_consensus/quality_data/intermediate";
 const CONFIDENT_PATH: &str = "/data1/GiaB_benchmark/HG001_GRCh38_1_22_v4.2.1_benchmark.bed";
+const REF_GENOME_PATH: &str = "/data1/GiaB_benchmark/GRCh38.fa";
+const RESULT_WRITE_PATH: &str = "/data1/hifi_consensus/all_data/chr2_data";
 const BAND_SIZE: i32 = 100;
 const MAX_NODES_IN_POA: usize = 75_000;
 const SKIP_SCORE: i32 = 6_000;
@@ -52,10 +54,9 @@ pub fn get_all_data_for_ml (chromosone: &str, start: usize, end: usize, thread_i
         // get the three base context
         let mut threebase_context = "".to_string();
         if seq_name_qual_and_errorpos_vec.len() > 0 {
-            let mut fai_reader = faidx::Reader::from_path(&"/data1/GiaB_benchmark/GRCh38.fa").unwrap();
+            let mut fai_reader = faidx::Reader::from_path(REF_GENOME_PATH).unwrap();
             threebase_context = read_fai_file(position_base - 1, &chromosone.to_string(), &mut fai_reader);
         }
-        //println!("thread {} length = {} position = {} ", thread_id, seq_name_qual_and_errorpos_vec.len(), position_base);
         for seq_name_qual_and_errorpos in &seq_name_qual_and_errorpos_vec {
             let base = seq_name_qual_and_errorpos.0.as_bytes()[seq_name_qual_and_errorpos.3] as char;
             let quality = seq_name_qual_and_errorpos.2;
@@ -64,16 +65,14 @@ pub fn get_all_data_for_ml (chromosone: &str, start: usize, end: usize, thread_i
             // check if the file is already available
             if check_file_availability(&seq_name_qual_and_errorpos.1, INTERMEDIATE_PATH) {
                 let available_file_path = format!("{}/{}", INTERMEDIATE_PATH, seq_name_qual_and_errorpos.1);
-                let temp_quality_score = get_quality_scores_from_file(&available_file_path, seq_name_qual_and_errorpos.3);
-                parallel_stuff = temp_quality_score.2;
+                parallel_stuff = get_parallel_bases_from_file(&available_file_path, seq_name_qual_and_errorpos.3);
             }
             else {
-                //println!("Thread: {} Skipping this file (not available) {} ", thread_id, seq_name_qual_and_errorpos.1);
                 continue;
             }
             // write data
             let write_string = format!("{} {} {} {} {}", position_base, threebase_context, base, quality, parallel_stuff);
-            let write_file = format!("result/{}_mldata.txt", thread_id);
+            let write_file = format!("{}/{}_mldata.txt",RESULT_WRITE_PATH, thread_id);
             write_string_to_file(&write_file, &write_string);
         }
         position_base += 1;
@@ -120,7 +119,7 @@ pub fn list_corrected_errors_comparing_with_ref (_chromosone: &str, _start: usiz
             continue;
         }*/
         // get the three base context
-        let mut fai_reader = faidx::Reader::from_path(&"/data1/GiaB_benchmark/GRCh38.fa").unwrap();
+        let mut fai_reader = faidx::Reader::from_path(REF_GENOME_PATH).unwrap();
         let threebase_context = read_fai_file(error_location.1 - 1, &thread_id_chr, &mut fai_reader);
         println!("Thread ID: {}, Error position {}:{} ref allele: {} alt allele: {}", thread_id, error_location.0, error_location.1, error_location.2, error_location.3);
         // find the ccs which are in that error
@@ -734,7 +733,7 @@ pub fn get_data_for_ml (chromosone: &str, start: usize, end: usize, thread_id: u
         let mut wrong_errors = false;
         for seq_name_qual_and_errorpos in &seq_name_qual_and_errorpos_vec {
             // get the three base context
-            let mut fai_reader = faidx::Reader::from_path(&"/data1/GiaB_benchmark/GRCh38.fa").unwrap();
+            let mut fai_reader = faidx::Reader::from_path(REF_GENOME_PATH).unwrap();
             let threebase_context = read_fai_file(position_base - 1, &chromosone.to_string(), &mut fai_reader);
             let base = seq_name_qual_and_errorpos.0.as_bytes()[seq_name_qual_and_errorpos.3] as char;
             let quality = seq_name_qual_and_errorpos.2;
@@ -758,8 +757,7 @@ pub fn get_data_for_ml (chromosone: &str, start: usize, end: usize, thread_id: u
             // check if the file is already available
             if check_file_availability(&seq_name_qual_and_errorpos.1, INTERMEDIATE_PATH) {
                 let available_file_path = format!("{}/{}", INTERMEDIATE_PATH, seq_name_qual_and_errorpos.1);
-                let temp_quality_score = get_quality_scores_from_file(&available_file_path, seq_name_qual_and_errorpos.3);
-                parallel_stuff = temp_quality_score.2;
+                parallel_stuff = get_parallel_bases_from_file(&available_file_path, seq_name_qual_and_errorpos.3);
             }
             else {
                 println!("Thread: {} Skipping this file (not available) {} ", thread_id, seq_name_qual_and_errorpos.1);
@@ -911,70 +909,7 @@ fn get_confident_locations_from_file () -> Vec<(String, usize, usize)> {
     location_vec
 }
 
-
-
-pub fn get_quality_score_count_topology_cut_errors (start: usize, end: usize, thread_id: usize) {
-    let mut quality_score_count: Vec<usize> = vec![0; 94];
-    let chromosone = format!("{}{}", String::from("chr"), 21);
-    let (error_locations, _) = get_error_bases_from_himut_vcf (); //chromosone, location, ref allele, alt allele
-    // go through the error locations
-    let mut index = 0;
-    for error_location in error_locations {
-        if (error_location.1 < start) || !(error_location.0.eq(&chromosone)) {
-            continue;
-        }
-        if (error_location.1 > end) && (error_location.0.eq(&chromosone)) {
-            break;
-        }
-        index += 1;
-        let seq_name_qual_and_errorpos_vec = get_corrosponding_seq_name_location_quality_from_bam(error_location.1, &chromosone.to_string(), &'X');
-        for seq_name_qual_and_errorpos in &seq_name_qual_and_errorpos_vec {
-            // check if the file is already available
-            if check_file_availability(&seq_name_qual_and_errorpos.1, INTERMEDIATE_PATH) {
-                let available_file_path = format!("{}/{}", INTERMEDIATE_PATH, seq_name_qual_and_errorpos.1);
-                let temp_quality_score = get_quality_scores_from_file(&available_file_path, seq_name_qual_and_errorpos.3);
-                if error_location.3 == temp_quality_score.0 as char {
-                    quality_score_count[temp_quality_score.1 as usize] += 1;
-                }
-            }
-        }
-    }
-    println!("count {}", index);
-    let write_file = format!("result/{}_errorcount.txt", thread_id);
-    let write_string = format!("{:#?}", quality_score_count);
-    write_string_to_file(&write_file, &write_string);
-}
-
-pub fn get_quality_score_count_topology_cut (start: usize, end: usize, thread_id: usize) {
-    let mut quality_score_count: Vec<usize> = vec![0; 200];
-    let chromosone = format!("{}{}", String::from("chr"), 21);
-    let mut position_base = start; 
-    'bigloop: loop {
-        if position_base % 1000 == 0 {
-            println!("Thread ID: {} Position {}", thread_id, position_base);
-        }
-        // get the required info from sam
-        let seq_name_qual_and_errorpos_vec = get_corrosponding_seq_name_location_quality_from_bam(position_base, &chromosone.to_string(), &'X');
-        for seq_name_qual_and_errorpos in &seq_name_qual_and_errorpos_vec {
-            // check if the file is already available
-            if check_file_availability(&seq_name_qual_and_errorpos.1, INTERMEDIATE_PATH) {
-                let available_file_path = format!("{}/{}", INTERMEDIATE_PATH, seq_name_qual_and_errorpos.1);
-                let temp_quality_score = get_quality_scores_from_file(&available_file_path, seq_name_qual_and_errorpos.3);
-                quality_score_count[temp_quality_score.1 as usize] += 1;
-            }
-            if position_base > end {
-                break 'bigloop;
-            }
-        }
-        position_base += 1;
-    }
-    let write_file = format!("result/{}_totalcount.txt", thread_id);
-    let write_string = format!("{:#?}", quality_score_count);
-    write_string_to_file(&write_file, &write_string);
-}
-
-pub fn get_quality_scores_from_file(file_path: &String, required_pos: usize) -> (u8, u8, String) {
-    let mut temp_quality_vec: (u8, u8, String) = (0, 0, "".to_string());
+pub fn get_parallel_bases_from_file(file_path: &String, required_pos: usize) -> String {
     // open the file
     let f = File::open(&file_path).unwrap();
     let mut reader = BufReader::new(f);
@@ -984,29 +919,11 @@ pub fn get_quality_scores_from_file(file_path: &String, required_pos: usize) -> 
         buffer.clear();
         reader.read_line(&mut buffer).unwrap();
         if current_pos == required_pos {
-            let mut split_text_iter = (buffer.split(" ")).into_iter();
-            let base;
-            match split_text_iter.next() {
-                Some(x) => {if x.as_bytes().len() > 0 {base = x.as_bytes()[0];} else {break;}},
-                None => {break;},
-            }
-            let temp;
-            match split_text_iter.next() {
-                Some(x) => {temp = x.parse::<u8>();},
-                None => {break;}
-            }
-            let quality;
-            match temp {
-                Ok(x) => {quality = x;},
-                Err(_) => {break;}
-            }
-            //println!("{} {}", base, quality);
-            temp_quality_vec = (base, quality, buffer);
             break;
         }
         current_pos += 1;
     }
-    temp_quality_vec
+    buffer
 }
 
 fn check_file_availability (file_name: &str, search_path: &str) -> bool {
