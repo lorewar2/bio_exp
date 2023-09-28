@@ -58,7 +58,6 @@ pub fn get_all_data_for_ml (chromosone: &str, start: usize, end: usize, thread_i
             threebase_context = read_fai_file(position_base - 1, &chromosone.to_string(), &mut fai_reader);
         }
         for seq_name_qual_and_errorpos in &seq_name_qual_and_errorpos_vec {
-            let base = seq_name_qual_and_errorpos.0.as_bytes()[seq_name_qual_and_errorpos.3] as char;
             let quality = seq_name_qual_and_errorpos.2;
             // error is here
             let parallel_stuff;
@@ -71,7 +70,7 @@ pub fn get_all_data_for_ml (chromosone: &str, start: usize, end: usize, thread_i
                 continue;
             }
             // write data
-            let write_string = format!("{} {} {} {} {}", position_base, threebase_context, base, quality, parallel_stuff);
+            let write_string = format!("{} {} {} {}", position_base, threebase_context, quality, parallel_stuff);
             let write_file = format!("{}/{}_mldata.txt",RESULT_WRITE_PATH, thread_id);
             write_string_to_file(&write_file, &write_string);
         }
