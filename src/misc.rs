@@ -40,9 +40,51 @@ const INTERMEDIATE_PATH: &str = "/data1/hifi_consensus/quality_data/intermediate
 const CONFIDENT_PATH: &str = "/data1/GiaB_benchmark/HG001_GRCh38_1_22_v4.2.1_benchmark.bed";
 const REF_GENOME_PATH: &str = "/data1/GiaB_benchmark/GRCh38.fa";
 const RESULT_WRITE_PATH: &str = "/data1/hifi_consensus/all_data/chr2_data";
+const DEEPVARIANT_PATH: &str = "/data1/hifi_consensus/try3/hg38.PD47269d.minimap2_ccs.deepvariant_1.1.0.vcf";
 const BAND_SIZE: i32 = 100;
 const MAX_NODES_IN_POA: usize = 75_000;
 const SKIP_SCORE: i32 = 6_000;
+
+pub fn create_list_of_errors () {
+    // get the error locations
+    let error_locations = get_error_bases_from_deepvariant_vcf (); //chromosone, location, ref allele, alt allele
+    for error_location in error_locations {
+        if error_location.0 != chromosone {
+            continue;
+        }
+        let error_string = format!("{} {}\n", error_location.1, error_location.3);
+        let write_file = format!("/data1/hifi_consensus/unfiltered_data/{}_error_data.txt", chromosone);
+        //write_string_to_file(&write_file, &error_string);
+    }
+}
+
+pub fn get_error_bases_from_deepvariant_vcf () -> Vec<(String, usize, String, String)> {
+    let mut germline_skip_location_vec: Vec<(String, usize)> = vec![]; //chromosone, position
+    let mut error_locus_vec: Vec<(String, usize, String, String)> = vec![]; //chromosone, position, ref, alt
+    let mut bcf = Reader::from_path(DEEPVARIANT_PATH).expect("Error opening file.");
+    // iterate through each row of the vcf body.
+    for (_, record_result) in bcf.records().enumerate() {
+        let record = record_result.expect("Fail to read record");
+        let mut allele_vec: Vec<String> = vec![];
+        // only pass filters are acceptedß
+        let temp_str = record.desc();
+        let mut split_text_iter = (temp_str.split(":")).into_iter();
+        let chromosone = format!("{}", split_text_iter.next().unwrap());
+
+        if record.has_filter("PASS".as_bytes()) == true {
+            for allele in record.alleles() {
+                allele_vec.push(str::from_utf8(allele).unwrap().to_owned());
+            }
+            let temp_str = record.desc();
+            let mut split_text_iter = (temp_str.split(":")).into_iter();
+            let chromosone = format!("{}", split_text_iter.next().unwrap());
+            error_locus_vec.push((chromosone.to_string(), record.pos() as usize, allele_vec[0], allele_vec[1]));
+            println!("{} {} {} {} {}", chromosone.to_string(), record.pos() as usize, allele_vec[0], allele_vec[1]);
+        }
+    }
+    println!("number of errors = {}", error_locus_vec.len());
+    (error_locus_vec, germline_skip_location_vec)
+}
 
 pub fn get_all_data_for_ml (chromosone: &str, start: usize, end: usize, thread_id: usize) {
     let mut position_base = start;
@@ -78,19 +120,6 @@ pub fn get_all_data_for_ml (chromosone: &str, start: usize, end: usize, thread_i
         if position_base > end {
             break 'bigloop;
         }
-    }
-}
-
-pub fn create_list_of_errors (chromosone: &str, _start: usize, _end: usize, _thread_id: usize) {
-    // get the error locations
-    let (error_locations, _) = get_error_bases_from_himut_vcf (); //chromosone, location, ref allele, alt allele
-    for error_location in error_locations {
-        if error_location.0 != chromosone {
-            continue;
-        }
-        let error_string = format!("{} {}\n", error_location.1, error_location.3);
-        let write_file = format!("/data1/hifi_consensus/unfiltered_data/{}_error_data.txt", chromosone);
-        write_string_to_file(&write_file, &error_string);
     }
 }
 
