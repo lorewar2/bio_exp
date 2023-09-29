@@ -78,7 +78,7 @@ pub fn get_error_bases_from_deepvariant_vcf () -> Vec<(String, usize, String, St
             let temp_str = record.desc();
             let mut split_text_iter = (temp_str.split(":")).into_iter();
             let chromosone = format!("{}", split_text_iter.next().unwrap());
-            error_locus_vec.push((chromosone.to_string(), record.pos() as usize, allele_vec[0], allele_vec[1]));
+            error_locus_vec.push((chromosone.to_string(), record.pos() as usize, allele_vec[0].clone(), allele_vec[1].clone()));
             println!("{} {} {} {}", chromosone.to_string(), record.pos() as usize, allele_vec[0], allele_vec[1]);
         }
     }
