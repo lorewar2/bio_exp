@@ -16,10 +16,11 @@ const MISMATCH: i32 = -2;
 const NTHREADS: usize = 1;
 
 fn main() {
-    create_list_of_errors();
+    
     // make a vector to hold the children which are spawned.
     let mut children = vec![];
     let chromosone = "chr2";
+    create_list_of_errors(chromosone);
     let total_start = 5_000_000;
     let total_end = 240_000_000;
     let one_thread_allocation = (total_end - total_start) / NTHREADS;
