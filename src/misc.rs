@@ -45,23 +45,25 @@ const BAND_SIZE: i32 = 100;
 const MAX_NODES_IN_POA: usize = 75_000;
 const SKIP_SCORE: i32 = 6_000;
 
-
 pub fn concancate_files () {
-    let mut output = File::create("result/chr21_ml_file").unwrap();
-    let paths = read_dir("data/chr21/").unwrap();
-    println!("{:?}", paths);
-    let mut string_array = vec![];
-    // convert path to string and save in array
-    for path in paths {
-        let temp = path.unwrap().path().clone().into_os_string().into_string().unwrap();
-        string_array.push(temp);
-        //let mut input = File::open(path.unwrap().path()).unwrap();
-        //io::copy(&mut input, &mut output).unwrap();
+    let mut output = File::create("/data1/hifi_consensus/all_data/chr2.txt").unwrap();
+    //let paths = read_dir("data/chr21/").unwrap();
+    let parent_path = "/data1/hifi_consensus/all_data/chr2_data/";
+    let mut path_array = vec![];
+    for i in 0..70 {
+        path_array.push(format!("{}{}_mldata.txt",parent_path, i))
     }
-    println!("before {:?}", string_array);
-    string_array.sort();
-    println!("after {:?}", string_array);
-
+    // convert path to string and save in array
+    for path in path_array {
+        let input = File::open(path.clone());
+        match input {
+            Ok(mut x) => {
+                io::copy(&mut x, &mut output).unwrap();
+                println!("{}", path);
+            },
+            _ => {},
+        }
+    }
     println!("done");
 }
 
