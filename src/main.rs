@@ -6,7 +6,7 @@ mod generator;
 mod misc;
 mod quality;
 use std::thread;
-use crate::misc::concancate_files;
+use crate::misc::create_germline_list;
 
 const SEED: u64 = 2;
 const GAP_OPEN: i32 = -2;
@@ -16,11 +16,10 @@ const MISMATCH: i32 = -2;
 const NTHREADS: usize = 1;
 
 fn main() {
-    
     // make a vector to hold the children which are spawned.
     let mut children = vec![];
     let chromosone = "chr2";
-    concancate_files();
+    create_germline_list();
     let total_start = 5_000_000;
     let total_end = 240_000_000;
     let one_thread_allocation = (total_end - total_start) / NTHREADS;

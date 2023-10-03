@@ -67,32 +67,24 @@ pub fn concancate_files () {
     println!("done");
 }
 
-pub fn create_list_of_errors (chromosone: &str) {
+pub fn create_germline_list () {
     // get the error locations
-    let error_locations = get_error_bases_from_deepvariant_vcf (); //chromosone, location, ref allele, alt allele
+    let error_locations = get_germline_info_from_deepvariant_vcf (); //chromosone, location, ref allele, alt allele
     for error_location in error_locations {
-        if error_location.0 != chromosone {
-            continue;
-        }
-        let error_string = format!("{} {}\n", error_location.1, error_location.3);
-        let write_file = format!("/data1/hifi_consensus/unfiltered_data/{}_error_data.txt", chromosone);
+        let error_string = format!("{} {} {} -> {}\n", error_location.0, error_location.1, error_location.2, error_location.3);
+        let write_file = format!("/data1/hifi_consensus/all_data/filters/germline_data.txt");
         //write_string_to_file(&write_file, &error_string);
     }
 }
 
-pub fn get_error_bases_from_deepvariant_vcf () -> Vec<(String, usize, String, String)> {
-    let mut germline_skip_location_vec: Vec<(String, usize)> = vec![]; //chromosone, position
+pub fn get_germline_info_from_deepvariant_vcf () -> Vec<(String, usize, String, String)> {
     let mut error_locus_vec: Vec<(String, usize, String, String)> = vec![]; //chromosone, position, ref, alt
     let mut bcf = Reader::from_path(DEEPVARIANT_PATH).expect("Error opening file.");
     // iterate through each row of the vcf body.
     for (_, record_result) in bcf.records().enumerate() {
         let record = record_result.expect("Fail to read record");
         let mut allele_vec: Vec<String> = vec![];
-        // only pass filters are acceptedß
-        let temp_str = record.desc();
-        let mut split_text_iter = (temp_str.split(":")).into_iter();
-        let chromosone = format!("{}", split_text_iter.next().unwrap());
-
+        // only pass filters are accepted
         if record.has_filter("PASS".as_bytes()) == true {
             for allele in record.alleles() {
                 allele_vec.push(std::str::from_utf8(allele).unwrap().to_owned());
@@ -101,7 +93,7 @@ pub fn get_error_bases_from_deepvariant_vcf () -> Vec<(String, usize, String, St
             let mut split_text_iter = (temp_str.split(":")).into_iter();
             let chromosone = format!("{}", split_text_iter.next().unwrap());
             error_locus_vec.push((chromosone.to_string(), record.pos() as usize, allele_vec[0].clone(), allele_vec[1].clone()));
-            println!("{} {} {} {}", chromosone.to_string(), record.pos() as usize, allele_vec[0], allele_vec[1]);
+            println!("{} {} {} -> {}", chromosone.to_string(), record.pos() as usize, allele_vec[0], allele_vec[1]);
         }
     }
     println!("number of errors = {}", error_locus_vec.len());
