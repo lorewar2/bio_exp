@@ -45,6 +45,54 @@ const BAND_SIZE: i32 = 100;
 const MAX_NODES_IN_POA: usize = 75_000;
 const SKIP_SCORE: i32 = 6_000;
 
+pub fn create_confidence_list () {
+    // get the confident locations
+    let confident_locations = get_confident_locations_from_file (); //chromosone, location, ref allele, alt allele
+    for confident_location in confident_locations {
+        let error_string = format!("{} {} ~ {}\n", confident_location.0, confident_location.1, confident_location.2);
+        let write_file = format!("/data1/hifi_consensus/all_data/filters/confident_data.txt");
+        write_string_to_file(&write_file, &error_string);
+    }
+}
+
+fn get_confident_locations_from_file () -> Vec<(String, usize, usize)> {
+    let mut location_vec: Vec<(String, usize, usize)> = vec![];
+    let file_path = CONFIDENT_PATH;
+    let f = File::open(&file_path).unwrap();
+    let mut reader = BufReader::new(f);
+    let mut buffer = String::new();
+    loop {
+        buffer.clear();
+        match reader.read_line(&mut buffer) {
+            Ok(_) => {
+                let mut split_text_iter = (buffer.split("\t")).into_iter();
+                let chromosone ; 
+                match split_text_iter.next() {
+                    Some(x) => {chromosone = x.to_string();},
+                    None => {break;},
+                }
+                let start_string;
+                match split_text_iter.next() {
+                    Some(x) => {start_string = x.to_string();},
+                    None => {break;},
+                }
+                let mut end_string;
+                match split_text_iter.next() {
+                    Some(x) => {end_string = x.to_string();},
+                    None => {break;},
+                };
+                end_string.pop();
+                let end = end_string.parse::<usize>().unwrap();
+                let start = start_string.parse::<usize>().unwrap();
+                //println!("{} {} {}",chromosone, start, end);
+                location_vec.push((chromosone, start, end));
+            },
+            Err(_) => {break;},
+        };
+    }
+    location_vec
+}
+
 pub fn concancate_files () {
     let mut output = File::create("/data1/hifi_consensus/all_data/chr2.txt").unwrap();
     //let paths = read_dir("data/chr21/").unwrap();
@@ -73,7 +121,7 @@ pub fn create_germline_list () {
     for error_location in error_locations {
         let error_string = format!("{} {} {} -> {}\n", error_location.0, error_location.1, error_location.2, error_location.3);
         let write_file = format!("/data1/hifi_consensus/all_data/filters/germline_data.txt");
-        //write_string_to_file(&write_file, &error_string);
+        write_string_to_file(&write_file, &error_string);
     }
 }
 
@@ -901,44 +949,6 @@ pub fn get_quality_score_count_confident (thread_id: usize) {
     let write_file = format!("result/{}_confidentquality.txt", thread_id);
     let write_string = format!("{:?}", quality_score_count);
     write_string_to_file(&write_file, &write_string);
-}
-
-fn get_confident_locations_from_file () -> Vec<(String, usize, usize)> {
-    let mut location_vec: Vec<(String, usize, usize)> = vec![];
-    let file_path = CONFIDENT_PATH;
-    let f = File::open(&file_path).unwrap();
-    let mut reader = BufReader::new(f);
-    let mut buffer = String::new();
-    loop {
-        buffer.clear();
-        match reader.read_line(&mut buffer) {
-            Ok(_) => {
-                let mut split_text_iter = (buffer.split("\t")).into_iter();
-                let chromosone ; 
-                match split_text_iter.next() {
-                    Some(x) => {chromosone = x.to_string();},
-                    None => {break;},
-                }
-                let start_string;
-                match split_text_iter.next() {
-                    Some(x) => {start_string = x.to_string();},
-                    None => {break;},
-                }
-                let mut end_string;
-                match split_text_iter.next() {
-                    Some(x) => {end_string = x.to_string();},
-                    None => {break;},
-                };
-                end_string.pop();
-                let end = end_string.parse::<usize>().unwrap();
-                let start = start_string.parse::<usize>().unwrap();
-                //println!("{} {} {}",chromosone, start, end);
-                location_vec.push((chromosone, start, end));
-            },
-            Err(_) => {break;},
-        };
-    }
-    location_vec
 }
 
 pub fn get_parallel_bases_from_file(file_path: &String, required_pos: usize) -> String {
