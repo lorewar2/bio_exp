@@ -45,6 +45,26 @@ const BAND_SIZE: i32 = 100;
 const MAX_NODES_IN_POA: usize = 75_000;
 const SKIP_SCORE: i32 = 6_000;
 
+
+pub fn concancate_files () {
+    let mut output = File::create("result/chr21_ml_file").unwrap();
+    let paths = read_dir("data/chr21/").unwrap();
+    println!("{:?}", paths);
+    let mut string_array = vec![];
+    // convert path to string and save in array
+    for path in paths {
+        let temp = path.unwrap().path().clone().into_os_string().into_string().unwrap();
+        string_array.push(temp);
+        //let mut input = File::open(path.unwrap().path()).unwrap();
+        //io::copy(&mut input, &mut output).unwrap();
+    }
+    println!("before {:?}", string_array);
+    string_array.sort();
+    println!("after {:?}", string_array);
+
+    println!("done");
+}
+
 pub fn create_list_of_errors (chromosone: &str) {
     // get the error locations
     let error_locations = get_error_bases_from_deepvariant_vcf (); //chromosone, location, ref allele, alt allele
@@ -816,16 +836,6 @@ pub fn get_data_for_ml (chromosone: &str, start: usize, end: usize, thread_id: u
             break 'bigloop;
         }
     }
-}
-
-pub fn concancate_files () {
-    let mut output = File::create("result/chr21_ml_file").unwrap();
-    let paths = read_dir("data/chr21/").unwrap();
-    for path in paths {
-        let mut input = File::open(path.unwrap().path()).unwrap();
-        io::copy(&mut input, &mut output).unwrap();
-    }
-    println!("done");
 }
 
 pub fn get_quality_score_count_confident_error () {
