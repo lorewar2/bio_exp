@@ -76,6 +76,7 @@ fn get_info_from_bam (error_pos: usize, error_chr: &String) -> (usize, usize, us
     }
     let mut overlap_indel_count: usize = 0;
     let mut depth_count: usize = 0;
+    println!("current location {}", error_pos);
     'read_loop: for read in bam_reader.records() {
         depth_count += 1;
         let readunwrapped = read.unwrap();
@@ -84,6 +85,7 @@ fn get_info_from_bam (error_pos: usize, error_chr: &String) -> (usize, usize, us
         let mut temp_character_vec: Vec<char> = vec![];
         // get the read start position
         let read_start_pos = readunwrapped.pos() as usize;
+        let read_vec = readunwrapped.seq().as_bytes().to_vec();
         let mut current_ref_pos = read_start_pos;
         let mut current_read_pos = 0;
         let mut last_one_del = false;
@@ -92,11 +94,13 @@ fn get_info_from_bam (error_pos: usize, error_chr: &String) -> (usize, usize, us
                 'M' => {         
                     let temp_string: String = temp_character_vec.clone().into_iter().collect();
                     let temp_int = temp_string.parse::<usize>().unwrap();
-                    if (current_ref_pos + temp_int >= error_pos)
-                        && (current_ref_pos <= error_pos + 1) {
+                    if current_ref_pos + 1 == error_pos {
                         if last_one_del {
                             overlap_indel_count += 1;
                         }
+                    }
+                    if (current_ref_pos + temp_int >= error_pos)
+                        && (current_ref_pos <= error_pos + 1) {
                         continue 'read_loop;
                     }
                     current_ref_pos += temp_int;
@@ -127,9 +131,6 @@ fn get_info_from_bam (error_pos: usize, error_chr: &String) -> (usize, usize, us
                     let temp_int = temp_string.parse::<usize>().unwrap();
                     if (current_ref_pos + temp_int >= error_pos)
                         && (current_ref_pos <= error_pos + 1) {
-                        if last_one_del {
-                            overlap_indel_count += 1;
-                        }
                         continue 'read_loop;
                     }
                     current_ref_pos += temp_int;
@@ -141,9 +142,6 @@ fn get_info_from_bam (error_pos: usize, error_chr: &String) -> (usize, usize, us
                     let temp_int = temp_string.parse::<usize>().unwrap();
                     if (current_ref_pos + temp_int >= error_pos)
                         && (current_ref_pos <= error_pos + 1) {
-                        if last_one_del {
-                            overlap_indel_count += 1;
-                        }
                         continue 'read_loop;
                     }
                     current_ref_pos += temp_int;
