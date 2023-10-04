@@ -40,29 +40,28 @@ const READ_BAM_PATH: &str = "/data1/hifi_consensus/try2/merged.bam";
 const INTERMEDIATE_PATH: &str = "/data1/hifi_consensus/quality_data/intermediate";
 const CONFIDENT_PATH: &str = "/data1/GiaB_benchmark/HG001_GRCh38_1_22_v4.2.1_benchmark.bed";
 const REF_GENOME_PATH: &str = "/data1/GiaB_benchmark/GRCh38.fa";
-const RESULT_WRITE_PATH: &str = "/data1/hifi_consensus/all_data/chr2_data";
+const RESULT_WRITE_PATH: &str = "/data1/hifi_consensus/all_data/filters";
 const DEEPVARIANT_PATH: &str = "/data1/hifi_consensus/try3/hg38.PD47269d.minimap2_ccs.deepvariant_1.1.0.vcf";
 const BAND_SIZE: i32 = 100;
 const MAX_NODES_IN_POA: usize = 75_000;
 const SKIP_SCORE: i32 = 6_000;
 
-pub fn create_depth_indel_list () {
+pub fn create_depth_indel_list (chromosone: &str, start: usize, end: usize, thread_id: usize) {
     // go though the locations
-    for chromosone_num in 1..21 {
-        let chromosone = format!("chr{}", chromosone_num);
-        for position_base in 21_388_000..250_000_000 {
-            if position_base % 1000 == 0 {
-                println!("Position {}", position_base);
-            }
-            let cause_value = get_info_from_bam(position_base, &chromosone);
-            if cause_value.0 == 1 {
-                let write_string = format!("{} {} depth {}", chromosone, position_base, cause_value.1);
-                println!("{}", write_string);
-            }
-            else if cause_value.0 == 2 {
-                let write_string = format!("{} {} indel {}/{}", chromosone, position_base, cause_value.2, cause_value.1);
-                println!("{}", write_string);
-            }
+    for position_base in start..end {
+        if position_base % 1000 == 0 {
+            println!("Position {}", position_base);
+        }
+        let cause_value = get_info_from_bam(position_base, &chromosone.to_string());
+        if cause_value.0 == 1 {
+            let write_string = format!("{} {} {}", chromosone, position_base, cause_value.1);
+            let write_file = format!("{}/{}_depth.txt", RESULT_WRITE_PATH, thread_id);
+            write_string_to_file(&write_file, &write_string);
+        }
+        else if cause_value.0 == 2 {
+            let write_string = format!("{} {} {}/{}", chromosone, position_base, cause_value.2, cause_value.1);
+            let write_file = format!("{}/{}_indel.txt", RESULT_WRITE_PATH, thread_id);
+            write_string_to_file(&write_file, &write_string);
         }
     }
 }
@@ -76,7 +75,6 @@ fn get_info_from_bam (error_pos: usize, error_chr: &String) -> (usize, usize, us
     }
     let mut overlap_indel_count: usize = 0;
     let mut depth_count: usize = 0;
-    println!("current location {}", error_pos);
     'read_loop: for read in bam_reader.records() {
         depth_count += 1;
         let readunwrapped = read.unwrap();
@@ -85,7 +83,6 @@ fn get_info_from_bam (error_pos: usize, error_chr: &String) -> (usize, usize, us
         let mut temp_character_vec: Vec<char> = vec![];
         // get the read start position
         let read_start_pos = readunwrapped.pos() as usize;
-        let read_vec = readunwrapped.seq().as_bytes().to_vec();
         let mut current_ref_pos = read_start_pos;
         let mut current_read_pos = 0;
         let mut last_one_del = false;

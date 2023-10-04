@@ -13,13 +13,12 @@ const GAP_OPEN: i32 = -2;
 const GAP_EXTEND: i32 = 0;
 const MATCH: i32 = 2;
 const MISMATCH: i32 = -2;
-const NTHREADS: usize = 1;
+const NTHREADS: usize = 64;
 
 fn main() {
     // make a vector to hold the children which are spawned.
     let mut children = vec![];
     let chromosone = "chr2";
-    create_depth_indel_list();
     let total_start = 5_000_000;
     let total_end = 240_000_000;
     let one_thread_allocation = (total_end - total_start) / NTHREADS;
@@ -31,6 +30,7 @@ fn main() {
             let start = total_start + one_thread_allocation * i;
             let end = start + one_thread_allocation;
             println!("Thread number {} started, {} from {} to {}..", chromosone, i, start, end);
+            create_depth_indel_list(chromosone, start, end, i);
             //get_all_data_for_ml (chromosone, start, end, i);
         }));
     }
