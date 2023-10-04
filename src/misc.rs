@@ -70,7 +70,10 @@ pub fn create_depth_indel_list () {
 fn get_info_from_bam (error_pos: usize, error_chr: &String) -> (usize, usize, usize) {
     let path = &READ_BAM_PATH;
     let mut bam_reader = BamIndexedReader::from_path(path).unwrap();
-    bam_reader.fetch((error_chr, error_pos as i64, error_pos as i64 + 1)).unwrap();
+    match bam_reader.fetch((error_chr, error_pos as i64, error_pos as i64 + 1)) {
+        Ok(_x) => {},
+        _ => {return (0, 0, 0);},
+    }
     let mut insert_count: usize = 0;
     let mut depth_count: usize = 0;
     for read in bam_reader.records() {
