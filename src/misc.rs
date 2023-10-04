@@ -48,9 +48,9 @@ const SKIP_SCORE: i32 = 6_000;
 
 pub fn create_depth_indel_list () {
     // go though the locations
-    for chromosone_num in 0..21 {
+    for chromosone_num in 1..21 {
         let chromosone = format!("chr{}", chromosone_num);
-        for position_base in 0..250_000_000 {
+        for position_base in 21_388_000..250_000_000 {
             if position_base % 1000 == 0 {
                 println!("Position {}", position_base);
             }
@@ -76,11 +76,74 @@ fn get_info_from_bam (error_pos: usize, error_chr: &String) -> (usize, usize, us
     }
     let mut insert_count: usize = 0;
     let mut depth_count: usize = 0;
-    for read in bam_reader.records() {
+    'read_loop: for read in bam_reader.records() {
         depth_count += 1;
         let readunwrapped = read.unwrap();
         if readunwrapped.insert_size() > 0 {
             insert_count += 1;
+        }
+        // decode the cigar string
+        // get the location from the cigar processing
+        let mut temp_character_vec: Vec<char> = vec![];
+        // get the read start position
+        let read_start_pos = readunwrapped.pos() as usize;
+        let mut current_ref_pos = read_start_pos;
+        let mut current_read_pos = 0;
+        for character in readunwrapped.cigar().to_string().as_bytes() {
+            match *character as char {
+                'M' => {         
+                    let temp_string: String = temp_character_vec.clone().into_iter().collect();
+                    let temp_int = temp_string.parse::<usize>().unwrap();
+                    if (current_ref_pos + temp_int >= error_pos)
+                        && (current_ref_pos <= error_pos + 1) {
+                        continue 'read_loop;
+                    }
+                    current_ref_pos += temp_int;
+                    current_read_pos += temp_int;
+                    temp_character_vec = vec![];
+                },
+                'H' => {
+                    temp_character_vec = vec![];
+                },
+                'S' => {
+                    let temp_string: String = temp_character_vec.clone().into_iter().collect();
+                    let temp_int = temp_string.parse::<usize>().unwrap();
+                    current_read_pos += temp_int;
+                    temp_character_vec = vec![];
+                },
+                'I' => {
+                    let temp_string: String = temp_character_vec.clone().into_iter().collect();
+                    let temp_int = temp_string.parse::<usize>().unwrap();
+                    current_read_pos += temp_int;
+                    temp_character_vec = vec![];
+                },
+                'N' => {
+                    let temp_string: String = temp_character_vec.clone().into_iter().collect();
+                    let temp_int = temp_string.parse::<usize>().unwrap();
+                    if (current_ref_pos + temp_int >= error_pos)
+                        && (current_ref_pos <= error_pos + 1) {
+                        insert_count += 1;
+                        //(_, _) = get_required_start_end_positions_from_read (temp_int, current_ref_pos, current_read_pos, error_pos, 1);
+                        continue 'read_loop;
+                    }
+                    current_ref_pos += temp_int;
+                    temp_character_vec = vec![];
+                },
+                'D' => {
+                    let temp_string: String = temp_character_vec.clone().into_iter().collect();
+                    let temp_int = temp_string.parse::<usize>().unwrap();
+                    if (current_ref_pos + temp_int >= error_pos)
+                        && (current_ref_pos <= error_pos + 1) {
+                        insert_count += 1;
+                        continue 'read_loop;
+                    }
+                    current_ref_pos += temp_int;
+                    temp_character_vec = vec![];
+                },
+                _ => {
+                    temp_character_vec.push(*character as char);
+                },
+            }
         }
     }
     drop(bam_reader);
@@ -88,10 +151,9 @@ fn get_info_from_bam (error_pos: usize, error_chr: &String) -> (usize, usize, us
     if depth_count as f64 > (30.0 + (4.0 * sqrt(30.0))) {
         cause = 1;
     }
-    else if insert_count > 1 {
+    else if insert_count > 0 {
         cause = 2;
     }
-
     (cause, depth_count, insert_count)
 }
 
