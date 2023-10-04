@@ -1,5 +1,6 @@
 extern crate bio;
 use bio::alignment::pairwise::banded::Aligner as BandedDP;
+use libm::sqrt;
 
 use crate::alignment::pairwise::pairwise;
 use crate::alignment::poabandedsmarter::Aligner;
@@ -44,6 +45,52 @@ const DEEPVARIANT_PATH: &str = "/data1/hifi_consensus/try3/hg38.PD47269d.minimap
 const BAND_SIZE: i32 = 100;
 const MAX_NODES_IN_POA: usize = 75_000;
 const SKIP_SCORE: i32 = 6_000;
+
+pub fn create_depth_indel_list () {
+    // go though the locations
+    for chromosone_num in 0..21 {
+        let chromosone = format!("chr{}", chromosone_num);
+        for position_base in 0..250_000_000 {
+            if position_base % 1000 == 0 {
+                println!("Position {}", position_base);
+            }
+            let cause_value = get_info_from_bam(position_base, &chromosone);
+            if cause_value.0 == 1 {
+                let write_string = format!("{} {} depth {}", chromosone, position_base, cause_value.1);
+                println!("{}", write_string);
+            }
+            else if cause_value.0 == 2 {
+                let write_string = format!("{} {} indel {}/{}", chromosone, position_base, cause_value.2, cause_value.1);
+                println!("{}", write_string);
+            }
+        }
+    }
+}
+
+fn get_info_from_bam (error_pos: usize, error_chr: &String) -> (usize, usize, usize) {
+    let path = &READ_BAM_PATH;
+    let mut bam_reader = BamIndexedReader::from_path(path).unwrap();
+    bam_reader.fetch((error_chr, error_pos as i64, error_pos as i64 + 1)).unwrap();
+    let mut insert_count: usize = 0;
+    let mut depth_count: usize = 0;
+    for read in bam_reader.records() {
+        depth_count += 1;
+        let readunwrapped = read.unwrap();
+        if readunwrapped.insert_size() > 0 {
+            insert_count += 1;
+        }
+    }
+    drop(bam_reader);
+    let mut cause: usize = 0;
+    if depth_count as f64 > (30.0 + (4.0 * sqrt(30.0))) {
+        cause = 1;
+    }
+    else if insert_count > 1 {
+        cause = 2;
+    }
+
+    (cause, depth_count, insert_count)
+}
 
 pub fn create_confidence_list () {
     // get the confident locations
