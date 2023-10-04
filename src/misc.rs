@@ -120,7 +120,7 @@ fn get_info_from_bam (error_pos: usize, error_chr: &String) -> (usize, usize, us
                     let temp_int = temp_string.parse::<usize>().unwrap();
                     current_read_pos += temp_int;
                     temp_character_vec = vec![];
-                    last_one_del = false;
+                    last_one_del = true;
                 },
                 'N' => {
                     let temp_string: String = temp_character_vec.clone().into_iter().collect();
@@ -148,7 +148,7 @@ fn get_info_from_bam (error_pos: usize, error_chr: &String) -> (usize, usize, us
                     }
                     current_ref_pos += temp_int;
                     temp_character_vec = vec![];
-                    last_one_del = true;
+                    last_one_del = false;
                 },
                 _ => {
                     temp_character_vec.push(*character as char);
