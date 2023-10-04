@@ -74,14 +74,11 @@ fn get_info_from_bam (error_pos: usize, error_chr: &String) -> (usize, usize, us
         Ok(_x) => {},
         _ => {return (0, 0, 0);},
     }
-    let mut insert_count: usize = 0;
+    let mut overlap_indel_count: usize = 0;
     let mut depth_count: usize = 0;
     'read_loop: for read in bam_reader.records() {
         depth_count += 1;
         let readunwrapped = read.unwrap();
-        if readunwrapped.insert_size() > 0 {
-            insert_count += 1;
-        }
         // decode the cigar string
         // get the location from the cigar processing
         let mut temp_character_vec: Vec<char> = vec![];
@@ -89,6 +86,7 @@ fn get_info_from_bam (error_pos: usize, error_chr: &String) -> (usize, usize, us
         let read_start_pos = readunwrapped.pos() as usize;
         let mut current_ref_pos = read_start_pos;
         let mut current_read_pos = 0;
+        let mut last_one_del = false;
         for character in readunwrapped.cigar().to_string().as_bytes() {
             match *character as char {
                 'M' => {         
@@ -96,49 +94,61 @@ fn get_info_from_bam (error_pos: usize, error_chr: &String) -> (usize, usize, us
                     let temp_int = temp_string.parse::<usize>().unwrap();
                     if (current_ref_pos + temp_int >= error_pos)
                         && (current_ref_pos <= error_pos + 1) {
+                        if last_one_del {
+                            overlap_indel_count += 1;
+                        }
                         continue 'read_loop;
                     }
                     current_ref_pos += temp_int;
                     current_read_pos += temp_int;
                     temp_character_vec = vec![];
+                    last_one_del = false;
                 },
                 'H' => {
                     temp_character_vec = vec![];
+                    last_one_del = false;
                 },
                 'S' => {
                     let temp_string: String = temp_character_vec.clone().into_iter().collect();
                     let temp_int = temp_string.parse::<usize>().unwrap();
                     current_read_pos += temp_int;
                     temp_character_vec = vec![];
+                    last_one_del = false;
                 },
                 'I' => {
                     let temp_string: String = temp_character_vec.clone().into_iter().collect();
                     let temp_int = temp_string.parse::<usize>().unwrap();
                     current_read_pos += temp_int;
                     temp_character_vec = vec![];
+                    last_one_del = false;
                 },
                 'N' => {
                     let temp_string: String = temp_character_vec.clone().into_iter().collect();
                     let temp_int = temp_string.parse::<usize>().unwrap();
                     if (current_ref_pos + temp_int >= error_pos)
                         && (current_ref_pos <= error_pos + 1) {
-                        insert_count += 1;
-                        //(_, _) = get_required_start_end_positions_from_read (temp_int, current_ref_pos, current_read_pos, error_pos, 1);
+                        if last_one_del {
+                            overlap_indel_count += 1;
+                        }
                         continue 'read_loop;
                     }
                     current_ref_pos += temp_int;
                     temp_character_vec = vec![];
+                    last_one_del = false;
                 },
                 'D' => {
                     let temp_string: String = temp_character_vec.clone().into_iter().collect();
                     let temp_int = temp_string.parse::<usize>().unwrap();
                     if (current_ref_pos + temp_int >= error_pos)
                         && (current_ref_pos <= error_pos + 1) {
-                        insert_count += 1;
+                        if last_one_del {
+                            overlap_indel_count += 1;
+                        }
                         continue 'read_loop;
                     }
                     current_ref_pos += temp_int;
                     temp_character_vec = vec![];
+                    last_one_del = true;
                 },
                 _ => {
                     temp_character_vec.push(*character as char);
@@ -151,10 +161,10 @@ fn get_info_from_bam (error_pos: usize, error_chr: &String) -> (usize, usize, us
     if depth_count as f64 > (30.0 + (4.0 * sqrt(30.0))) {
         cause = 1;
     }
-    else if insert_count > 0 {
+    else if (overlap_indel_count < depth_count) && (overlap_indel_count > 0) {
         cause = 2;
     }
-    (cause, depth_count, insert_count)
+    (cause, depth_count, overlap_indel_count)
 }
 
 pub fn create_confidence_list () {
