@@ -56,8 +56,8 @@ pub fn check_error_location (error_position: usize, chromosone: String) {
         threebase_context = read_fai_file(error_position - 1, &chromosone.to_string(), &mut fai_reader);
     }
     for seq_name_qual_and_errorpos in &seq_name_qual_and_errorpos_vec {
-        let base = seq_name_qual_and_errorpos.2 as char;
-        println!("{} {} {:?}", threebase_context, base, seq_name_qual_and_errorpos);
+        let qual = seq_name_qual_and_errorpos.2;
+        println!("{} {} {} {}", threebase_context, qual, seq_name_qual_and_errorpos.1,  seq_name_qual_and_errorpos.0.chars().collect::<Vec<char>>()[seq_name_qual_and_errorpos.3]);
     }
 }
 
@@ -1494,9 +1494,11 @@ fn get_corrosponding_seq_name_location_quality_from_bam (error_pos: usize, error
         // decode the cigar string
         for character in readunwrapped.cigar().to_string().as_bytes() {
             match *character as char {
-                'M' => {         
+                'M' => {    
+                      
                     let temp_string: String = temp_character_vec.clone().into_iter().collect();
                     let temp_int = temp_string.parse::<usize>().unwrap();
+                    println!("M {}", temp_int);  
                     if (current_ref_pos + temp_int >= error_pos)
                         && (current_ref_pos <= error_pos + 1) {
                         (read_index, _) = get_required_start_end_positions_from_read (temp_int, current_ref_pos, current_read_pos, error_pos, 1);
@@ -1520,6 +1522,7 @@ fn get_corrosponding_seq_name_location_quality_from_bam (error_pos: usize, error
                 'S' => {
                     let temp_string: String = temp_character_vec.clone().into_iter().collect();
                     let temp_int = temp_string.parse::<usize>().unwrap();
+                    println!("S {}", temp_int); 
                     current_read_pos += temp_int;
                     temp_character_vec = vec![];
                 },
@@ -1527,11 +1530,13 @@ fn get_corrosponding_seq_name_location_quality_from_bam (error_pos: usize, error
                     let temp_string: String = temp_character_vec.clone().into_iter().collect();
                     let temp_int = temp_string.parse::<usize>().unwrap();
                     current_read_pos += temp_int;
+                    println!("I {}", temp_int); 
                     temp_character_vec = vec![];
                 },
                 'N' => {
                     let temp_string: String = temp_character_vec.clone().into_iter().collect();
                     let temp_int = temp_string.parse::<usize>().unwrap();
+                    println!("N {}", temp_int); 
                     if (current_ref_pos + temp_int >= error_pos)
                         && (current_ref_pos <= error_pos + 1) {
                         //(_, _) = get_required_start_end_positions_from_read (temp_int, current_ref_pos, current_read_pos, error_pos, 1);
@@ -1543,6 +1548,7 @@ fn get_corrosponding_seq_name_location_quality_from_bam (error_pos: usize, error
                 'D' => {
                     let temp_string: String = temp_character_vec.clone().into_iter().collect();
                     let temp_int = temp_string.parse::<usize>().unwrap();
+                    println!("D {}", temp_int); 
                     if (current_ref_pos + temp_int >= error_pos)
                         && (current_ref_pos <= error_pos + 1) {
                         //let (_, _) = get_required_start_end_positions_from_read (temp_int, current_ref_pos, current_read_pos, error_pos, 1);
