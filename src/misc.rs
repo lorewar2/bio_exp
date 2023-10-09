@@ -49,7 +49,7 @@ const SKIP_SCORE: i32 = 6_000;
 
 pub fn create_himut_list () {
     // get the error locations
-    let error_locations = get_germline_info_from_deepvariant_vcf (); //chromosone, location, ref allele, alt allele
+    let error_locations = get_himut_info_from_himut_vcf (); //chromosone, location, ref allele, alt allele
     for error_location in error_locations {
         let error_string = format!("{} {} {} -> {}\n", error_location.0, error_location.1, error_location.2, error_location.3);
         let write_file = format!("/data1/hifi_consensus/all_data/filters/himut_data.txt");
