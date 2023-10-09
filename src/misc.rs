@@ -47,6 +47,20 @@ const BAND_SIZE: i32 = 100;
 const MAX_NODES_IN_POA: usize = 75_000;
 const SKIP_SCORE: i32 = 6_000;
 
+pub fn check_error_location (error_position: usize, chromosone: String) {
+    let seq_name_qual_and_errorpos_vec = get_corrosponding_seq_name_location_quality_from_bam(error_position, &chromosone.to_string(), &'X');
+    // get the three base context
+    let mut threebase_context = "".to_string();
+    if seq_name_qual_and_errorpos_vec.len() > 0 {
+        let mut fai_reader = faidx::Reader::from_path(REF_GENOME_PATH).unwrap();
+        threebase_context = read_fai_file(error_position - 1, &chromosone.to_string(), &mut fai_reader);
+    }
+    for seq_name_qual_and_errorpos in &seq_name_qual_and_errorpos_vec {
+        let base = seq_name_qual_and_errorpos.2 as char;
+        println!("{} {} {:?}", threebase_context, base, seq_name_qual_and_errorpos);
+    }
+}
+
 pub fn create_himut_list () {
     // get the error locations
     let error_locations = get_himut_info_from_himut_vcf (); //chromosone, location, ref allele, alt allele

@@ -6,7 +6,7 @@ mod generator;
 mod misc;
 mod quality;
 use std::thread;
-use crate::misc::create_himut_list;
+use crate::misc::check_error_location;
 
 const SEED: u64 = 2;
 const GAP_OPEN: i32 = -2;
@@ -21,7 +21,7 @@ fn main() {
     let chromosone = "chr2";
     let total_start = 5_000_000;
     let total_end = 240_000_000;
-    create_himut_list();
+    check_error_location (5_085_348, "chr2".to_string());
     let one_thread_allocation = (total_end - total_start) / NTHREADS;
     for i in 0..NTHREADS {
         // calculate my start and end locations
