@@ -6,7 +6,7 @@ mod generator;
 mod misc;
 mod quality;
 use std::thread;
-use crate::misc::create_depth_indel_list;
+use crate::misc::create_himut_list;
 
 const SEED: u64 = 2;
 const GAP_OPEN: i32 = -2;
@@ -21,6 +21,7 @@ fn main() {
     let chromosone = "chr2";
     let total_start = 5_000_000;
     let total_end = 240_000_000;
+    create_himut_list();
     let one_thread_allocation = (total_end - total_start) / NTHREADS;
     for i in 0..NTHREADS {
         // calculate my start and end locations
@@ -30,7 +31,7 @@ fn main() {
             let start = total_start + one_thread_allocation * i;
             let end = start + one_thread_allocation;
             println!("Thread number {} started, {} from {} to {}..", chromosone, i, start, end);
-            create_depth_indel_list(chromosone, start, end, i);
+            //create_depth_indel_list(chromosone, start, end, i);
             //get_all_data_for_ml (chromosone, start, end, i);
         }));
     }

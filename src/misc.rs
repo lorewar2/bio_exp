@@ -42,9 +42,43 @@ const CONFIDENT_PATH: &str = "/data1/GiaB_benchmark/HG001_GRCh38_1_22_v4.2.1_ben
 const REF_GENOME_PATH: &str = "/data1/GiaB_benchmark/GRCh38.fa";
 const RESULT_WRITE_PATH: &str = "/data1/hifi_consensus/all_data/filters";
 const DEEPVARIANT_PATH: &str = "/data1/hifi_consensus/try3/hg38.PD47269d.minimap2_ccs.deepvariant_1.1.0.vcf";
+const HIMUT_PATH: &str = "/data1/hifi_consensus/try3/test.vcf";
 const BAND_SIZE: i32 = 100;
 const MAX_NODES_IN_POA: usize = 75_000;
 const SKIP_SCORE: i32 = 6_000;
+
+pub fn create_himut_list () {
+    // get the error locations
+    let error_locations = get_germline_info_from_deepvariant_vcf (); //chromosone, location, ref allele, alt allele
+    for error_location in error_locations {
+        let error_string = format!("{} {} {} -> {}\n", error_location.0, error_location.1, error_location.2, error_location.3);
+        let write_file = format!("/data1/hifi_consensus/all_data/filters/himut_data.txt");
+        write_string_to_file(&write_file, &error_string);
+    }
+}
+
+pub fn get_himut_info_from_himut_vcf () -> Vec<(String, usize, String, String)> {
+    let mut error_locus_vec: Vec<(String, usize, String, String)> = vec![]; //chromosone, position, ref, alt
+    let mut bcf = Reader::from_path(HIMUT_PATH).expect("Error opening file.");
+    // iterate through each row of the vcf body.
+    for (_, record_result) in bcf.records().enumerate() {
+        let record = record_result.expect("Fail to read record");
+        let mut allele_vec: Vec<String> = vec![];
+        // only pass filters are accepted
+        //if record.has_filter("PASS".as_bytes()) == true {
+            for allele in record.alleles() {
+                allele_vec.push(std::str::from_utf8(allele).unwrap().to_owned());
+            }
+            let temp_str = record.desc();
+            let mut split_text_iter = (temp_str.split(":")).into_iter();
+            let chromosone = format!("{}", split_text_iter.next().unwrap());
+            error_locus_vec.push((chromosone.to_string(), record.pos() as usize, allele_vec[0].clone(), allele_vec[1].clone()));
+            println!("{} {} {} -> {}", chromosone.to_string(), record.pos() as usize, allele_vec[0], allele_vec[1]);
+        //}
+    }
+    println!("number of errors = {}", error_locus_vec.len());
+    error_locus_vec
+}
 
 pub fn create_depth_indel_list (chromosone: &str, start: usize, end: usize, thread_id: usize) {
     // go though the locations
@@ -54,12 +88,12 @@ pub fn create_depth_indel_list (chromosone: &str, start: usize, end: usize, thre
         }
         let cause_value = get_info_from_bam(position_base, &chromosone.to_string());
         if cause_value.0 == 1 {
-            let write_string = format!("{} {} {}", chromosone, position_base, cause_value.1);
+            let write_string = format!("{} {} {}\n", chromosone, position_base, cause_value.1);
             let write_file = format!("{}/{}_depth.txt", RESULT_WRITE_PATH, thread_id);
             write_string_to_file(&write_file, &write_string);
         }
         else if cause_value.0 == 2 {
-            let write_string = format!("{} {} {}/{}", chromosone, position_base, cause_value.2, cause_value.1);
+            let write_string = format!("{} {} {}/{}\n", chromosone, position_base, cause_value.2, cause_value.1);
             let write_file = format!("{}/{}_indel.txt", RESULT_WRITE_PATH, thread_id);
             write_string_to_file(&write_file, &write_string);
         }
