@@ -42,10 +42,40 @@ const CONFIDENT_PATH: &str = "/data1/GiaB_benchmark/HG001_GRCh38_1_22_v4.2.1_ben
 const REF_GENOME_PATH: &str = "/data1/GiaB_benchmark/GRCh38.fa";
 const RESULT_WRITE_PATH: &str = "/data1/hifi_consensus/all_data/filters";
 const DEEPVARIANT_PATH: &str = "/data1/hifi_consensus/try3/hg38.PD47269d.minimap2_ccs.deepvariant_1.1.0.vcf";
+const WRONG_ERROR_FILE_PATH: &str = "/data1/hifi_consensus/all_data/chr2_errors.txt";
 const HIMUT_PATH: &str = "/data1/hifi_consensus/try3/test.vcf";
 const BAND_SIZE: i32 = 100;
 const MAX_NODES_IN_POA: usize = 75_000;
 const SKIP_SCORE: i32 = 6_000;
+
+pub fn redo_topology_parallel_bases_rewrite_files () {
+    let chromosone: String = "chr2".to_string();
+    // read the file and make an array of the error locations
+    let mut error_location_array: Vec<usize> = vec![];
+    let file_path = WRONG_ERROR_FILE_PATH;
+    let f = File::open(&file_path).unwrap();
+    let mut reader = BufReader::new(f);
+    let mut buffer = String::new();
+    loop {
+        buffer.clear();
+        match reader.read_line(&mut buffer) {
+            Ok(_) => {
+                let mut split_text_iter = (buffer.split(" ")).into_iter();
+                let location; 
+                match split_text_iter.next() {
+                    Some(x) => {location = x.parse::<usize>().unwrap();},
+                    None => {break;},
+                }
+                if !error_location_array.contains(&location) {
+                    error_location_array.push(location);
+                }
+            },
+            Err(_) => {break;},
+        };
+    }
+    println!("{:?}", error_location_array);
+    // go through the locations and
+}
 
 pub fn check_error_location (error_position: usize, chromosone: String) {
     let seq_name_qual_and_errorpos_vec = get_corrosponding_seq_name_location_quality_from_bam(error_position, &chromosone.to_string(), &'X');
