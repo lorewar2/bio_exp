@@ -71,10 +71,13 @@ pub fn redo_topology_parallel_bases_rewrite_files (_chromosone: &str, start: usi
                     Ok(x) => {location_usize = x;},
                     Err(_) => {break;},
                 }
-                if !error_location_array.contains(&location_usize) {
-                    if (location_usize > start) && (location_usize < end) {
-                        error_location_array.push(location_usize);
+                if (location_usize > start) && (location_usize < end) {
+                    if !error_location_array.contains(&location_usize) {
+                        error_location_array.push(location_usize); 
                     }
+                }
+                else {
+                    continue;
                 }
             },
             Err(_) => {break;},
@@ -87,11 +90,12 @@ pub fn redo_topology_parallel_bases_rewrite_files (_chromosone: &str, start: usi
     let len = error_location_array.len();
     let mut processed_stuff: Vec<String> = vec![];
     for error_location in error_location_array {
-        println!("thread {} progress {}/{}", thread_id, error_index, len);
+        println!("thread {}: progress {}/{}", thread_id, error_index, len);
         error_index += 1;
         let seq_name_qual_and_errorpos_vec = get_corrosponding_seq_name_location_quality_from_bam(error_location, &chromosone, &'X');
         for seq_name_qual_and_errorpos in &seq_name_qual_and_errorpos_vec {
             if processed_stuff.contains(&seq_name_qual_and_errorpos.1) {
+                println!("thread {}: available skipping", thread_id);
                 continue;
             }
             else {
