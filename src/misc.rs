@@ -16,6 +16,7 @@ use petgraph::Direction::Outgoing;
 use rust_htslib::bam::{Read as BamRead, IndexedReader as BamIndexedReader};
 use rust_htslib::bcf::{Reader, Read as BcfRead};
 use rust_htslib::faidx;
+use std::iter::Enumerate;
 use std::{fs::OpenOptions, io::{prelude::*}};
 use std::io::BufReader;
 use std::fs::File;
@@ -79,7 +80,61 @@ pub fn redo_topology_parallel_bases_rewrite_files () {
         };
     }
     println!("{:?}", error_location_array);
+
     // go through the locations and
+    let mut error_index = 0;
+    let len = error_location_array.len();
+    for error_location in error_location_array {
+        println!("progress {}/{}", error_index, len);
+        error_index += 1;
+        let seq_name_qual_and_errorpos_vec = get_corrosponding_seq_name_location_quality_from_bam(error_location, &chromosone, &'X');
+        for seq_name_qual_and_errorpos in &seq_name_qual_and_errorpos_vec {
+            // delete the current ccs file
+            //let file_name = format!("{}/{}", INTERMEDIATE_PATH, &seq_name_qual_and_errorpos.1);
+            //let path = std::path::Path::new(&file_name);
+            //match remove_file(path) {
+            //    Ok(_) => {},
+            //    Err(_) => {}
+            //};
+            // check if graph is available, if available load all the data
+            let check_file = format!("{}_graph.txt", &seq_name_qual_and_errorpos.1);
+            if check_file_availability(&check_file, INTERMEDIATE_PATH) {
+                //println!("Thread {}: Required File not Available, Graph Available, processing..", thread_id);
+            }
+            else {
+                continue;
+            }
+            // find the subreads of that ccs
+            let sub_reads = get_the_subreads_by_name_sam(&seq_name_qual_and_errorpos.1);
+            // skip if no subreads, errors and stuff
+            if sub_reads.len() == 0 {
+                continue;
+            }
+            let calculated_graph = load_the_graph(check_file);
+            let (calculated_consensus, calculated_topology) = get_consensus_from_graph(&calculated_graph);
+            let parallel_bases_vec = get_consensus_parallel_bases(sub_reads.len(), &calculated_consensus, &calculated_topology, &calculated_graph);
+            // match the calculated consensus to the original consensus and get the required indices
+            let calc_cons_id = get_redone_consensus_matched_positions(&seq_name_qual_and_errorpos.0, &calculated_consensus);
+            for (index, pacbio_base) in seq_name_qual_and_errorpos.0.as_bytes().to_vec().iter().enumerate() {
+                let pacbio_char = *pacbio_base as char;
+                let parallel_bases;
+                if calc_cons_id[index] != usize::MAX {
+                    parallel_bases = parallel_bases_vec[calc_cons_id[index]].clone();
+                }
+                else {
+                    parallel_bases = vec![1, 1, 1, 1];
+                }
+                let write_string = format!("{} {} {:?}\n", pacbio_char, (sub_reads.len() - 1), parallel_bases);
+                if index == seq_name_qual_and_errorpos.3 {
+                    println!("{} {}", error_location, write_string);
+                }
+                break;
+                //println!("{}", write_string);
+                let write_file = format!("{}/{}", INTERMEDIATE_PATH, &seq_name_qual_and_errorpos.1);
+                write_string_to_file(&write_file, &write_string);
+            }
+        }
+    }
 }
 
 pub fn check_error_location (error_position: usize, chromosone: String) {
