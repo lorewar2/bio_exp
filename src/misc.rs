@@ -1499,7 +1499,7 @@ fn get_corrosponding_seq_name_location_quality_from_bam (error_pos: usize, error
                     let temp_string: String = temp_character_vec.clone().into_iter().collect();
                     let temp_int = temp_string.parse::<usize>().unwrap();
                     println!("M {}", temp_int);  
-                    if (current_ref_pos + temp_int >= error_pos)
+                    if (current_ref_pos + temp_int > error_pos)
                         && (current_ref_pos <= error_pos + 1) {
                         (read_index, _) = get_required_start_end_positions_from_read (temp_int, current_ref_pos, current_read_pos, error_pos, 1);
                         if &(read_vec[read_index] as char) == base_change && ('X' != *base_change) {
