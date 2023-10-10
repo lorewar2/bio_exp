@@ -61,13 +61,18 @@ pub fn redo_topology_parallel_bases_rewrite_files () {
         match reader.read_line(&mut buffer) {
             Ok(_) => {
                 let mut split_text_iter = (buffer.split(" ")).into_iter();
-                let location; 
+                let location_result;
+                let location_usize; 
                 match split_text_iter.next() {
-                    Some(x) => {location = x.parse::<usize>().unwrap();},
+                    Some(x) => {location_result = x.parse::<usize>();},
                     None => {break;},
                 }
-                if !error_location_array.contains(&location) {
-                    error_location_array.push(location);
+                match location_result {
+                    Ok(x) => {location_usize = x;},
+                    Err(_) => {break;},
+                }
+                if !error_location_array.contains(&location_usize) {
+                    error_location_array.push(location_usize);
                 }
             },
             Err(_) => {break;},
