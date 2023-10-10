@@ -13,7 +13,7 @@ const GAP_OPEN: i32 = -2;
 const GAP_EXTEND: i32 = 0;
 const MATCH: i32 = 2;
 const MISMATCH: i32 = -2;
-const NTHREADS: usize = 64;
+const NTHREADS: usize = 1;
 
 fn main() {
     // make a vector to hold the children which are spawned.
@@ -21,7 +21,7 @@ fn main() {
     let chromosone = "chr2";
     let total_start = 5_000_000;
     let total_end = 240_000_000;
-    redo_topology_parallel_bases_rewrite_files ();
+    
     let one_thread_allocation = (total_end - total_start) / NTHREADS;
     for i in 0..NTHREADS {
         // calculate my start and end locations
@@ -31,6 +31,7 @@ fn main() {
             let start = total_start + one_thread_allocation * i;
             let end = start + one_thread_allocation;
             println!("Thread number {} started, {} from {} to {}..", chromosone, i, start, end);
+            redo_topology_parallel_bases_rewrite_files(chromosone, start, end, i);
             //create_depth_indel_list(chromosone, start, end, i);
             //get_all_data_for_ml (chromosone, start, end, i);
         }));

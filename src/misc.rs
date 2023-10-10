@@ -16,7 +16,6 @@ use petgraph::Direction::Outgoing;
 use rust_htslib::bam::{Read as BamRead, IndexedReader as BamIndexedReader};
 use rust_htslib::bcf::{Reader, Read as BcfRead};
 use rust_htslib::faidx;
-use std::iter::Enumerate;
 use std::{fs::OpenOptions, io::{prelude::*}};
 use std::io::BufReader;
 use std::fs::File;
@@ -49,7 +48,7 @@ const BAND_SIZE: i32 = 100;
 const MAX_NODES_IN_POA: usize = 75_000;
 const SKIP_SCORE: i32 = 6_000;
 
-pub fn redo_topology_parallel_bases_rewrite_files () {
+pub fn redo_topology_parallel_bases_rewrite_files (_chromosone: &str, start: usize, end: usize, thread_id: usize) {
     let chromosone: String = "chr2".to_string();
     // read the file and make an array of the error locations
     let mut error_location_array: Vec<usize> = vec![];
@@ -73,29 +72,38 @@ pub fn redo_topology_parallel_bases_rewrite_files () {
                     Err(_) => {break;},
                 }
                 if !error_location_array.contains(&location_usize) {
-                    error_location_array.push(location_usize);
+                    if (location_usize > start) && (location_usize < end) {
+                        error_location_array.push(location_usize);
+                    }
                 }
             },
             Err(_) => {break;},
         };
     }
-    println!("{:?}", error_location_array);
+    println!("{} {:?}", thread_id, error_location_array);
 
     // go through the locations and
     let mut error_index = 0;
     let len = error_location_array.len();
+    let mut processed_stuff: Vec<String> = vec![];
     for error_location in error_location_array {
-        println!("progress {}/{}", error_index, len);
+        println!("thread {} progress {}/{}", thread_id, error_index, len);
         error_index += 1;
         let seq_name_qual_and_errorpos_vec = get_corrosponding_seq_name_location_quality_from_bam(error_location, &chromosone, &'X');
         for seq_name_qual_and_errorpos in &seq_name_qual_and_errorpos_vec {
+            if processed_stuff.contains(&seq_name_qual_and_errorpos.1) {
+                continue;
+            }
+            else {
+                processed_stuff.push(seq_name_qual_and_errorpos.1.clone());
+            }
             // delete the current ccs file
-            //let file_name = format!("{}/{}", INTERMEDIATE_PATH, &seq_name_qual_and_errorpos.1);
-            //let path = std::path::Path::new(&file_name);
-            //match remove_file(path) {
-            //    Ok(_) => {},
-            //    Err(_) => {}
-            //};
+            let file_name = format!("{}/{}", INTERMEDIATE_PATH, &seq_name_qual_and_errorpos.1);
+            let path = std::path::Path::new(&file_name);
+            match remove_file(path) {
+               Ok(_) => {},
+               Err(_) => {}
+            };
             // check if graph is available, if available load all the data
             let check_file = format!("{}_graph.txt", &seq_name_qual_and_errorpos.1);
             if check_file_availability(&check_file, INTERMEDIATE_PATH) {
@@ -128,8 +136,6 @@ pub fn redo_topology_parallel_bases_rewrite_files () {
                 if index == seq_name_qual_and_errorpos.3 {
                     println!("{} {}", error_location, write_string);
                 }
-                break;
-                //println!("{}", write_string);
                 let write_file = format!("{}/{}", INTERMEDIATE_PATH, &seq_name_qual_and_errorpos.1);
                 write_string_to_file(&write_file, &write_string);
             }
