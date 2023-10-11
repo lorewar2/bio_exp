@@ -40,13 +40,81 @@ const READ_BAM_PATH: &str = "/data1/hifi_consensus/try2/merged.bam";
 const INTERMEDIATE_PATH: &str = "/data1/hifi_consensus/quality_data/intermediate";
 const CONFIDENT_PATH: &str = "/data1/GiaB_benchmark/HG001_GRCh38_1_22_v4.2.1_benchmark.bed";
 const REF_GENOME_PATH: &str = "/data1/GiaB_benchmark/GRCh38.fa";
-const RESULT_WRITE_PATH: &str = "/data1/hifi_consensus/all_data/filters";
+const RESULT_WRITE_PATH: &str = "/data1/hifi_consensus/all_data/chr2_data";
 const DEEPVARIANT_PATH: &str = "/data1/hifi_consensus/try3/hg38.PD47269d.minimap2_ccs.deepvariant_1.1.0.vcf";
 const WRONG_ERROR_FILE_PATH: &str = "/data1/hifi_consensus/all_data/chr2_errors.txt";
 const HIMUT_PATH: &str = "/data1/hifi_consensus/try3/test.vcf";
 const BAND_SIZE: i32 = 100;
 const MAX_NODES_IN_POA: usize = 75_000;
 const SKIP_SCORE: i32 = 6_000;
+
+pub fn get_corrected_parallel_bases (_chromosone: &str, start: usize, end: usize, thread_id: usize) {
+    let chromosone: String = "chr2".to_string();
+    // read the file and make an array of the error locations
+    let mut error_location_array: Vec<usize> = vec![];
+    let file_path = WRONG_ERROR_FILE_PATH;
+    let f = File::open(&file_path).unwrap();
+    let mut reader = BufReader::new(f);
+    let mut buffer = String::new();
+    loop {
+        buffer.clear();
+        match reader.read_line(&mut buffer) {
+            Ok(_) => {
+                let mut split_text_iter = (buffer.split(" ")).into_iter();
+                let location_result;
+                let location_usize; 
+                match split_text_iter.next() {
+                    Some(x) => {location_result = x.parse::<usize>();},
+                    None => {break;},
+                }
+                match location_result {
+                    Ok(x) => {location_usize = x;},
+                    Err(_) => {break;},
+                }
+                if (location_usize > start) && (location_usize < end) {
+                    if !error_location_array.contains(&location_usize) {
+                        error_location_array.push(location_usize); 
+                    }
+                }
+                else {
+                    continue;
+                }
+            },
+            Err(_) => {break;},
+        };
+    }
+    println!("{} {:?}", thread_id, error_location_array);
+    // go through the thing and redo the errors
+    for position_base in error_location_array {
+        if position_base % 1000 == 0 {
+            println!("Thread ID: {} Position {}", thread_id, position_base);
+        }
+        let seq_name_qual_and_errorpos_vec = get_corrosponding_seq_name_location_quality_from_bam(position_base, &chromosone.to_string(), &'X');
+        // get the three base context
+        let mut threebase_context = "".to_string();
+        if seq_name_qual_and_errorpos_vec.len() > 0 {
+            let mut fai_reader = faidx::Reader::from_path(REF_GENOME_PATH).unwrap();
+            threebase_context = read_fai_file(position_base - 1, &chromosone.to_string(), &mut fai_reader);
+        }
+        for seq_name_qual_and_errorpos in &seq_name_qual_and_errorpos_vec {
+            let quality = seq_name_qual_and_errorpos.2;
+            // error is here
+            let parallel_stuff;
+            // check if the file is already available
+            if check_file_availability(&seq_name_qual_and_errorpos.1, INTERMEDIATE_PATH) {
+                let available_file_path = format!("{}/{}", INTERMEDIATE_PATH, seq_name_qual_and_errorpos.1);
+                parallel_stuff = get_parallel_bases_from_file(&available_file_path, seq_name_qual_and_errorpos.3);
+            }
+            else {
+                continue;
+            }
+            // write data
+            let write_string = format!("{} {} {} {}", position_base, threebase_context, quality, parallel_stuff);
+            let write_file = format!("{}/{}_corrected_data.txt", RESULT_WRITE_PATH, thread_id);
+            write_string_to_file(&write_file, &write_string);
+        }
+    }
+}
 
 pub fn redo_topology_parallel_bases_rewrite_files (_chromosone: &str, start: usize, end: usize, thread_id: usize) {
     let chromosone: String = "chr2".to_string();

@@ -6,7 +6,7 @@ mod generator;
 mod misc;
 mod quality;
 use std::thread;
-use crate::misc::redo_topology_parallel_bases_rewrite_files;
+use crate::misc::get_corrected_parallel_bases;
 
 const SEED: u64 = 2;
 const GAP_OPEN: i32 = -2;
@@ -31,7 +31,7 @@ fn main() {
             let start = total_start + one_thread_allocation * i;
             let end = start + one_thread_allocation;
             println!("Thread number {} started, {} from {} to {}..", chromosone, i, start, end);
-            redo_topology_parallel_bases_rewrite_files(chromosone, start, end, i);
+            get_corrected_parallel_bases(chromosone, start, end, i);
             //create_depth_indel_list(chromosone, start, end, i);
             //get_all_data_for_ml (chromosone, start, end, i);
         }));
