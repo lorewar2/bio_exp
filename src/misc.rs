@@ -489,6 +489,11 @@ pub fn get_all_data_for_ml (chromosone: &str, start: usize, end: usize, thread_i
         }
         let seq_name_qual_and_errorpos_vec = get_corrosponding_seq_name_location_quality_from_bam(position_base, &chromosone.to_string(), &'X');
         // get the three base context
+        let mut threebase_context = "".to_string();
+        if seq_name_qual_and_errorpos_vec.len() > 0 {
+            let mut fai_reader = faidx::Reader::from_path(REF_GENOME_PATH).unwrap();
+            threebase_context = read_fai_file(position_base - 1, &chromosone.to_string(), &mut fai_reader);
+        }
         for seq_name_qual_and_errorpos in &seq_name_qual_and_errorpos_vec {
             let char_sequence: Vec<char> = seq_name_qual_and_errorpos.0.chars().collect::<Vec<_>>();
             let mut char_7base_context: Vec<char> = vec![];
@@ -500,9 +505,9 @@ pub fn get_all_data_for_ml (chromosone: &str, start: usize, end: usize, thread_i
             }
             // when 7 base context below 0
             else {
-                char_7base_context.push('A');
-                char_7base_context.push('A');
-                char_7base_context.push('A');
+                char_7base_context.push('X');
+                char_7base_context.push('X');
+                char_7base_context.push('X');
             }
             char_7base_context.push(char_sequence[seq_name_qual_and_errorpos.3]);
             // when len is greater than 7 base context
@@ -513,9 +518,9 @@ pub fn get_all_data_for_ml (chromosone: &str, start: usize, end: usize, thread_i
             }
             // when len is less than 7 base context
             else {
-                char_7base_context.push('A');
-                char_7base_context.push('A');
-                char_7base_context.push('A');
+                char_7base_context.push('X');
+                char_7base_context.push('X');
+                char_7base_context.push('X');
             }
             let sevenbase_context = char_7base_context.iter().collect::<String>();
             let quality = seq_name_qual_and_errorpos.2;
@@ -530,7 +535,7 @@ pub fn get_all_data_for_ml (chromosone: &str, start: usize, end: usize, thread_i
                 continue;
             }
             // write data
-            let write_string = format!("{} {} {} {}", position_base, sevenbase_context, quality, parallel_stuff);
+            let write_string = format!("{} {} : {} {} {}", position_base, threebase_context, sevenbase_context, quality, parallel_stuff);
             let write_file = format!("{}/{}_mldata.txt", RESULT_WRITE_PATH, thread_id);
             write_string_to_file(&write_file, &write_string);
         }
