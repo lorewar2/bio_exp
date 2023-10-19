@@ -40,7 +40,7 @@ const READ_BAM_PATH: &str = "/data1/hifi_consensus/try2/merged.bam";
 const INTERMEDIATE_PATH: &str = "/data1/hifi_consensus/quality_data/intermediate";
 const CONFIDENT_PATH: &str = "/data1/GiaB_benchmark/HG001_GRCh38_1_22_v4.2.1_benchmark.bed";
 const REF_GENOME_PATH: &str = "/data1/GiaB_benchmark/GRCh38.fa";
-const RESULT_WRITE_PATH: &str = "/data1/hifi_consensus/all_data/chr2_data";
+const RESULT_WRITE_PATH: &str = "/data1/hifi_consensus/all_data/chr2_7base_data";
 const DEEPVARIANT_PATH: &str = "/data1/hifi_consensus/try3/hg38.PD47269d.minimap2_ccs.deepvariant_1.1.0.vcf";
 const WRONG_ERROR_FILE_PATH: &str = "/data1/hifi_consensus/all_data/chr2_errors.txt";
 const HIMUT_PATH: &str = "/data1/hifi_consensus/try3/test.vcf";
@@ -489,12 +489,35 @@ pub fn get_all_data_for_ml (chromosone: &str, start: usize, end: usize, thread_i
         }
         let seq_name_qual_and_errorpos_vec = get_corrosponding_seq_name_location_quality_from_bam(position_base, &chromosone.to_string(), &'X');
         // get the three base context
-        let mut threebase_context = "".to_string();
-        if seq_name_qual_and_errorpos_vec.len() > 0 {
-            let mut fai_reader = faidx::Reader::from_path(REF_GENOME_PATH).unwrap();
-            threebase_context = read_fai_file(position_base - 1, &chromosone.to_string(), &mut fai_reader);
-        }
         for seq_name_qual_and_errorpos in &seq_name_qual_and_errorpos_vec {
+            let char_sequence: Vec<char> = seq_name_qual_and_errorpos.0.chars().collect::<Vec<_>>();
+            let mut char_7base_context: Vec<char> = vec![];
+            // when 7 base context above 0
+            if seq_name_qual_and_errorpos.3 >= 3 {
+                char_7base_context.push(char_sequence[seq_name_qual_and_errorpos.3 - 3]);
+                char_7base_context.push(char_sequence[seq_name_qual_and_errorpos.3 - 2]);
+                char_7base_context.push(char_sequence[seq_name_qual_and_errorpos.3 - 1]);
+            }
+            // when 7 base context below 0
+            else {
+                char_7base_context.push('A');
+                char_7base_context.push('A');
+                char_7base_context.push('A');
+            }
+            char_7base_context.push(char_sequence[seq_name_qual_and_errorpos.3]);
+            // when len is greater than 7 base context
+            if seq_name_qual_and_errorpos.0.len() > (3 + seq_name_qual_and_errorpos.3) {
+                char_7base_context.push(char_sequence[seq_name_qual_and_errorpos.3 + 1]);
+                char_7base_context.push(char_sequence[seq_name_qual_and_errorpos.3 + 2]);
+                char_7base_context.push(char_sequence[seq_name_qual_and_errorpos.3 + 3]);
+            }
+            // when len is less than 7 base context
+            else {
+                char_7base_context.push('A');
+                char_7base_context.push('A');
+                char_7base_context.push('A');
+            }
+            let sevenbase_context = char_7base_context.iter().collect::<String>();
             let quality = seq_name_qual_and_errorpos.2;
             // error is here
             let parallel_stuff;
@@ -507,8 +530,8 @@ pub fn get_all_data_for_ml (chromosone: &str, start: usize, end: usize, thread_i
                 continue;
             }
             // write data
-            let write_string = format!("{} {} {} {}", position_base, threebase_context, quality, parallel_stuff);
-            let write_file = format!("{}/{}_mldata.txt",RESULT_WRITE_PATH, thread_id);
+            let write_string = format!("{} {} {} {}", position_base, sevenbase_context, quality, parallel_stuff);
+            let write_file = format!("{}/{}_mldata.txt", RESULT_WRITE_PATH, thread_id);
             write_string_to_file(&write_file, &write_string);
         }
         position_base += 1;
