@@ -534,8 +534,10 @@ pub fn get_all_data_for_ml (chromosone: &str, start: usize, end: usize, thread_i
             else {
                 continue;
             }
+            let read_position = seq_name_qual_and_errorpos.3;
+            let read_len =  seq_name_qual_and_errorpos.0.len();
             // write data
-            let write_string = format!("{} {} : {} {} {}", position_base, threebase_context, sevenbase_context, quality, parallel_stuff);
+            let write_string = format!("{} {} : {}/{} {} {} {}", position_base, threebase_context, read_position, read_len, sevenbase_context, quality, parallel_stuff);
             let write_file = format!("{}/{}_mldata.txt", RESULT_WRITE_PATH, thread_id);
             write_string_to_file(&write_file, &write_string);
         }
