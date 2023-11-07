@@ -32,7 +32,7 @@ const THREE_BASE_CONTEXT_READ_LENGTH: usize = 2;
 const NUM_OF_ITER_FOR_ZOOMED_GRAPHS: usize = 4;
 const DATA_PATH: &str = "/data1/hifi_consensus/try2/";
 const READ_BAM_PATH: &str = "/data1/hifi_consensus/try2/merged.bam";
-const INTERMEDIATE_PATH: &str = "/data1/hifi_consensus/quality_data/intermediate";
+const INTERMEDIATE_PATH: &str = "/data1/hifi_consensus/intermediate";
 const CONFIDENT_PATH: &str = "/data1/GiaB_benchmark/HG001_GRCh38_1_22_v4.2.1_benchmark.bed";
 const REF_GENOME_PATH: &str = "/data1/GiaB_benchmark/GRCh38.fa";
 const RESULT_WRITE_PATH: &str = "/data1/hifi_consensus/all_data/chr2_7base_data";
@@ -89,7 +89,7 @@ pub fn pipeline_load_graph_get_topological_parallel_bases (chromosone: &str, sta
             }
             let calculated_graph = load_the_graph(check_file);
             let (calculated_consensus, calculated_topology) = get_consensus_from_graph(&calculated_graph); //just poa
-            let parallel_bases_vec = get_consensus_parallel_bases(sub_reads.len(), &calculated_consensus, &calculated_topology, &calculated_graph);
+            let parallel_bases_vec = get_consensus_parallel_bases(sub_reads.len(), &calculated_consensus, &calculated_topology, &calculated_graph, thread_id);
             // match the calculated consensus to the original consensus and get the required indices
             let calc_cons_id = get_redone_consensus_matched_positions(&seq_name_qual_and_errorpos.0, &calculated_consensus);
             for (index, pacbio_base) in seq_name_qual_and_errorpos.0.as_bytes().to_vec().iter().enumerate() {
