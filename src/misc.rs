@@ -59,14 +59,14 @@ pub fn pipeline_load_graph_get_topological_parallel_bases (chromosone: &str, sta
                 continue;
             }
         }
-        println!("Thread {}: Chr {} Loc {}, tasks_done {}", thread_id, chromosone, process_location, index_thread);
+        println!("Thread {}: Chr {} Loc {}, tasks_done {} NEW LOCATION", thread_id, chromosone, process_location, index_thread);
         // get the string and the name
         let seq_name_qual_and_errorpos_vec = get_corrosponding_seq_name_location_quality_from_bam(process_location, &chromosone.to_string(), &'X');
         let mut all_skipped = true;
         for seq_name_qual_and_errorpos in &seq_name_qual_and_errorpos_vec {
-            //println!("Thread {}: Processing ccs file: {}", thread_id, seq_name_qual_and_errorpos.1);
             // check if the css file is already available
-            if check_file_availability(&seq_name_qual_and_errorpos.1, INTERMEDIATE_PATH) {
+            let check_file = format!("{}_parallel.txt", &seq_name_qual_and_errorpos.1);
+            if check_file_availability(&check_file, INTERMEDIATE_PATH) {
                 //println!("Thread {}: Required CSS File Available, skipping..", thread_id);
                 continue;
             }
@@ -93,23 +93,25 @@ pub fn pipeline_load_graph_get_topological_parallel_bases (chromosone: &str, sta
             // match the calculated consensus to the original consensus and get the required indices
             let calc_cons_id = get_redone_consensus_matched_positions(&seq_name_qual_and_errorpos.0, &calculated_consensus);
             for (index, pacbio_base) in seq_name_qual_and_errorpos.0.as_bytes().to_vec().iter().enumerate() {
-                let pacbio_char = *pacbio_base as char;
+                let mut pacbio_str = format!("OK({})", *pacbio_base as char);
                 let parallel_bases;
                 if calc_cons_id[index].1 == 0 {
                     parallel_bases = vec![1, 1, 1, 1]; //deletion
+                    pacbio_str = "DEL()".to_string();
                 }
                 else if calc_cons_id[index].1 == 1 {
                     parallel_bases = parallel_bases_vec[calc_cons_id[index].0].clone(); //normal
                 }
                 else {
-                    parallel_bases = parallel_bases_vec[calc_cons_id[index].0].clone(); //subsitution
+                    parallel_bases = parallel_bases_vec[calc_cons_id[index].0].clone(); //subsitution the value corrospond to the sub
+                    pacbio_str = format!{"SB({})", calc_cons_id[index].1 as char};
                 }
-                let write_string = format!("{} {} {:?}\n", pacbio_char, (sub_reads.len() - 1), parallel_bases);
-                //println!("{}", write_string);
-                let write_file = format!("{}/{}", INTERMEDIATE_PATH, &seq_name_qual_and_errorpos.1);
+                let write_string = format!("{} {:?}\n", pacbio_str, parallel_bases);
+                let write_file = format!("{}/{}_parallel.txt", INTERMEDIATE_PATH, &seq_name_qual_and_errorpos.1);
                 write_string_to_file(&write_file, &write_string);
             } 
             index_thread += 1;
+            println!("Thread {}: Chr {} Loc {}, tasks_done {}", thread_id, chromosone, process_location, index_thread);
         }
         if all_skipped {
             skip_thousand = true;
@@ -135,7 +137,8 @@ fn get_redone_consensus_matched_positions (pacbio_consensus: &String, calculated
                 calc_index += 1;
             },
             bio::alignment::AlignmentOperation::Subst => {
-                consensus_matched_indices.push((calc_index, 2));
+                let base = calculated_consensus[calc_index];
+                consensus_matched_indices.push((calc_index, base));
                 calc_index += 1;
             },
             bio::alignment::AlignmentOperation::Del => {
@@ -159,46 +162,62 @@ pub fn get_all_data_for_ml (chromosone: &str, start: usize, end: usize, thread_i
         }
         let seq_name_qual_and_errorpos_vec = get_corrosponding_seq_name_location_quality_from_bam(position_base, &chromosone.to_string(), &'X');
         // get the three base context
-        let mut threebase_context = "".to_string();
+        let mut ref_sevenbase_context = "".to_string();
         if seq_name_qual_and_errorpos_vec.len() > 0 {
             let mut fai_reader = faidx::Reader::from_path(REF_GENOME_PATH).unwrap();
-            threebase_context = read_fai_file(position_base - 1, &chromosone.to_string(), &mut fai_reader);
+            ref_sevenbase_context = read_fai_get_ref_context(position_base - 3,7,  &chromosone.to_string(), &mut fai_reader);
         }
         for seq_name_qual_and_errorpos in &seq_name_qual_and_errorpos_vec {
             let char_sequence: Vec<char> = seq_name_qual_and_errorpos.0.chars().collect::<Vec<_>>();
             let mut char_7base_context: Vec<char> = vec![];
-            // when 7 base context above 0
+            // when 7 base context above 0 this is very dumb re write
             if seq_name_qual_and_errorpos.3 >= 3 {
                 char_7base_context.push(char_sequence[seq_name_qual_and_errorpos.3 - 3]);
-                char_7base_context.push(char_sequence[seq_name_qual_and_errorpos.3 - 2]);
-                char_7base_context.push(char_sequence[seq_name_qual_and_errorpos.3 - 1]);
             }
-            // when 7 base context below 0
             else {
                 char_7base_context.push('X');
+            }
+            if seq_name_qual_and_errorpos.3 >= 2 {
+                char_7base_context.push(char_sequence[seq_name_qual_and_errorpos.3 - 2]);
+            }
+            else{
                 char_7base_context.push('X');
+            }
+            if seq_name_qual_and_errorpos.3 >= 1 {
+                char_7base_context.push(char_sequence[seq_name_qual_and_errorpos.3 - 1]);
+            }
+            else {
                 char_7base_context.push('X');
             }
             char_7base_context.push(char_sequence[seq_name_qual_and_errorpos.3]);
             // when len is greater than 7 base context
-            if seq_name_qual_and_errorpos.0.len() > (3 + seq_name_qual_and_errorpos.3) {
+            if seq_name_qual_and_errorpos.0.len() > (1 + seq_name_qual_and_errorpos.3) {
                 char_7base_context.push(char_sequence[seq_name_qual_and_errorpos.3 + 1]);
-                char_7base_context.push(char_sequence[seq_name_qual_and_errorpos.3 + 2]);
-                char_7base_context.push(char_sequence[seq_name_qual_and_errorpos.3 + 3]);
             }
             // when len is less than 7 base context
             else {
                 char_7base_context.push('X');
-                char_7base_context.push('X');
+            }
+            if seq_name_qual_and_errorpos.0.len() > (2 + seq_name_qual_and_errorpos.3) {
+                char_7base_context.push(char_sequence[seq_name_qual_and_errorpos.3 + 2]);
+            }
+            else{
                 char_7base_context.push('X');
             }
-            let sevenbase_context = char_7base_context.iter().collect::<String>();
+            if seq_name_qual_and_errorpos.0.len() > (3 + seq_name_qual_and_errorpos.3) {
+                char_7base_context.push(char_sequence[seq_name_qual_and_errorpos.3 + 3]);
+            }
+            else{
+                char_7base_context.push('X');
+            }
+            let read_sevenbase_context = char_7base_context.iter().collect::<String>();
             let quality = seq_name_qual_and_errorpos.2;
             // error is here
             let parallel_stuff;
             // check if the file is already available
-            if check_file_availability(&seq_name_qual_and_errorpos.1, INTERMEDIATE_PATH) {
-                let available_file_path = format!("{}/{}", INTERMEDIATE_PATH, seq_name_qual_and_errorpos.1);
+            let file_name = format!("{}{}", seq_name_qual_and_errorpos.1, "_parallel.txt");
+            if check_file_availability(&file_name, INTERMEDIATE_PATH) {
+                let available_file_path = format!("{}/{}", INTERMEDIATE_PATH, file_name);
                 parallel_stuff = get_parallel_bases_from_file(&available_file_path, seq_name_qual_and_errorpos.3);
             }
             else {
@@ -207,7 +226,7 @@ pub fn get_all_data_for_ml (chromosone: &str, start: usize, end: usize, thread_i
             let read_position = seq_name_qual_and_errorpos.3;
             let read_len =  seq_name_qual_and_errorpos.0.len();
             // write data
-            let write_string = format!("{} {} : {}/{} {} {} {}", position_base, threebase_context, read_position, read_len, sevenbase_context, quality, parallel_stuff);
+            let write_string = format!("{} {} {} : {} {} {} {}", position_base, ref_sevenbase_context, quality, read_position, read_len, read_sevenbase_context, parallel_stuff);
             let write_file = format!("{}/{}_mldata.txt", RESULT_WRITE_PATH, thread_id);
             write_string_to_file(&write_file, &write_string);
         }
@@ -215,88 +234,6 @@ pub fn get_all_data_for_ml (chromosone: &str, start: usize, end: usize, thread_i
         if position_base > end {
             break 'bigloop;
         }
-    }
-}
-
-pub fn get_corrected_parallel_bases (_chromosone: &str, start: usize, end: usize, thread_id: usize) {
-    let chromosone: String = "chr2".to_string();
-    // read the file and make an array of the error locations
-    let mut error_location_array: Vec<usize> = vec![];
-    let file_path = WRONG_ERROR_FILE_PATH;
-    let f = File::open(&file_path).unwrap();
-    let mut reader = BufReader::new(f);
-    let mut buffer = String::new();
-    loop {
-        buffer.clear();
-        match reader.read_line(&mut buffer) {
-            Ok(_) => {
-                let mut split_text_iter = (buffer.split(" ")).into_iter();
-                let location_result;
-                let location_usize; 
-                match split_text_iter.next() {
-                    Some(x) => {location_result = x.parse::<usize>();},
-                    None => {break;},
-                }
-                match location_result {
-                    Ok(x) => {location_usize = x;},
-                    Err(_) => {break;},
-                }
-                if (location_usize > start) && (location_usize < end) {
-                    if !error_location_array.contains(&location_usize) {
-                        error_location_array.push(location_usize); 
-                    }
-                }
-                else {
-                    continue;
-                }
-            },
-            Err(_) => {break;},
-        };
-    }
-    println!("{} {:?}", thread_id, error_location_array);
-    // go through the thing and redo the errors
-    for position_base in error_location_array {
-        if position_base % 1000 == 0 {
-            println!("Thread ID: {} Position {}", thread_id, position_base);
-        }
-        let seq_name_qual_and_errorpos_vec = get_corrosponding_seq_name_location_quality_from_bam(position_base, &chromosone.to_string(), &'X');
-        // get the three base context
-        let mut threebase_context = "".to_string();
-        if seq_name_qual_and_errorpos_vec.len() > 0 {
-            let mut fai_reader = faidx::Reader::from_path(REF_GENOME_PATH).unwrap();
-            threebase_context = read_fai_file(position_base - 1, &chromosone.to_string(), &mut fai_reader);
-        }
-        for seq_name_qual_and_errorpos in &seq_name_qual_and_errorpos_vec {
-            let quality = seq_name_qual_and_errorpos.2;
-            // error is here
-            let parallel_stuff;
-            // check if the file is already available
-            if check_file_availability(&seq_name_qual_and_errorpos.1, INTERMEDIATE_PATH) {
-                let available_file_path = format!("{}/{}", INTERMEDIATE_PATH, seq_name_qual_and_errorpos.1);
-                parallel_stuff = get_parallel_bases_from_file(&available_file_path, seq_name_qual_and_errorpos.3);
-            }
-            else {
-                continue;
-            }
-            // write data
-            let write_string = format!("{} {} {} {}", position_base, threebase_context, quality, parallel_stuff);
-            let write_file = format!("{}/{}_corrected_data.txt", RESULT_WRITE_PATH, thread_id);
-            write_string_to_file(&write_file, &write_string);
-        }
-    }
-}
-
-pub fn check_error_location (error_position: usize, chromosone: String) {
-    let seq_name_qual_and_errorpos_vec = get_corrosponding_seq_name_location_quality_from_bam(error_position, &chromosone.to_string(), &'X');
-    // get the three base context
-    let mut threebase_context = "".to_string();
-    if seq_name_qual_and_errorpos_vec.len() > 0 {
-        let mut fai_reader = faidx::Reader::from_path(REF_GENOME_PATH).unwrap();
-        threebase_context = read_fai_file(error_position - 1, &chromosone.to_string(), &mut fai_reader);
-    }
-    for seq_name_qual_and_errorpos in &seq_name_qual_and_errorpos_vec {
-        let qual = seq_name_qual_and_errorpos.2;
-        println!("{} {} {} {}", threebase_context, qual, seq_name_qual_and_errorpos.1,  seq_name_qual_and_errorpos.0.chars().collect::<Vec<char>>()[seq_name_qual_and_errorpos.3]);
     }
 }
 
@@ -1385,10 +1322,8 @@ fn modify_dot_graph_with_highlight (mut dot: String, focus_node: &usize) -> Stri
     dot
 }
 
-fn read_fai_file (start_pos: usize, chromosone: &String, reader: &mut faidx::Reader) -> String {
-    //println!("The ref sequenece");
-    //println!("{}", fasta_reader.fetch_seq_string(chromosone, start_pos, start_pos + THREE_BASE_CONTEXT_READ_LENGTH).unwrap());
-    reader.fetch_seq_string(chromosone, start_pos, start_pos + THREE_BASE_CONTEXT_READ_LENGTH).unwrap()
+fn read_fai_get_ref_context (start_pos: usize, length: usize, chromosone: &String, reader: &mut faidx::Reader) -> String {
+    reader.fetch_seq_string(chromosone, start_pos, start_pos + length - 1).unwrap()
 }
 
 pub fn get_required_start_end_positions_from_read (section_length: usize, current_ref_pos: usize, current_read_pos: usize, required_pos: usize, required_len: usize) -> (usize, usize) {
