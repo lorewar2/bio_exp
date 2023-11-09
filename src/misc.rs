@@ -1145,8 +1145,15 @@ fn get_corrosponding_seq_name_location_quality_from_bam (error_pos: usize, error
         // get the sn tag info
         for i in readunwrapped.aux_iter() {
             //println!("{:?}", i.unwrap().0);
-            for j in i.unwrap().0 {
+            let test = i.unwrap();
+            for j in test.0 {
                 print!("{}", *j as char);
+            }
+            if let Ok(Aux::ArrayFloat(array)) = readunwrapped.aux(b"sn") {
+                println!("{:?}", array);
+            }
+            else {
+                //panic!("Could not sn data");
             }
             println!("");
         };
