@@ -67,17 +67,17 @@ pub fn pipeline_load_graph_get_topological_parallel_bases (chromosone: &str, sta
             // check if the css file is already available
             let check_file = format!("{}_parallel.txt", &seq_name_qual_and_errorpos.1);
             if check_file_availability(&check_file, INTERMEDIATE_PATH) {
-                //println!("Thread {}: Required CSS File Available, skipping..", thread_id);
+                println!("Thread {}: Required CSS File Available, skipping..", thread_id);
                 continue;
             }
             // check if graph is available, if available load all the data
             let check_file = format!("{}_graph.txt", &seq_name_qual_and_errorpos.1);
             if check_file_availability(&check_file, INTERMEDIATE_PATH) {
-                //println!("Thread {}: Required File not Available, Graph Available, processing..", thread_id);
+                println!("Thread {}: Required File not Available, Graph Available, processing..", thread_id);
             }
             // if both not available
             else {
-                //println!("Thread {}: Nothing is available, continuing..", thread_id);
+                println!("Thread {}: Nothing is available, continuing..", thread_id);
                 continue;
             }
             all_skipped = false;
