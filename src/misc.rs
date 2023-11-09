@@ -1144,7 +1144,11 @@ fn get_corrosponding_seq_name_location_quality_from_bam (error_pos: usize, error
         let readunwrapped = read.unwrap();
         // get the sn tag info
         for i in readunwrapped.aux_iter() {
-            println!("{:?}", i.unwrap().0);
+            //println!("{:?}", i.unwrap().0);
+            for j in i.unwrap().0 {
+                print!("{}", *j as char);
+            }
+            println!("");
         };
 
         let mut sn_array= vec![0.0];
