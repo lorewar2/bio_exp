@@ -82,7 +82,7 @@ pub fn pipeline_load_graph_get_topological_parallel_bases (chromosone: &str, sta
             }
             all_skipped = false;
             // find the subreads of that ccs
-            let sub_reads = get_the_subreads_by_name_sam(&seq_name_qual_and_errorpos.1);
+            let (sub_reads, sn_string) = get_the_subreads_by_name_sam(&seq_name_qual_and_errorpos.1);
             // skip if no subreads, errors and stuff
             if sub_reads.len() == 0 {
                 continue;
@@ -106,9 +106,10 @@ pub fn pipeline_load_graph_get_topological_parallel_bases (chromosone: &str, sta
                     parallel_bases = parallel_bases_vec[calc_cons_id[index].0].clone(); //subsitution the value corrospond to the sub
                     pacbio_str = format!{"SB({})", calc_cons_id[index].1 as char};
                 }
-                let write_string = format!("{} {:?}\n", pacbio_str, parallel_bases);
+                let write_string = format!("{} {:?} {:?}\n", pacbio_str, sn_string, parallel_bases);
+                println!("{}", write_string);
                 let write_file = format!("{}/{}_parallel.txt", INTERMEDIATE_PATH, &seq_name_qual_and_errorpos.1);
-                write_string_to_file(&write_file, &write_string);
+                //write_string_to_file(&write_file, &write_string);
             } 
             index_thread += 1;
             println!("Thread {}: Chr {} Loc {}, tasks_done {}", thread_id, chromosone, process_location, index_thread);
@@ -564,7 +565,7 @@ pub fn pipeline_save_the_graphs (chromosone: &str, start: usize, end: usize, thr
             }
             // if not available do poa and make a file
             // find the subreads of that ccs
-            let mut sub_reads = get_the_subreads_by_name_sam(&seq_name_qual_and_errorpos.1);
+            let (mut sub_reads, _) = get_the_subreads_by_name_sam(&seq_name_qual_and_errorpos.1);
             // skip if no subreads, errors and stuff
             if sub_reads.len() == 0 {
                 continue;
@@ -862,14 +863,16 @@ fn reverse_complement_filter_and_rearrange_subreads (original_subreads: &Vec<Str
     seqvec
 }
 
-fn get_the_subreads_by_name_sam (full_name: &String) -> Vec<String> {
+fn get_the_subreads_by_name_sam (full_name: &String) -> (Vec<String>, String) {
+    let mut sn_obtained = false;
+    let mut sn_string = "".to_string();
     let mut subread_vec: Vec<String> = vec![];
     let mut split_text_iter = (full_name.split("/")).into_iter();
     let file_name = split_text_iter.next().unwrap();
     let required_id = split_text_iter.next().unwrap().parse::<usize>().unwrap();
     let path = format!("{}{}{}", DATA_PATH.to_string(), file_name, ".subreads.sam".to_string());
     if file_name.eq(&"m64125_201017_124255".to_string()) {
-        return subread_vec;
+        return (subread_vec, sn_string);
     }
     let file_position = read_index_file_for_sam (&file_name.to_string(), required_id);
     // file stuff init
@@ -899,12 +902,19 @@ fn get_the_subreads_by_name_sam (full_name: &String) -> Vec<String> {
             for _ in 0..8 {data_split_iter.next();}
             subread_vec.push(data_split_iter.next().unwrap().to_string());
             count += 1;
+            if sn_obtained == false {
+                sn_obtained = true;
+                let mut data_split_iter = (buffer.split("sn:B:f,")).into_iter();
+                data_split_iter.next();
+                let after_sn = data_split_iter.next().unwrap();
+                sn_string = after_sn.split("\t").into_iter().next().unwrap().to_string();
+            }
         }
     }
     println!("count = {}", count);
     drop(reader);
     drop(buffer);
-    subread_vec
+    (subread_vec, sn_string)
 }
 
 pub fn read_index_file_for_sam (file_name: &String, read_name: usize) -> usize {
