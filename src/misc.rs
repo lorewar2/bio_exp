@@ -8,7 +8,7 @@ use petgraph::{Graph, Directed, graph::NodeIndex};
 use petgraph::dot::Dot;
 use petgraph::visit::Topo;
 use petgraph::Direction::Outgoing;
-use rust_htslib::bam::{Read as BamRead, IndexedReader as BamIndexedReader, record::Aux};
+use rust_htslib::bam::{Read as BamRead, IndexedReader as BamIndexedReader};
 use rust_htslib::bcf::{Reader, Read as BcfRead};
 use rust_htslib::faidx;
 use std::{fs::OpenOptions, io::{prelude::*}};
@@ -226,10 +226,9 @@ pub fn get_all_data_for_ml (chromosone: &str, start: usize, end: usize, thread_i
             let read_position = seq_name_qual_and_errorpos.3;
             let read_len =  seq_name_qual_and_errorpos.0.len();
             // write data
-            let write_string = format!("{} {} {} : {} {} {} {} {:?}", position_base, ref_sevenbase_context, quality, read_position, read_len, read_sevenbase_context, parallel_stuff, seq_name_qual_and_errorpos.4);
-            println!("{}", write_string);
+            let write_string = format!("{} {} {} : {} {} {} {}", position_base, ref_sevenbase_context, quality, read_position, read_len, read_sevenbase_context, parallel_stuff);
             let write_file = format!("{}/{}_mldata.txt", RESULT_WRITE_PATH, thread_id);
-            //write_string_to_file(&write_file, &write_string);
+            write_string_to_file(&write_file, &write_string);
         }
         position_base += 1;
         if position_base > end {
@@ -1135,37 +1134,14 @@ fn check_the_scores_and_change_alignment (seqvec: Vec<String>, pacbio_consensus:
     }
 }
 
-fn get_corrosponding_seq_name_location_quality_from_bam (error_pos: usize, error_chr: &String, base_change: &char) -> Vec<(String, String, u8, usize, Vec<f32>)> {
-    let mut seq_name_qual_and_errorpos: Vec<(String, String, u8, usize, Vec<f32>)> = vec![]; // seq name qual errorpos 4 sn values
+fn get_corrosponding_seq_name_location_quality_from_bam (error_pos: usize, error_chr: &String, base_change: &char) -> Vec<(String, String, u8, usize)> {
+    let mut seq_name_qual_and_errorpos: Vec<(String, String, u8, usize)> = vec![];
     let path = &READ_BAM_PATH;
     let mut bam_reader = BamIndexedReader::from_path(path).unwrap();
     bam_reader.fetch((error_chr, error_pos as i64, error_pos as i64 + 1)).unwrap();
     'read_loop: for read in bam_reader.records() {
         let readunwrapped = read.unwrap();
-        // get the sn tag info
-        for i in readunwrapped.aux_iter() {
-            //println!("{:?}", i.unwrap().0);
-            let test = i.unwrap();
-            for j in test.0 {
-                print!("{}", *j as char);
-            }
-            if let Ok(Aux::ArrayFloat(array)) = readunwrapped.aux(b"sn") {
-                println!("{:?}", array);
-            }
-            else {
-                //panic!("Could not sn data");
-            }
-            println!("");
-        };
-
-        let mut sn_array= vec![0.0];
-        readunwrapped.aux(b"sn").unwrap();
-        // if let Ok(Aux::ArrayFloat(array)) = readunwrapped.aux(b"sn") {
-        //     sn_array = array.iter().collect::<Vec<_>>();
-        // }
-        // else {
-        //     panic!("Could not sn data");
-        // }
+        // get the data
         let mut read_index = 0;
         let read_name = String::from_utf8(readunwrapped.qname().to_vec()).expect("");
         let read_vec = readunwrapped.seq().as_bytes().to_vec();
@@ -1244,7 +1220,7 @@ fn get_corrosponding_seq_name_location_quality_from_bam (error_pos: usize, error
                 },
             }
         }
-        seq_name_qual_and_errorpos.push((read_string.clone(), read_name.clone(), readunwrapped.qual()[read_index], read_index, sn_array));
+        seq_name_qual_and_errorpos.push((read_string.clone(), read_name.clone(), readunwrapped.qual()[read_index], read_index));
     }
     drop(bam_reader);
     seq_name_qual_and_errorpos
