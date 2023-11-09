@@ -1143,13 +1143,14 @@ fn get_corrosponding_seq_name_location_quality_from_bam (error_pos: usize, error
     'read_loop: for read in bam_reader.records() {
         let readunwrapped = read.unwrap();
         // get the sn tag info
-        let sn_array;
-        if let Ok(Aux::ArrayFloat(array)) = readunwrapped.aux(b"sn") {
-            sn_array = array.iter().collect::<Vec<_>>();
-        }
-        else {
-            panic!("Could not sn data");
-        }
+        let mut sn_array= vec![0.0];
+        readunwrapped.aux(b"sn").unwrap();
+        // if let Ok(Aux::ArrayFloat(array)) = readunwrapped.aux(b"sn") {
+        //     sn_array = array.iter().collect::<Vec<_>>();
+        // }
+        // else {
+        //     panic!("Could not sn data");
+        // }
         let mut read_index = 0;
         let read_name = String::from_utf8(readunwrapped.qname().to_vec()).expect("");
         let read_vec = readunwrapped.seq().as_bytes().to_vec();
