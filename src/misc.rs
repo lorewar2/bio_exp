@@ -43,9 +43,9 @@ const BAND_SIZE: i32 = 100;
 const MAX_NODES_IN_POA: usize = 75_000;
 const SKIP_SCORE: i32 = 6_000;
 
-pub fn get_the_subreads_by_name_sam (full_name: &String) -> (Vec<String>, String) {
+pub fn get_the_subreads_by_name_sam (full_name: &String) -> (Vec<String>, Vec<usize>, Vec<Vec<usize>>, Vec<Vec<usize>>) {
     let mut sn_obtained = false;
-    let mut sn_string = "".to_string();
+    let mut subread_sn_vec: Vec<usize>= vec![];
     let mut subread_vec: Vec<String> = vec![];
     let mut subread_pw_vec: Vec<Vec<usize>> = vec![];
     let mut subread_ip_vec: Vec<Vec<usize>> = vec![];
@@ -55,7 +55,7 @@ pub fn get_the_subreads_by_name_sam (full_name: &String) -> (Vec<String>, String
     let required_id = split_text_iter.next().unwrap().parse::<usize>().unwrap();
     let path = format!("{}{}{}", DATA_PATH.to_string(), file_name, ".subreads.sam".to_string());
     if file_name.eq(&"m64125_201017_124255".to_string()) {
-        return (subread_vec, sn_string);
+        return (subread_vec, subread_sn_vec, subread_pw_vec, subread_ip_vec);
     }
     let file_position = read_index_file_for_sam (&file_name.to_string(), required_id);
     // file stuff init
@@ -89,31 +89,33 @@ pub fn get_the_subreads_by_name_sam (full_name: &String) -> (Vec<String>, String
             let mut temp_subread_pw_vec = vec![];
             ip_collection.remove(0);
             for ip in ip_collection {
-                temp_subread_ip_vec.push(ip.parse::<usize>().unwrap())
+                temp_subread_ip_vec.push(ip.parse::<usize>().unwrap());
             }
             // process pw, parse to usize
             let mut pw_collection: Vec<&str> = collection[14].split(",").collect();
             pw_collection.remove(0);
             for pw in pw_collection {
-                temp_subread_pw_vec.push(pw.parse::<usize>().unwrap())
+                temp_subread_pw_vec.push(pw.parse::<usize>().unwrap());
             }
-            println!("lengths {} == {} == {}", temp_subread_ip_vec.len(), temp_subread_pw_vec.len(), collection[9].to_string().len());
+            //println!("lengths {} == {} == {}", temp_subread_ip_vec.len(), temp_subread_pw_vec.len(), collection[9].to_string().len());
             subread_pw_vec.push(temp_subread_pw_vec);
             subread_ip_vec.push(temp_subread_ip_vec);
             count += 1;
             if sn_obtained == false {
                 sn_obtained = true;
-                let mut data_split_iter = (buffer.split("sn:B:f,")).into_iter();
-                data_split_iter.next();
-                let after_sn = data_split_iter.next().unwrap();
-                sn_string = after_sn.split("\t").into_iter().next().unwrap().to_string();
+                let mut sn_collection: Vec<&str> = collection[18].split(",").collect();
+                sn_collection.remove(0);
+                for sn in sn_collection {
+                    subread_sn_vec.push(sn.parse::<usize>().unwrap());
+                }
+
             }
         }
     }
     println!("count = {}", count);
     drop(reader);
     drop(buffer);
-    (subread_vec, sn_string)
+    (subread_vec, subread_sn_vec, subread_pw_vec, subread_ip_vec)
 }
 
 pub fn pipeline_load_graph_get_topological_parallel_bases (chromosone: &str, start: usize, end: usize, thread_id: usize) {
@@ -155,14 +157,20 @@ pub fn pipeline_load_graph_get_topological_parallel_bases (chromosone: &str, sta
             }
             all_skipped = false;
             // find the subreads of that ccs
-            let (sub_reads, sn_string) = get_the_subreads_by_name_sam(&seq_name_qual_and_errorpos.1);
+            let (sub_reads, sn_vec, pw_vec, ip_vec) = get_the_subreads_by_name_sam(&seq_name_qual_and_errorpos.1);
+            
             // skip if no subreads, errors and stuff
             if sub_reads.len() == 0 {
                 continue;
             }
+            
             let calculated_graph = load_the_graph(check_file);
             let (calculated_consensus, calculated_topology) = get_consensus_from_graph(&calculated_graph); //just poa
             let parallel_bases_vec = get_consensus_parallel_bases(sub_reads.len(), &calculated_consensus, &calculated_topology, &calculated_graph, thread_id);
+            
+            // align all subreads to ccs
+            println!("aligning stuff...");
+            let (ip_vec, pw_vec) = align_subreads_to_ccs_read_calculate_avg_ip_pw(&seq_name_qual_and_errorpos.0, sub_reads, ip_vec, pw_vec);
             // match the calculated consensus to the original consensus and get the required indices
             let calc_cons_id = get_redone_consensus_matched_positions(&seq_name_qual_and_errorpos.0, &calculated_consensus);
             for (index, pacbio_base) in seq_name_qual_and_errorpos.0.as_bytes().to_vec().iter().enumerate() {
@@ -179,7 +187,7 @@ pub fn pipeline_load_graph_get_topological_parallel_bases (chromosone: &str, sta
                     parallel_bases = parallel_bases_vec[calc_cons_id[index].0].clone(); //subsitution the value corrospond to the sub
                     pacbio_str = format!{"SB({})", calc_cons_id[index].1 as char};
                 }
-                let write_string = format!("{} {} {:?}\n", pacbio_str, sn_string, parallel_bases);
+                let write_string = format!("{} {:?} {} {} {:?}\n", pacbio_str, sn_vec, ip_vec[index], pw_vec[index], parallel_bases);
                 println!("{}", write_string);
                 let write_file = format!("{}/{}_parallel.txt", INTERMEDIATE_PATH, &seq_name_qual_and_errorpos.1);
                 //write_string_to_file(&write_file, &write_string);
@@ -191,6 +199,54 @@ pub fn pipeline_load_graph_get_topological_parallel_bases (chromosone: &str, sta
             skip_thousand = true;
         }
     }
+}
+
+fn align_subreads_to_ccs_read_calculate_avg_ip_pw(pacbio_ccs_str: &String, subread_vec: Vec<String>, ip_vec: Vec<Vec<usize>>, pw_vec: Vec<Vec<usize>>) -> (Vec<usize>, Vec<usize>) {
+    let mut pacbio_ccs_ip_vec: Vec<usize> = vec![0; pacbio_ccs_str.len()];
+    let mut pacbio_ccs_pw_vec: Vec<usize> = vec![0; pacbio_ccs_str.len()];
+
+    let pacbio_ccs: Vec<u8> = pacbio_ccs_str.bytes().collect();
+    let mut current_sub_read = 0;
+    for subread_str in subread_vec {
+        let subread: Vec<u8> = subread_str.bytes().collect();
+        let score_func = |a: u8, b: u8| if a == b { 2i32 } else { -2i32 };
+        let k = 8; // kmer match length
+        let w = 20; // Window size for creating the band
+        let mut aligner = BandedDP::new(-2, -2, score_func, k, w);
+        let alignment = aligner.global(&pacbio_ccs, &subread);
+        let mut pacbio_index = 0;
+        let mut subread_index = 0;
+        for op in alignment.operations {
+            match op {
+                bio::alignment::AlignmentOperation::Match => {
+                    pacbio_ccs_ip_vec[pacbio_index] = ip_vec[current_sub_read][subread_index];
+                    pacbio_ccs_pw_vec[pacbio_index] = pw_vec[current_sub_read][subread_index];
+                    pacbio_index += 1;
+                    subread_index += 1;
+                },
+                bio::alignment::AlignmentOperation::Subst => {
+                    pacbio_ccs_ip_vec[pacbio_index] = ip_vec[current_sub_read][subread_index];
+                    pacbio_ccs_pw_vec[pacbio_index] = pw_vec[current_sub_read][subread_index];
+                    pacbio_index += 1;
+                    subread_index += 1;
+                },
+                bio::alignment::AlignmentOperation::Del => {
+                    subread_index += 1;
+                },
+                bio::alignment::AlignmentOperation::Ins => {
+                    pacbio_index += 1;
+                },
+                _ => {},
+            }
+        }
+        current_sub_read += 1;
+    }
+    // average the sum vectors
+    for index in 0..pacbio_ccs_str.len() {
+        pacbio_ccs_ip_vec[index] = pacbio_ccs_ip_vec[index] / current_sub_read;
+        pacbio_ccs_pw_vec[index] = pacbio_ccs_pw_vec[index] / current_sub_read;
+    }
+    (pacbio_ccs_ip_vec, pacbio_ccs_pw_vec)
 }
 
 fn get_redone_consensus_matched_positions (pacbio_consensus: &String, calculated_consensus: &Vec<u8>) -> Vec<(usize, u8)> {
@@ -638,7 +694,7 @@ pub fn pipeline_save_the_graphs (chromosone: &str, start: usize, end: usize, thr
             }
             // if not available do poa and make a file
             // find the subreads of that ccs
-            let (mut sub_reads, _) = get_the_subreads_by_name_sam(&seq_name_qual_and_errorpos.1);
+            let (mut sub_reads, _, _ ,_) = get_the_subreads_by_name_sam(&seq_name_qual_and_errorpos.1);
             // skip if no subreads, errors and stuff
             if sub_reads.len() == 0 {
                 continue;

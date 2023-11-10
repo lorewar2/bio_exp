@@ -6,7 +6,7 @@ mod generator;
 mod misc;
 mod quality;
 use std::thread;
-use crate::misc::get_the_subreads_by_name_sam;
+use crate::misc::pipeline_load_graph_get_topological_parallel_bases;
 
 const SEED: u64 = 2;
 const GAP_OPEN: i32 = -2;
@@ -21,7 +21,6 @@ fn main() {
     let chromosone = "chr2";
     let total_start = 5_000_000;
     let total_end = 240_000_000;
-    get_the_subreads_by_name_sam (&"m64125_201110_063134/19".to_string());
     let one_thread_allocation = (total_end - total_start) / NTHREADS;
     for i in 0..NTHREADS {
         // calculate my start and end locations
@@ -31,7 +30,7 @@ fn main() {
             let start = total_start + one_thread_allocation * i;
             let end = start + one_thread_allocation;
             println!("Thread number {} started, {} from {} to {}..", chromosone, i, start, end);
-            //pipeline_load_graph_get_topological_parallel_bases (chromosone, start, end, i);
+            pipeline_load_graph_get_topological_parallel_bases (chromosone, start, end, i);
         }));
     }
     for child in children {
