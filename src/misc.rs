@@ -43,6 +43,60 @@ const BAND_SIZE: i32 = 100;
 const MAX_NODES_IN_POA: usize = 75_000;
 const SKIP_SCORE: i32 = 6_000;
 
+pub fn get_the_subreads_by_name_sam (full_name: &String) -> (Vec<String>, String) {
+    let mut sn_obtained = false;
+    let mut sn_string = "".to_string();
+    let mut subread_vec: Vec<String> = vec![];
+    let mut split_text_iter = (full_name.split("/")).into_iter();
+    let file_name = split_text_iter.next().unwrap();
+    let required_id = split_text_iter.next().unwrap().parse::<usize>().unwrap();
+    let path = format!("{}{}{}", DATA_PATH.to_string(), file_name, ".subreads.sam".to_string());
+    if file_name.eq(&"m64125_201017_124255".to_string()) {
+        return (subread_vec, sn_string);
+    }
+    let file_position = read_index_file_for_sam (&file_name.to_string(), required_id);
+    // file stuff init
+    let mut count = 0;
+    let f = File::open(&path).unwrap();
+    let mut reader = BufReader::new(f);
+    let mut buffer = String::new();
+    reader.seek(SeekFrom::Start(file_position as u64)).expect("");
+    loop {
+        buffer.clear();
+        reader.read_line(&mut buffer).unwrap();
+        // split it to find the id
+        let mut temp_split_iter = (buffer.split("/")).into_iter();
+        temp_split_iter.next();
+        let current_id;
+        match temp_split_iter.next().unwrap().parse::<usize>() {
+            Ok(x) => {current_id = x;},
+            Err(_) => {break;},
+        }
+        if current_id != required_id {
+            break;
+        }
+        else {
+            // write code to extract the sequence and add to subread_vec
+            let data_split = buffer.split("\t");
+            let collection: Vec<&str> = data_split.collect();
+            subread_vec.push(collection[9].to_string());
+            println!("{}", collection[9]);
+            count += 1;
+            if sn_obtained == false {
+                sn_obtained = true;
+                let mut data_split_iter = (buffer.split("sn:B:f,")).into_iter();
+                data_split_iter.next();
+                let after_sn = data_split_iter.next().unwrap();
+                sn_string = after_sn.split("\t").into_iter().next().unwrap().to_string();
+            }
+        }
+    }
+    println!("count = {}", count);
+    drop(reader);
+    drop(buffer);
+    (subread_vec, sn_string)
+}
+
 pub fn pipeline_load_graph_get_topological_parallel_bases (chromosone: &str, start: usize, end: usize, thread_id: usize) {
     let mut index_thread = 0;
     let mut skip_thousand = false;
@@ -67,17 +121,17 @@ pub fn pipeline_load_graph_get_topological_parallel_bases (chromosone: &str, sta
             // check if the css file is already available
             let check_file = format!("{}_parallel.txt", &seq_name_qual_and_errorpos.1);
             if check_file_availability(&check_file, INTERMEDIATE_PATH) {
-                println!("Thread {}: Required CSS File Available, skipping..", thread_id);
+                //println!("Thread {}: Required CSS File Available, skipping..", thread_id);
                 continue;
             }
             // check if graph is available, if available load all the data
             let check_file = format!("{}_graph.txt", &seq_name_qual_and_errorpos.1);
             if check_file_availability(&check_file, INTERMEDIATE_PATH) {
-                println!("Thread {}: Required File not Available, Graph Available, processing..", thread_id);
+                //println!("Thread {}: Required File not Available, Graph Available, processing..", thread_id);
             }
             // if both not available
             else {
-                println!("Thread {}: Nothing is available, continuing..", thread_id);
+                //println!("Thread {}: Nothing is available, continuing..", thread_id);
                 continue;
             }
             all_skipped = false;
@@ -106,7 +160,7 @@ pub fn pipeline_load_graph_get_topological_parallel_bases (chromosone: &str, sta
                     parallel_bases = parallel_bases_vec[calc_cons_id[index].0].clone(); //subsitution the value corrospond to the sub
                     pacbio_str = format!{"SB({})", calc_cons_id[index].1 as char};
                 }
-                let write_string = format!("{} {:?} {:?}\n", pacbio_str, sn_string, parallel_bases);
+                let write_string = format!("{} {} {:?}\n", pacbio_str, sn_string, parallel_bases);
                 println!("{}", write_string);
                 let write_file = format!("{}/{}_parallel.txt", INTERMEDIATE_PATH, &seq_name_qual_and_errorpos.1);
                 //write_string_to_file(&write_file, &write_string);
@@ -863,60 +917,6 @@ fn reverse_complement_filter_and_rearrange_subreads (original_subreads: &Vec<Str
     seqvec
 }
 
-fn get_the_subreads_by_name_sam (full_name: &String) -> (Vec<String>, String) {
-    let mut sn_obtained = false;
-    let mut sn_string = "".to_string();
-    let mut subread_vec: Vec<String> = vec![];
-    let mut split_text_iter = (full_name.split("/")).into_iter();
-    let file_name = split_text_iter.next().unwrap();
-    let required_id = split_text_iter.next().unwrap().parse::<usize>().unwrap();
-    let path = format!("{}{}{}", DATA_PATH.to_string(), file_name, ".subreads.sam".to_string());
-    if file_name.eq(&"m64125_201017_124255".to_string()) {
-        return (subread_vec, sn_string);
-    }
-    let file_position = read_index_file_for_sam (&file_name.to_string(), required_id);
-    // file stuff init
-    let mut count = 0;
-    let f = File::open(&path).unwrap();
-    let mut reader = BufReader::new(f);
-    let mut buffer = String::new();
-    reader.seek(SeekFrom::Start(file_position as u64)).expect("");
-    loop {
-        buffer.clear();
-        reader.read_line(&mut buffer).unwrap();
-        // split it to find the id
-        let mut temp_split_iter = (buffer.split("/")).into_iter();
-        temp_split_iter.next();
-        let current_id;
-        match temp_split_iter.next().unwrap().parse::<usize>() {
-            Ok(x) => {current_id = x;},
-            Err(_) => {break;},
-        }
-        if current_id != required_id {
-            break;
-        }
-        else {
-            // write code to extract the sequence and add to subread_vec
-            let mut data_split_iter = (buffer.split("\t")).into_iter();
-            println!("{}", data_split_iter.next().unwrap());
-            for _ in 0..8 {data_split_iter.next();}
-            subread_vec.push(data_split_iter.next().unwrap().to_string());
-            count += 1;
-            if sn_obtained == false {
-                sn_obtained = true;
-                let mut data_split_iter = (buffer.split("sn:B:f,")).into_iter();
-                data_split_iter.next();
-                let after_sn = data_split_iter.next().unwrap();
-                sn_string = after_sn.split("\t").into_iter().next().unwrap().to_string();
-            }
-        }
-    }
-    println!("count = {}", count);
-    drop(reader);
-    drop(buffer);
-    (subread_vec, sn_string)
-}
-
 pub fn read_index_file_for_sam (file_name: &String, read_name: usize) -> usize {
     // get the file location from index file if no index found make one
     println!("Reading index file {}{}", file_name, ".cui".to_string());
@@ -997,7 +997,7 @@ pub fn make_index_file_for_sam (file_name: &String) -> File {
     let mut write_string: String = "".to_string();
     let mut current_position;
     let mut current_ccs: usize;
-    let mut prev_ccs: usize = 0;
+    let mut prev_ccs: usize = usize::MAX;
     let mut index = 0;
     let mut break_count = 0;
     loop {
