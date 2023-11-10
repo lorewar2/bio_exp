@@ -47,6 +47,9 @@ pub fn get_the_subreads_by_name_sam (full_name: &String) -> (Vec<String>, String
     let mut sn_obtained = false;
     let mut sn_string = "".to_string();
     let mut subread_vec: Vec<String> = vec![];
+    let mut subread_pw_vec: Vec<Vec<usize>> = vec![];
+    let mut subread_ip_vec: Vec<Vec<usize>> = vec![];
+
     let mut split_text_iter = (full_name.split("/")).into_iter();
     let file_name = split_text_iter.next().unwrap();
     let required_id = split_text_iter.next().unwrap().parse::<usize>().unwrap();
@@ -80,7 +83,23 @@ pub fn get_the_subreads_by_name_sam (full_name: &String) -> (Vec<String>, String
         else {
             // write code to extract the sequence and add to subread_vec
             subread_vec.push(collection[9].to_string());
-            println!("{}", collection[9]);
+            // procecss ip, parse to usize
+            let mut ip_collection: Vec<&str> = collection[12].split(",").collect();
+            let mut temp_subread_ip_vec = vec![];
+            let mut temp_subread_pw_vec = vec![];
+            ip_collection.remove(0);
+            for ip in ip_collection {
+                temp_subread_ip_vec.push(ip.parse::<usize>().unwrap())
+            }
+            // process pw, parse to usize
+            let mut pw_collection: Vec<&str> = collection[14].split(",").collect();
+            pw_collection.remove(0);
+            for pw in pw_collection {
+                temp_subread_pw_vec.push(pw.parse::<usize>().unwrap())
+            }
+            println!("lengths {} == {} == {}", temp_subread_ip_vec.len(), temp_subread_pw_vec.len(), collection[9].to_string().len());
+            subread_pw_vec.push(temp_subread_pw_vec);
+            subread_ip_vec.push(temp_subread_ip_vec);
             count += 1;
             if sn_obtained == false {
                 sn_obtained = true;
