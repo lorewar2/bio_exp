@@ -64,8 +64,10 @@ pub fn get_the_subreads_by_name_sam (full_name: &String) -> (Vec<String>, String
     loop {
         buffer.clear();
         reader.read_line(&mut buffer).unwrap();
+        let data_split = buffer.split("\t");
+        let collection: Vec<&str> = data_split.collect();
         // split it to find the id
-        let mut temp_split_iter = (buffer.split("/")).into_iter();
+        let mut temp_split_iter = (collection[0].split("/")).into_iter();
         temp_split_iter.next();
         let current_id;
         match temp_split_iter.next().unwrap().parse::<usize>() {
@@ -77,8 +79,6 @@ pub fn get_the_subreads_by_name_sam (full_name: &String) -> (Vec<String>, String
         }
         else {
             // write code to extract the sequence and add to subread_vec
-            let data_split = buffer.split("\t");
-            let collection: Vec<&str> = data_split.collect();
             subread_vec.push(collection[9].to_string());
             println!("{}", collection[9]);
             count += 1;
