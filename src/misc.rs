@@ -45,7 +45,7 @@ const SKIP_SCORE: i32 = 6_000;
 
 pub fn get_the_subreads_by_name_sam (full_name: &String) -> (Vec<String>, Vec<f32>, Vec<Vec<usize>>, Vec<Vec<usize>>) {
     let mut sn_obtained = false;
-    let mut subread_sn_vec: Vec<usize>= vec![];
+    let mut subread_sn_vec: Vec<f32>= vec![];
     let mut subread_vec: Vec<String> = vec![];
     let mut subread_pw_vec: Vec<Vec<usize>> = vec![];
     let mut subread_ip_vec: Vec<Vec<usize>> = vec![];
