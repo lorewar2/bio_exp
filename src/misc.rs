@@ -43,7 +43,7 @@ const BAND_SIZE: i32 = 100;
 const MAX_NODES_IN_POA: usize = 75_000;
 const SKIP_SCORE: i32 = 6_000;
 
-pub fn get_the_subreads_by_name_sam (full_name: &String) -> (Vec<String>, Vec<usize>, Vec<Vec<usize>>, Vec<Vec<usize>>) {
+pub fn get_the_subreads_by_name_sam (full_name: &String) -> (Vec<String>, Vec<f32>, Vec<Vec<usize>>, Vec<Vec<usize>>) {
     let mut sn_obtained = false;
     let mut subread_sn_vec: Vec<usize>= vec![];
     let mut subread_vec: Vec<String> = vec![];
@@ -106,7 +106,7 @@ pub fn get_the_subreads_by_name_sam (full_name: &String) -> (Vec<String>, Vec<us
                 let mut sn_collection: Vec<&str> = collection[18].split(",").collect();
                 sn_collection.remove(0);
                 for sn in sn_collection {
-                    subread_sn_vec.push(sn.parse::<usize>().unwrap());
+                    subread_sn_vec.push(sn.parse::<f32>().unwrap());
                 }
 
             }
