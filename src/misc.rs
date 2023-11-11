@@ -157,8 +157,11 @@ pub fn pipeline_load_graph_get_topological_parallel_bases (chromosone: &str, sta
             }
             all_skipped = false;
             // find the subreads of that ccs
-            let (sub_reads, sn_vec, pw_vec, ip_vec) = get_the_subreads_by_name_sam(&seq_name_qual_and_errorpos.1);
-            
+            let (mut sub_reads, sn_vec, pw_vec, ip_vec) = get_the_subreads_by_name_sam(&seq_name_qual_and_errorpos.1);
+            // filter out the long reads and rearrange the reads
+            sub_reads = reverse_complement_filter_and_rearrange_subreads(&sub_reads);
+            // reverse if score is too low
+            sub_reads = check_the_scores_and_change_alignment(sub_reads, &seq_name_qual_and_errorpos.0);
             // skip if no subreads, errors and stuff
             if sub_reads.len() == 0 {
                 continue;
