@@ -124,8 +124,8 @@ fn reverse_complement_subreads_ip_pw (original_subreads: &Vec<String>, mut pw_ve
     let mut index = 0;
     for seq in original_subreads {
         if index % 2 != 0 {
-            pw_vec[index] = pw_vec[index].reverse();
-            ip_vec[index] = ip_vec[index].reverse();
+            pw_vec[index].reverse();
+            ip_vec[index].reverse();
             let mut tempseq: Vec<char> = vec![];
             let iterator = seq.chars().rev().into_iter();
             for char in iterator{
@@ -211,10 +211,10 @@ fn check_the_scores_and_change_alignment_subreads_pw_ip (seqvec: Vec<String>, mu
             seqvec2.push(tempseq.iter().cloned().collect::<String>());
         }
         for index in 0..pw_vec.len() {
-            pw_vec[index] = pw_vec[index].reverse();
+            pw_vec[index].reverse();
         }
         for index in 0..ip_vec.len() {
-            ip_vec[index] = ip_vec[index].reverse();
+            ip_vec[index].reverse();
         }
         return (seqvec2, pw_vec, ip_vec);
     }
