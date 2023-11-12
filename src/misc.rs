@@ -190,7 +190,7 @@ fn check_the_scores_and_change_alignment_subreads_pw_ip (seqvec: Vec<String>, mu
         break;
     }
     if forward_score < SKIP_SCORE && backward_score < SKIP_SCORE {
-        return vec![];
+        return (vec![], vec![], vec![]);
     }
     else if backward_score > forward_score {
         println!("Scores are too low, inverting sequences.");
