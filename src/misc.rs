@@ -267,7 +267,6 @@ pub fn pipeline_load_graph_get_topological_parallel_bases (chromosone: &str, sta
             // reverse if score is too low
             (sub_reads, pw_vec, ip_vec) = check_the_scores_and_change_alignment_subreads_pw_ip(sub_reads, pw_vec, ip_vec, &seq_name_qual_and_errorpos.0);
             // skip if no subreads, errors and stuff
-            println!("{:?}", pw_vec);
             if sub_reads.len() == 0 {
                 continue;
             }
@@ -327,14 +326,14 @@ fn align_subreads_to_ccs_read_calculate_avg_ip_pw(pacbio_ccs_str: &String, subre
         for op in alignment.operations {
             match op {
                 bio::alignment::AlignmentOperation::Match => {
-                    pacbio_ccs_ip_vec[pacbio_index] = ip_vec[current_sub_read][subread_index];
-                    pacbio_ccs_pw_vec[pacbio_index] = pw_vec[current_sub_read][subread_index];
+                    pacbio_ccs_ip_vec[pacbio_index] += ip_vec[current_sub_read][subread_index];
+                    pacbio_ccs_pw_vec[pacbio_index] += pw_vec[current_sub_read][subread_index];
                     pacbio_index += 1;
                     subread_index += 1;
                 },
                 bio::alignment::AlignmentOperation::Subst => {
-                    pacbio_ccs_ip_vec[pacbio_index] = ip_vec[current_sub_read][subread_index];
-                    pacbio_ccs_pw_vec[pacbio_index] = pw_vec[current_sub_read][subread_index];
+                    pacbio_ccs_ip_vec[pacbio_index] += ip_vec[current_sub_read][subread_index];
+                    pacbio_ccs_pw_vec[pacbio_index] += pw_vec[current_sub_read][subread_index];
                     pacbio_index += 1;
                     subread_index += 1;
                 },
