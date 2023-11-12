@@ -267,6 +267,7 @@ pub fn pipeline_load_graph_get_topological_parallel_bases (chromosone: &str, sta
             // reverse if score is too low
             (sub_reads, pw_vec, ip_vec) = check_the_scores_and_change_alignment_subreads_pw_ip(sub_reads, pw_vec, ip_vec, &seq_name_qual_and_errorpos.0);
             // skip if no subreads, errors and stuff
+            println!("{:?}", pw_vec);
             if sub_reads.len() == 0 {
                 continue;
             }
