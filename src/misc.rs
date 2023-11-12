@@ -118,6 +118,110 @@ pub fn get_the_subreads_by_name_sam (full_name: &String) -> (Vec<String>, Vec<f3
     (subread_vec, subread_sn_vec, subread_pw_vec, subread_ip_vec)
 }
 
+fn reverse_complement_subreads_ip_pw (original_subreads: &Vec<String>, mut pw_vec: Vec<Vec<usize>>, mut ip_vec: Vec<Vec<usize>>) -> (Vec<String>, Vec<Vec<usize>>, Vec<Vec<usize>>) {
+    let mut seqvec: Vec<String> = vec![];
+    //reverse complement every other line
+    let mut index = 0;
+    for seq in original_subreads {
+        if index % 2 != 0 {
+            pw_vec[index] = pw_vec[index].reverse();
+            ip_vec[index] = ip_vec[index].reverse();
+            let mut tempseq: Vec<char> = vec![];
+            let iterator = seq.chars().rev().into_iter();
+            for char in iterator{
+                tempseq.push(match char {
+                    'A' => 'T',
+                    'C' => 'G',
+                    'G' => 'C',
+                    'T' => 'A',
+                    _ => ' ',
+                });
+            }
+            seqvec.push(tempseq.iter().cloned().collect::<String>());
+        }
+        else {
+            seqvec.push((*seq.clone()).to_string());
+        }
+        index += 1;
+    }
+    (seqvec, pw_vec, ip_vec)
+}
+
+fn check_the_scores_and_change_alignment_subreads_pw_ip (seqvec: Vec<String>, mut pw_vec: Vec<Vec<usize>>, mut ip_vec: Vec<Vec<usize>>, pacbio_consensus: &String) -> (Vec<String>, Vec<Vec<usize>>, Vec<Vec<usize>>) {
+    let mut forward_score = 0;
+    let mut backward_score = 0;
+    // make the pacbio orientation files
+    let pacbio_forward = pacbio_consensus.as_bytes().to_vec();
+    let pacbio_backward;
+    let mut tempseq: Vec<char> = vec![];
+    let iterator = pacbio_consensus.chars().rev().into_iter();
+    for char in iterator{
+        tempseq.push(match char {
+            'A' => 'T',
+            'C' => 'G',
+            'G' => 'C',
+            'T' => 'A',
+            _ => ' ',
+        });
+    }
+    pacbio_backward = tempseq.iter().cloned().collect::<String>().as_bytes().to_vec();
+    // check the forward scores for 2 sequences
+    for seq in &seqvec {
+        let score_func = |a: u8, b: u8| if a == b { 1i32 } else { -1i32 };
+        let k = 8; // kmer match length
+        let w = 20; // Window size for creating the band
+        let mut aligner = BandedDP::new(-5, -1, score_func, k, w);
+        let alignment = aligner.local(&pacbio_forward, &seq.as_bytes().to_vec());
+        let score = alignment.score;
+        println!("forward score: {}", score);
+        forward_score += score;
+        break;
+    }
+    // check the backward scores for 2 sequences
+    for seq in &seqvec {
+        let score_func = |a: u8, b: u8| if a == b { 1i32 } else { -1i32 };
+        let k = 8; // kmer match length
+        let w = 20; // Window size for creating the band
+        let mut aligner = BandedDP::new(-5, -1, score_func, k, w);
+        let alignment = aligner.local(&pacbio_backward, &seq.as_bytes().to_vec());
+        let score = alignment.score;
+        println!("backward score: {}", score);
+        backward_score += score;
+        break;
+    }
+    if forward_score < SKIP_SCORE && backward_score < SKIP_SCORE {
+        return vec![];
+    }
+    else if backward_score > forward_score {
+        println!("Scores are too low, inverting sequences.");
+        let mut seqvec2 = vec![];
+        //reverse complement every line
+        for seq in &seqvec {
+            let mut tempseq: Vec<char> = vec![];
+            let iterator = seq.chars().rev().into_iter();
+            for char in iterator{
+                tempseq.push(match char {
+                    'A' => 'T',
+                    'C' => 'G',
+                    'G' => 'C',
+                    'T' => 'A',
+                    _ => ' ',
+                });
+            }
+            seqvec2.push(tempseq.iter().cloned().collect::<String>());
+        }
+        for index in 0..pw_vec.len() {
+            pw_vec[index] = pw_vec[index].reverse();
+        }
+        for index in 0..ip_vec.len() {
+            ip_vec[index] = ip_vec[index].reverse();
+        }
+        return (seqvec2, pw_vec, ip_vec);
+    }
+    else {
+        return (seqvec, pw_vec, ip_vec);
+    }
+}
 pub fn pipeline_load_graph_get_topological_parallel_bases (chromosone: &str, start: usize, end: usize, thread_id: usize) {
     let mut index_thread = 0;
     let mut skip_thousand = false;
@@ -157,11 +261,11 @@ pub fn pipeline_load_graph_get_topological_parallel_bases (chromosone: &str, sta
             }
             all_skipped = false;
             // find the subreads of that ccs
-            let (mut sub_reads, sn_vec, pw_vec, ip_vec) = get_the_subreads_by_name_sam(&seq_name_qual_and_errorpos.1);
+            let (mut sub_reads, sn_vec, mut pw_vec, mut ip_vec) = get_the_subreads_by_name_sam(&seq_name_qual_and_errorpos.1);
             // filter out the long reads and rearrange the reads
-            sub_reads = reverse_complement_filter_and_rearrange_subreads(&sub_reads);
+            (sub_reads, pw_vec, ip_vec) = reverse_complement_subreads_ip_pw(&sub_reads, pw_vec, ip_vec);
             // reverse if score is too low
-            sub_reads = check_the_scores_and_change_alignment(sub_reads, &seq_name_qual_and_errorpos.0);
+            (sub_reads, pw_vec, ip_vec) = check_the_scores_and_change_alignment_subreads_pw_ip(sub_reads, pw_vec, ip_vec, &seq_name_qual_and_errorpos.0);
             // skip if no subreads, errors and stuff
             if sub_reads.len() == 0 {
                 continue;
@@ -217,8 +321,8 @@ fn align_subreads_to_ccs_read_calculate_avg_ip_pw(pacbio_ccs_str: &String, subre
         let w = 20; // Window size for creating the band
         let mut aligner = BandedDP::new(-2, -2, score_func, k, w);
         let alignment = aligner.global(&pacbio_ccs, &subread);
-        let mut pacbio_index = 0;
-        let mut subread_index = 0;
+        let mut pacbio_index = alignment.xstart;
+        let mut subread_index = alignment.ystart;
         for op in alignment.operations {
             match op {
                 bio::alignment::AlignmentOperation::Match => {
