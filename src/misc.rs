@@ -43,6 +43,32 @@ const BAND_SIZE: i32 = 100;
 const MAX_NODES_IN_POA: usize = 75_000;
 const SKIP_SCORE: i32 = 6_000;
 
+pub fn calculate_deep_quality (chromosone: &str, start: usize, end: usize, thread_id: usize) {
+    let mut position_base = start;
+    'bigloop: loop {
+        if position_base % 1000 == 0 {
+            println!("Thread ID: {} Position {}", thread_id, position_base);
+        }
+        let seq_name_qual_and_errorpos_vec = get_corrosponding_seq_name_location_quality_from_bam(position_base, &chromosone.to_string(), &'X');
+        // get the three base context
+        let mut ref_base_context = "".to_string();
+        if seq_name_qual_and_errorpos_vec.len() > 0 {
+            let mut fai_reader = faidx::Reader::from_path(REF_GENOME_PATH).unwrap();
+            ref_base_context = read_fai_get_ref_context(position_base,1,  &chromosone.to_string(), &mut fai_reader);
+        }
+        for seq_name in seq_name_qual_and_errorpos_vec {
+            let base_position_in_read = seq_name.3;
+            if seq_name.0.as_bytes().to_vec()[base_position_in_read] != ref_base_context.as_bytes().to_vec()[0] {
+                println!("{} {} {}", seq_name.0.as_bytes().to_vec()[base_position_in_read] as char, ref_base_context.as_bytes().to_vec()[0] as char, seq_name.2 as char);
+            }
+        }
+        position_base += 1;
+        if position_base > end {
+            break 'bigloop;
+        }
+    }
+}
+
 pub fn get_the_subreads_by_name_sam (full_name: &String) -> (Vec<String>, Vec<f32>, Vec<Vec<usize>>, Vec<Vec<usize>>) {
     let mut sn_obtained = false;
     let mut subread_sn_vec: Vec<f32>= vec![];
@@ -417,7 +443,7 @@ pub fn get_all_data_for_ml (chromosone: &str, start: usize, end: usize, thread_i
             if seq_name_qual_and_errorpos.3 >= 2 {
                 char_7base_context.push(char_sequence[seq_name_qual_and_errorpos.3 - 2]);
             }
-            else{
+            else {
                 char_7base_context.push('X');
             }
             if seq_name_qual_and_errorpos.3 >= 1 {
