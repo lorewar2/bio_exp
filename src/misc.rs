@@ -44,6 +44,8 @@ const MAX_NODES_IN_POA: usize = 75_000;
 const SKIP_SCORE: i32 = 6_000;
 
 pub fn calculate_deep_quality (chromosone: &str, start: usize, end: usize, thread_id: usize) {
+    let mut error_quality_count = vec![0; 94];
+    let mut correct_quality_count = vec![0; 94];
     let mut position_base = start;
     'bigloop: loop {
         if position_base % 1000 == 0 {
@@ -58,8 +60,11 @@ pub fn calculate_deep_quality (chromosone: &str, start: usize, end: usize, threa
         }
         for seq_name in seq_name_qual_and_errorpos_vec {
             let base_position_in_read = seq_name.3;
+            correct_quality_count[seq_name.2 as usize] += 1;
             if seq_name.0.as_bytes().to_vec()[base_position_in_read] != ref_base_context.as_bytes().to_vec()[0] {
-                println!("{} {} {}", seq_name.0.as_bytes().to_vec()[base_position_in_read] as char, ref_base_context.as_bytes().to_vec()[0] as char, seq_name.2 as char);
+                error_quality_count[seq_name.2 as usize] += 1;
+                println!("{} {} {}", seq_name.0.as_bytes().to_vec()[base_position_in_read] as char, ref_base_context.as_bytes().to_vec()[0] as char, seq_name.2);
+                break 'bigloop;
             }
         }
         position_base += 1;
@@ -67,6 +72,8 @@ pub fn calculate_deep_quality (chromosone: &str, start: usize, end: usize, threa
             break 'bigloop;
         }
     }
+    println!("{:?}", correct_quality_count);
+    println!("{:?}", error_quality_count);
 }
 
 pub fn get_the_subreads_by_name_sam (full_name: &String) -> (Vec<String>, Vec<f32>, Vec<Vec<usize>>, Vec<Vec<usize>>) {
