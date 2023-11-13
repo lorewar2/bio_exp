@@ -64,7 +64,8 @@ pub fn calculate_deep_quality (chromosone: &str, start: usize, end: usize, threa
             correct_quality_count[seq_name.2 as usize] += 1;
             if seq_name.0.as_bytes().to_vec()[base_position_in_read] != ref_base_context.as_bytes().to_vec()[0] {
                 error_quality_count[seq_name.2 as usize] += 1;
-                //println!("{} {} {}", seq_name.0.as_bytes().to_vec()[base_position_in_read] as char, ref_base_context.as_bytes().to_vec()[0] as char, seq_name.2);
+                println!("{} {} {}", seq_name.0.as_bytes().to_vec()[base_position_in_read] as char, ref_base_context.as_bytes().to_vec()[0] as char, seq_name.2);
+                break 'bigloop;
             }
         }
         position_base += 1;
@@ -74,6 +75,9 @@ pub fn calculate_deep_quality (chromosone: &str, start: usize, end: usize, threa
     }
     println!("{:?}", correct_quality_count);
     println!("{:?}", error_quality_count);
+    let write_string = format!("{:?}\n{:?}\n", correct_quality_count, error_quality_count);
+    let write_file = format!("/data1/hifi_consensus/deepresult/{}_data.txt", thread_id);
+    write_string_to_file(&write_file, &write_string);
 }
 
 pub fn get_the_subreads_by_name_sam (full_name: &String) -> (Vec<String>, Vec<f32>, Vec<Vec<usize>>, Vec<Vec<usize>>) {
@@ -330,7 +334,7 @@ pub fn pipeline_load_graph_get_topological_parallel_bases (chromosone: &str, sta
                 let write_string = format!("{} {:?} {} {} {:?}\n", pacbio_str, sn_vec, ip_vec[index], pw_vec[index], parallel_bases);
                 println!("{}", write_string);
                 let write_file = format!("{}/{}_parallel.txt", INTERMEDIATE_PATH, &seq_name_qual_and_errorpos.1);
-                //write_string_to_file(&write_file, &write_string);
+                write_string_to_file(&write_file, &write_string);
             } 
             index_thread += 1;
             println!("Thread {}: Chr {} Loc {}, tasks_done {}", thread_id, chromosone, process_location, index_thread);
