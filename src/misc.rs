@@ -31,7 +31,8 @@ const NUMBER_OF_RANDOM_SEQUENCES: usize = 20;
 const THREE_BASE_CONTEXT_READ_LENGTH: usize = 2;
 const NUM_OF_ITER_FOR_ZOOMED_GRAPHS: usize = 4;
 const DATA_PATH: &str = "/data1/hifi_consensus/try2/";
-const READ_BAM_PATH: &str = "/data1/hifi_consensus/try2/merged.bam";
+const READ_BAM_PATH: &str = "/data1/hifi_consensus/try2/m64125_201109_000332.deep.mapped.bam";
+const READ_BAM_PATH2: &str = "/data1/hifi_consensus/try2/merged.bam";
 const INTERMEDIATE_PATH: &str = "/data1/hifi_consensus/intermediate";
 const CONFIDENT_PATH: &str = "/data1/GiaB_benchmark/HG001_GRCh38_1_22_v4.2.1_benchmark.bed";
 const REF_GENOME_PATH: &str = "/data1/GiaB_benchmark/GRCh38.fa";
@@ -63,8 +64,7 @@ pub fn calculate_deep_quality (chromosone: &str, start: usize, end: usize, threa
             correct_quality_count[seq_name.2 as usize] += 1;
             if seq_name.0.as_bytes().to_vec()[base_position_in_read] != ref_base_context.as_bytes().to_vec()[0] {
                 error_quality_count[seq_name.2 as usize] += 1;
-                println!("{} {} {}", seq_name.0.as_bytes().to_vec()[base_position_in_read] as char, ref_base_context.as_bytes().to_vec()[0] as char, seq_name.2);
-                break 'bigloop;
+                //println!("{} {} {}", seq_name.0.as_bytes().to_vec()[base_position_in_read] as char, ref_base_context.as_bytes().to_vec()[0] as char, seq_name.2);
             }
         }
         position_base += 1;
