@@ -31,8 +31,8 @@ const NUMBER_OF_RANDOM_SEQUENCES: usize = 20;
 const THREE_BASE_CONTEXT_READ_LENGTH: usize = 2;
 const NUM_OF_ITER_FOR_ZOOMED_GRAPHS: usize = 4;
 const DATA_PATH: &str = "/data1/hifi_consensus/try2/";
-const READ_BAM_PATH: &str = "/data1/hifi_consensus/try2/m64125_201109_000332.deep.mapped.bam";
-const READ_BAM_PATH2: &str = "/data1/hifi_consensus/try2/merged.bam";
+const READ_BAM_PATH2: &str = "/data1/hifi_consensus/try2/m64125_201109_000332.deep.mapped.bam";
+const READ_BAM_PATH: &str = "/data1/hifi_consensus/try2/merged.bam";
 const INTERMEDIATE_PATH: &str = "/data1/hifi_consensus/intermediate";
 const CONFIDENT_PATH: &str = "/data1/GiaB_benchmark/HG001_GRCh38_1_22_v4.2.1_benchmark.bed";
 const REF_GENOME_PATH: &str = "/data1/GiaB_benchmark/GRCh38.fa";
@@ -43,6 +43,91 @@ const HIMUT_PATH: &str = "/data1/hifi_consensus/try3/test.vcf";
 const BAND_SIZE: i32 = 100;
 const MAX_NODES_IN_POA: usize = 75_000;
 const SKIP_SCORE: i32 = 6_000;
+
+pub fn pipeline_load_graph_get_topological_parallel_bases (chromosone: &str, start: usize, end: usize, thread_id: usize) {
+    let mut index_thread = 0;
+    let mut skip_thousand = false;
+    let mut skip_index = 0;
+    for process_location in start..end {
+        // skip thousand when same found
+        if skip_thousand {
+            skip_index += 1;
+            if skip_index > 5000 {
+                skip_thousand = false;
+                skip_index = 0;
+            }
+            else {
+                continue;
+            }
+        }
+        println!("Thread {}: Chr {} Loc {}, tasks_done {} NEW LOCATION", thread_id, chromosone, process_location, index_thread);
+        // get the string and the name
+        let seq_name_qual_and_errorpos_vec = get_corrosponding_seq_name_location_quality_from_bam(process_location, &chromosone.to_string(), &'X');
+        let mut all_skipped = true;
+        for seq_name_qual_and_errorpos in &seq_name_qual_and_errorpos_vec {
+            // check if the css file is already available
+            let check_file = format!("{}_parallel.txt", &seq_name_qual_and_errorpos.1);
+            if check_file_availability(&check_file, INTERMEDIATE_PATH) {
+                //println!("Thread {}: Required CSS File Available, skipping..", thread_id);
+                continue;
+            }
+            // check if graph is available, if available load all the data
+            let check_file = format!("{}_graph.txt", &seq_name_qual_and_errorpos.1);
+            if check_file_availability(&check_file, INTERMEDIATE_PATH) {
+                //println!("Thread {}: Required File not Available, Graph Available, processing..", thread_id);
+            }
+            // if both not available
+            else {
+                //println!("Thread {}: Nothing is available, continuing..", thread_id);
+                continue;
+            }
+            // find the subreads of that ccs
+            let (mut sub_reads, sn_vec, mut pw_vec, mut ip_vec) = get_the_subreads_by_name_sam(&seq_name_qual_and_errorpos.1);
+            // filter out the long reads and rearrange the reads
+            (sub_reads, pw_vec, ip_vec) = reverse_complement_subreads_ip_pw(&sub_reads, pw_vec, ip_vec);
+            // reverse if score is too low
+            (sub_reads, pw_vec, ip_vec) = check_the_scores_and_change_alignment_subreads_pw_ip(sub_reads, pw_vec, ip_vec, &seq_name_qual_and_errorpos.0);
+            // skip if no subreads, errors and stuff
+            if sub_reads.len() == 0 {
+                continue;
+            }
+            all_skipped = false;
+            let calculated_graph = load_the_graph(check_file);
+            let (calculated_consensus, calculated_topology) = get_consensus_from_graph(&calculated_graph); //just poa
+            let parallel_bases_vec = get_consensus_parallel_bases(sub_reads.len(), &calculated_consensus, &calculated_topology, &calculated_graph, thread_id);
+            
+            // align all subreads to ccs
+            println!("aligning stuff...");
+            let (ip_vec, pw_vec) = align_subreads_to_ccs_read_calculate_avg_ip_pw(&seq_name_qual_and_errorpos.0, sub_reads, ip_vec, pw_vec);
+            // match the calculated consensus to the original consensus and get the required indices
+            let calc_cons_id = get_redone_consensus_matched_positions(&seq_name_qual_and_errorpos.0, &calculated_consensus);
+            for (index, pacbio_base) in seq_name_qual_and_errorpos.0.as_bytes().to_vec().iter().enumerate() {
+                let mut pacbio_str = format!("OK({})", *pacbio_base as char);
+                let parallel_bases;
+                if calc_cons_id[index].1 == 0 {
+                    parallel_bases = vec![1, 1, 1, 1]; //deletion
+                    pacbio_str = "DEL()".to_string();
+                }
+                else if calc_cons_id[index].1 == 1 {
+                    parallel_bases = parallel_bases_vec[calc_cons_id[index].0].clone(); //normal
+                }
+                else {
+                    parallel_bases = parallel_bases_vec[calc_cons_id[index].0].clone(); //subsitution the value corrospond to the sub
+                    pacbio_str = format!{"SB({})", calc_cons_id[index].1 as char};
+                }
+                let write_string = format!("{} {:?} {} {} {:?}\n", pacbio_str, sn_vec, ip_vec[index], pw_vec[index], parallel_bases);
+                println!("{}", write_string);
+                let write_file = format!("{}/{}_parallel.txt", INTERMEDIATE_PATH, &seq_name_qual_and_errorpos.1);
+                write_string_to_file(&write_file, &write_string);
+            } 
+            index_thread += 1;
+            println!("Thread {}: Chr {} Loc {}, tasks_done {}", thread_id, chromosone, process_location, index_thread);
+        }
+        if all_skipped {
+            skip_thousand = true;
+        }
+    }
+}
 
 pub fn calculate_deep_quality (chromosone: &str, start: usize, end: usize, thread_id: usize) {
     let mut error_quality_count = vec![0; 94];
@@ -65,7 +150,6 @@ pub fn calculate_deep_quality (chromosone: &str, start: usize, end: usize, threa
             if seq_name.0.as_bytes().to_vec()[base_position_in_read] != ref_base_context.as_bytes().to_vec()[0] {
                 error_quality_count[seq_name.2 as usize] += 1;
                 println!("{} {} {}", seq_name.0.as_bytes().to_vec()[base_position_in_read] as char, ref_base_context.as_bytes().to_vec()[0] as char, seq_name.2);
-                break 'bigloop;
             }
         }
         position_base += 1;
@@ -181,6 +265,34 @@ fn reverse_complement_subreads_ip_pw (original_subreads: &Vec<String>, mut pw_ve
         }
         index += 1;
     }
+    // original seqvec
+    let seqvec_ori = seqvec.clone();
+    //sort the vector by size
+    seqvec.sort_by_key(|seq| seq.len());
+    //drop the sequences which are > 1.8x median size
+    let median_size: f32 = seqvec[(seqvec.len() / 2) - 1].len() as f32;
+    let mut drop_index = seqvec.len();
+    for index in (seqvec.len() / 2)..(seqvec.len() - 1) {
+        if seqvec[index].len() as f32 > (median_size * 1.5) {
+            drop_index = index;
+            break;
+        }
+    }
+    for _ in drop_index..seqvec.len() {
+        seqvec.pop();
+    }
+    // rearrange the seq vector median first and rest according mediand size difference
+    seqvec.sort_by(|a, b| ((a.len() as f32 - median_size).abs()).partial_cmp(&(b.len() as f32 - median_size).abs()).unwrap());
+    let mut new_pw_vec: Vec<Vec<usize>> = vec![vec![]; seqvec.len()];
+    let mut new_ip_vec: Vec<Vec<usize>> = vec![vec![]; seqvec.len()];
+    for i in 0..seqvec_ori.len() {
+        for j in 0..seqvec.len() {
+            if seqvec_ori[i] == seqvec[j] {
+                new_pw_vec[j] = pw_vec[i].clone();
+                new_ip_vec[j] = ip_vec[i].clone();
+            }
+        } 
+    }
     (seqvec, pw_vec, ip_vec)
 }
 
@@ -257,91 +369,6 @@ fn check_the_scores_and_change_alignment_subreads_pw_ip (seqvec: Vec<String>, mu
     }
     else {
         return (seqvec, pw_vec, ip_vec);
-    }
-}
-pub fn pipeline_load_graph_get_topological_parallel_bases (chromosone: &str, start: usize, end: usize, thread_id: usize) {
-    let mut index_thread = 0;
-    let mut skip_thousand = false;
-    let mut skip_index = 0;
-    for process_location in start..end {
-        // skip thousand when same found
-        if skip_thousand {
-            skip_index += 1;
-            if skip_index > 5000 {
-                skip_thousand = false;
-                skip_index = 0;
-            }
-            else {
-                continue;
-            }
-        }
-        println!("Thread {}: Chr {} Loc {}, tasks_done {} NEW LOCATION", thread_id, chromosone, process_location, index_thread);
-        // get the string and the name
-        let seq_name_qual_and_errorpos_vec = get_corrosponding_seq_name_location_quality_from_bam(process_location, &chromosone.to_string(), &'X');
-        let mut all_skipped = true;
-        for seq_name_qual_and_errorpos in &seq_name_qual_and_errorpos_vec {
-            // check if the css file is already available
-            let check_file = format!("{}_parallel.txt", &seq_name_qual_and_errorpos.1);
-            if check_file_availability(&check_file, INTERMEDIATE_PATH) {
-                //println!("Thread {}: Required CSS File Available, skipping..", thread_id);
-                continue;
-            }
-            // check if graph is available, if available load all the data
-            let check_file = format!("{}_graph.txt", &seq_name_qual_and_errorpos.1);
-            if check_file_availability(&check_file, INTERMEDIATE_PATH) {
-                //println!("Thread {}: Required File not Available, Graph Available, processing..", thread_id);
-            }
-            // if both not available
-            else {
-                //println!("Thread {}: Nothing is available, continuing..", thread_id);
-                continue;
-            }
-            all_skipped = false;
-            // find the subreads of that ccs
-            let (mut sub_reads, sn_vec, mut pw_vec, mut ip_vec) = get_the_subreads_by_name_sam(&seq_name_qual_and_errorpos.1);
-            // filter out the long reads and rearrange the reads
-            (sub_reads, pw_vec, ip_vec) = reverse_complement_subreads_ip_pw(&sub_reads, pw_vec, ip_vec);
-            // reverse if score is too low
-            (sub_reads, pw_vec, ip_vec) = check_the_scores_and_change_alignment_subreads_pw_ip(sub_reads, pw_vec, ip_vec, &seq_name_qual_and_errorpos.0);
-            // skip if no subreads, errors and stuff
-            if sub_reads.len() == 0 {
-                continue;
-            }
-            
-            let calculated_graph = load_the_graph(check_file);
-            let (calculated_consensus, calculated_topology) = get_consensus_from_graph(&calculated_graph); //just poa
-            let parallel_bases_vec = get_consensus_parallel_bases(sub_reads.len(), &calculated_consensus, &calculated_topology, &calculated_graph, thread_id);
-            
-            // align all subreads to ccs
-            println!("aligning stuff...");
-            let (ip_vec, pw_vec) = align_subreads_to_ccs_read_calculate_avg_ip_pw(&seq_name_qual_and_errorpos.0, sub_reads, ip_vec, pw_vec);
-            // match the calculated consensus to the original consensus and get the required indices
-            let calc_cons_id = get_redone_consensus_matched_positions(&seq_name_qual_and_errorpos.0, &calculated_consensus);
-            for (index, pacbio_base) in seq_name_qual_and_errorpos.0.as_bytes().to_vec().iter().enumerate() {
-                let mut pacbio_str = format!("OK({})", *pacbio_base as char);
-                let parallel_bases;
-                if calc_cons_id[index].1 == 0 {
-                    parallel_bases = vec![1, 1, 1, 1]; //deletion
-                    pacbio_str = "DEL()".to_string();
-                }
-                else if calc_cons_id[index].1 == 1 {
-                    parallel_bases = parallel_bases_vec[calc_cons_id[index].0].clone(); //normal
-                }
-                else {
-                    parallel_bases = parallel_bases_vec[calc_cons_id[index].0].clone(); //subsitution the value corrospond to the sub
-                    pacbio_str = format!{"SB({})", calc_cons_id[index].1 as char};
-                }
-                let write_string = format!("{} {:?} {} {} {:?}\n", pacbio_str, sn_vec, ip_vec[index], pw_vec[index], parallel_bases);
-                println!("{}", write_string);
-                let write_file = format!("{}/{}_parallel.txt", INTERMEDIATE_PATH, &seq_name_qual_and_errorpos.1);
-                write_string_to_file(&write_file, &write_string);
-            } 
-            index_thread += 1;
-            println!("Thread {}: Chr {} Loc {}, tasks_done {}", thread_id, chromosone, process_location, index_thread);
-        }
-        if all_skipped {
-            skip_thousand = true;
-        }
     }
 }
 
