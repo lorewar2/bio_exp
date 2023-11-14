@@ -227,7 +227,7 @@ pub fn calculate_deep_quality (chromosone: &str, start: usize, end: usize, threa
         }
         for seq_name in seq_name_qual_and_errorpos_vec {
             let base_position_in_read = seq_name.3;
-            let write_string = format!("{} {} {} : {}\n", position_base, ref_base_context.as_bytes().to_vec()[0], seq_name.2 as usize, seq_name.0.as_bytes().to_vec()[base_position_in_read]);
+            let write_string = format!("{} {} {} : {}\n", position_base, ref_base_context.as_bytes().to_vec()[0] as char, seq_name.2 as usize, seq_name.0.as_bytes().to_vec()[base_position_in_read] as char);
             let write_file = format!("/data1/hifi_consensus/deepresult/{}_data.txt", thread_id);
             write_string_to_file(&write_file, &write_string);
         }
