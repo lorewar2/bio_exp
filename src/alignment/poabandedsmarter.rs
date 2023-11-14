@@ -128,14 +128,14 @@ impl Traceback {
 
     fn set(&mut self, i: usize, j: usize, cell: TracebackCell) {
         // if j is less than start, if j is greater than end, do nothing
-        if !(self.matrix[i].1 > j || self.matrix[i].2 < j) {
+        if !(self.matrix[i].1 > j || self.matrix[i].2 <= j) {
             let real_position = j - self.matrix[i].1;
             self.matrix[i].0[real_position] = cell;
         }
     }
 
     fn get(&self, i: usize, j: usize) -> &TracebackCell {
-        if !(self.matrix[i].1 > j || self.matrix[i].2 < j) {
+        if !(self.matrix[i].1 > j || self.matrix[i].2 <= j) {
             let real_position = j - self.matrix[i].1;
             return &self.matrix[i].0[real_position];
         }

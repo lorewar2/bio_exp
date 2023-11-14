@@ -31,18 +31,101 @@ const NUMBER_OF_RANDOM_SEQUENCES: usize = 20;
 const THREE_BASE_CONTEXT_READ_LENGTH: usize = 2;
 const NUM_OF_ITER_FOR_ZOOMED_GRAPHS: usize = 4;
 const DATA_PATH: &str = "/data1/hifi_consensus/try2/";
-const READ_BAM_PATH2: &str = "/data1/hifi_consensus/try2/m64125_201109_000332.deep.mapped.bam";
+const DEEP_BAM_PATH: &str = "/data1/hifi_consensus/try2/m64125_201109_000332.deep.mapped.bam";
 const READ_BAM_PATH: &str = "/data1/hifi_consensus/try2/merged.bam";
 const INTERMEDIATE_PATH: &str = "/data1/hifi_consensus/intermediate";
 const CONFIDENT_PATH: &str = "/data1/GiaB_benchmark/HG001_GRCh38_1_22_v4.2.1_benchmark.bed";
 const REF_GENOME_PATH: &str = "/data1/GiaB_benchmark/GRCh38.fa";
-const RESULT_WRITE_PATH: &str = "/data1/hifi_consensus/all_data/chr2_7base_data";
+const RESULT_WRITE_PATH: &str = "/data1/hifi_consensus/processed_data/chr2";
 const DEEPVARIANT_PATH: &str = "/data1/hifi_consensus/try3/hg38.PD47269d.minimap2_ccs.deepvariant_1.1.0.vcf";
 const WRONG_ERROR_FILE_PATH: &str = "/data1/hifi_consensus/all_data/chr2_errors.txt";
 const HIMUT_PATH: &str = "/data1/hifi_consensus/try3/test.vcf";
 const BAND_SIZE: i32 = 100;
 const MAX_NODES_IN_POA: usize = 75_000;
 const SKIP_SCORE: i32 = 6_000;
+
+pub fn get_all_data_for_ml (chromosone: &str, start: usize, end: usize, thread_id: usize) {
+    let mut position_base = start;
+    'bigloop: loop {
+        if position_base % 1000 == 0 {
+            println!("Thread ID: {} Position {}", thread_id, position_base);
+        }
+        let seq_name_qual_and_errorpos_vec = get_corrosponding_seq_name_location_quality_from_bam(position_base, &chromosone.to_string(), &'X');
+        // get the three base context
+        let mut ref_sevenbase_context = "".to_string();
+        if seq_name_qual_and_errorpos_vec.len() > 0 {
+            let mut fai_reader = faidx::Reader::from_path(REF_GENOME_PATH).unwrap();
+            ref_sevenbase_context = read_fai_get_ref_context(position_base - 3,7,  &chromosone.to_string(), &mut fai_reader);
+        }
+        for seq_name_qual_and_errorpos in &seq_name_qual_and_errorpos_vec {
+            let char_sequence: Vec<char> = seq_name_qual_and_errorpos.0.chars().collect::<Vec<_>>();
+            let mut char_7base_context: Vec<char> = vec![];
+            // when 7 base context above 0 this is very dumb re write
+            if seq_name_qual_and_errorpos.3 >= 3 {
+                char_7base_context.push(char_sequence[seq_name_qual_and_errorpos.3 - 3]);
+            }
+            else {
+                char_7base_context.push('X');
+            }
+            if seq_name_qual_and_errorpos.3 >= 2 {
+                char_7base_context.push(char_sequence[seq_name_qual_and_errorpos.3 - 2]);
+            }
+            else {
+                char_7base_context.push('X');
+            }
+            if seq_name_qual_and_errorpos.3 >= 1 {
+                char_7base_context.push(char_sequence[seq_name_qual_and_errorpos.3 - 1]);
+            }
+            else {
+                char_7base_context.push('X');
+            }
+            char_7base_context.push(char_sequence[seq_name_qual_and_errorpos.3]);
+            // when len is greater than 7 base context
+            if seq_name_qual_and_errorpos.0.len() > (1 + seq_name_qual_and_errorpos.3) {
+                char_7base_context.push(char_sequence[seq_name_qual_and_errorpos.3 + 1]);
+            }
+            // when len is less than 7 base context
+            else {
+                char_7base_context.push('X');
+            }
+            if seq_name_qual_and_errorpos.0.len() > (2 + seq_name_qual_and_errorpos.3) {
+                char_7base_context.push(char_sequence[seq_name_qual_and_errorpos.3 + 2]);
+            }
+            else{
+                char_7base_context.push('X');
+            }
+            if seq_name_qual_and_errorpos.0.len() > (3 + seq_name_qual_and_errorpos.3) {
+                char_7base_context.push(char_sequence[seq_name_qual_and_errorpos.3 + 3]);
+            }
+            else{
+                char_7base_context.push('X');
+            }
+            let read_sevenbase_context = char_7base_context.iter().collect::<String>();
+            let quality = seq_name_qual_and_errorpos.2;
+            // error is here
+            let parallel_stuff;
+            // check if the file is already available
+            let file_name = format!("{}{}", seq_name_qual_and_errorpos.1, "_parallel.txt");
+            if check_file_availability(&file_name, INTERMEDIATE_PATH) {
+                let available_file_path = format!("{}/{}", INTERMEDIATE_PATH, file_name);
+                parallel_stuff = get_parallel_bases_from_file(&available_file_path, seq_name_qual_and_errorpos.3);
+            }
+            else {
+                continue;
+            }
+            let read_position = seq_name_qual_and_errorpos.3;
+            let read_len =  seq_name_qual_and_errorpos.0.len();
+            // write data
+            let write_string = format!("{} {} {} : {} {} {} {}", position_base, ref_sevenbase_context, quality, read_position, read_len, read_sevenbase_context, parallel_stuff);
+            let write_file = format!("{}/{}_mldata.txt", RESULT_WRITE_PATH, thread_id);
+            write_string_to_file(&write_file, &write_string);
+        }
+        position_base += 1;
+        if position_base > end {
+            break 'bigloop;
+        }
+    }
+}
 
 pub fn pipeline_load_graph_get_topological_parallel_bases (chromosone: &str, start: usize, end: usize, thread_id: usize) {
     let mut index_thread = 0;
@@ -453,89 +536,6 @@ fn get_redone_consensus_matched_positions (pacbio_consensus: &String, calculated
     }
     println!("score {}", temp_score);
     consensus_matched_indices
-}
-
-pub fn get_all_data_for_ml (chromosone: &str, start: usize, end: usize, thread_id: usize) {
-    let mut position_base = start;
-    'bigloop: loop {
-        if position_base % 1000 == 0 {
-            println!("Thread ID: {} Position {}", thread_id, position_base);
-        }
-        let seq_name_qual_and_errorpos_vec = get_corrosponding_seq_name_location_quality_from_bam(position_base, &chromosone.to_string(), &'X');
-        // get the three base context
-        let mut ref_sevenbase_context = "".to_string();
-        if seq_name_qual_and_errorpos_vec.len() > 0 {
-            let mut fai_reader = faidx::Reader::from_path(REF_GENOME_PATH).unwrap();
-            ref_sevenbase_context = read_fai_get_ref_context(position_base - 3,7,  &chromosone.to_string(), &mut fai_reader);
-        }
-        for seq_name_qual_and_errorpos in &seq_name_qual_and_errorpos_vec {
-            let char_sequence: Vec<char> = seq_name_qual_and_errorpos.0.chars().collect::<Vec<_>>();
-            let mut char_7base_context: Vec<char> = vec![];
-            // when 7 base context above 0 this is very dumb re write
-            if seq_name_qual_and_errorpos.3 >= 3 {
-                char_7base_context.push(char_sequence[seq_name_qual_and_errorpos.3 - 3]);
-            }
-            else {
-                char_7base_context.push('X');
-            }
-            if seq_name_qual_and_errorpos.3 >= 2 {
-                char_7base_context.push(char_sequence[seq_name_qual_and_errorpos.3 - 2]);
-            }
-            else {
-                char_7base_context.push('X');
-            }
-            if seq_name_qual_and_errorpos.3 >= 1 {
-                char_7base_context.push(char_sequence[seq_name_qual_and_errorpos.3 - 1]);
-            }
-            else {
-                char_7base_context.push('X');
-            }
-            char_7base_context.push(char_sequence[seq_name_qual_and_errorpos.3]);
-            // when len is greater than 7 base context
-            if seq_name_qual_and_errorpos.0.len() > (1 + seq_name_qual_and_errorpos.3) {
-                char_7base_context.push(char_sequence[seq_name_qual_and_errorpos.3 + 1]);
-            }
-            // when len is less than 7 base context
-            else {
-                char_7base_context.push('X');
-            }
-            if seq_name_qual_and_errorpos.0.len() > (2 + seq_name_qual_and_errorpos.3) {
-                char_7base_context.push(char_sequence[seq_name_qual_and_errorpos.3 + 2]);
-            }
-            else{
-                char_7base_context.push('X');
-            }
-            if seq_name_qual_and_errorpos.0.len() > (3 + seq_name_qual_and_errorpos.3) {
-                char_7base_context.push(char_sequence[seq_name_qual_and_errorpos.3 + 3]);
-            }
-            else{
-                char_7base_context.push('X');
-            }
-            let read_sevenbase_context = char_7base_context.iter().collect::<String>();
-            let quality = seq_name_qual_and_errorpos.2;
-            // error is here
-            let parallel_stuff;
-            // check if the file is already available
-            let file_name = format!("{}{}", seq_name_qual_and_errorpos.1, "_parallel.txt");
-            if check_file_availability(&file_name, INTERMEDIATE_PATH) {
-                let available_file_path = format!("{}/{}", INTERMEDIATE_PATH, file_name);
-                parallel_stuff = get_parallel_bases_from_file(&available_file_path, seq_name_qual_and_errorpos.3);
-            }
-            else {
-                continue;
-            }
-            let read_position = seq_name_qual_and_errorpos.3;
-            let read_len =  seq_name_qual_and_errorpos.0.len();
-            // write data
-            let write_string = format!("{} {} {} : {} {} {} {}", position_base, ref_sevenbase_context, quality, read_position, read_len, read_sevenbase_context, parallel_stuff);
-            let write_file = format!("{}/{}_mldata.txt", RESULT_WRITE_PATH, thread_id);
-            write_string_to_file(&write_file, &write_string);
-        }
-        position_base += 1;
-        if position_base > end {
-            break 'bigloop;
-        }
-    }
 }
 
 pub fn create_himut_list () {
