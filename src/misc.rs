@@ -213,8 +213,6 @@ pub fn pipeline_load_graph_get_topological_parallel_bases (chromosone: &str, sta
 }
 
 pub fn calculate_deep_quality (chromosone: &str, start: usize, end: usize, thread_id: usize) {
-    let mut error_quality_count = vec![0; 94];
-    let mut correct_quality_count = vec![0; 94];
     let mut position_base = start;
     'bigloop: loop {
         if position_base % 1000 == 0 {
@@ -229,22 +227,15 @@ pub fn calculate_deep_quality (chromosone: &str, start: usize, end: usize, threa
         }
         for seq_name in seq_name_qual_and_errorpos_vec {
             let base_position_in_read = seq_name.3;
-            correct_quality_count[seq_name.2 as usize] += 1;
-            if seq_name.0.as_bytes().to_vec()[base_position_in_read] != ref_base_context.as_bytes().to_vec()[0] {
-                error_quality_count[seq_name.2 as usize] += 1;
-                println!("{} {} {}", seq_name.0.as_bytes().to_vec()[base_position_in_read] as char, ref_base_context.as_bytes().to_vec()[0] as char, seq_name.2);
-            }
+            let write_string = format!("{} {} {} : {}\n", position_base, ref_base_context.as_bytes().to_vec()[0], seq_name.2 as usize, seq_name.0.as_bytes().to_vec()[base_position_in_read]);
+            let write_file = format!("/data1/hifi_consensus/deepresult/{}_data.txt", thread_id);
+            write_string_to_file(&write_file, &write_string);
         }
         position_base += 1;
         if position_base > end {
             break 'bigloop;
         }
     }
-    println!("{:?}", correct_quality_count);
-    println!("{:?}", error_quality_count);
-    let write_string = format!("{:?}\n{:?}\n", correct_quality_count, error_quality_count);
-    let write_file = format!("/data1/hifi_consensus/deepresult/{}_data.txt", thread_id);
-    write_string_to_file(&write_file, &write_string);
 }
 
 pub fn get_the_subreads_by_name_sam (full_name: &String) -> (Vec<String>, Vec<f32>, Vec<Vec<usize>>, Vec<Vec<usize>>) {

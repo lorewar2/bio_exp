@@ -6,7 +6,7 @@ mod generator;
 mod misc;
 mod quality;
 use std::thread;
-use crate::misc::get_all_data_for_ml;
+use crate::misc::calculate_deep_quality;
 
 const SEED: u64 = 2;
 const GAP_OPEN: i32 = -2;
@@ -30,7 +30,7 @@ fn main() {
             let start = total_start + one_thread_allocation * i;
             let end = start + one_thread_allocation;
             println!("Thread number {} started, {} from {} to {}..", chromosone, i, start, end);
-            get_all_data_for_ml (chromosone, start, end, i);
+            calculate_deep_quality(chromosone, start, end, i);
         }));
     }
     for child in children {
