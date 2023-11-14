@@ -293,7 +293,7 @@ fn reverse_complement_subreads_ip_pw (original_subreads: &Vec<String>, mut pw_ve
             }
         } 
     }
-    (seqvec, pw_vec, ip_vec)
+    (seqvec, new_pw_vec, new_ip_vec)
 }
 
 fn check_the_scores_and_change_alignment_subreads_pw_ip (seqvec: Vec<String>, mut pw_vec: Vec<Vec<usize>>, mut ip_vec: Vec<Vec<usize>>, pacbio_consensus: &String) -> (Vec<String>, Vec<Vec<usize>>, Vec<Vec<usize>>) {
