@@ -727,9 +727,9 @@ fn get_confident_locations_from_file () -> Vec<(String, usize, usize)> {
 }
 
 pub fn concancate_files () {
-    let mut output = File::create("/data1/hifi_consensus/all_data/chr2.txt").unwrap();
+    let mut output = File::create("/data1/hifi_consensus/processed_data/chr2_ip_pw.txt").unwrap();
     //let paths = read_dir("data/chr21/").unwrap();
-    let parent_path = "/data1/hifi_consensus/all_data/chr2_data/";
+    let parent_path = "/data1/hifi_consensus/processed_data/chr2_data/";
     let mut path_array = vec![];
     for i in 0..70 {
         path_array.push(format!("{}{}_mldata.txt",parent_path, i))
