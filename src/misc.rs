@@ -31,7 +31,7 @@ const NUMBER_OF_RANDOM_SEQUENCES: usize = 20;
 const THREE_BASE_CONTEXT_READ_LENGTH: usize = 2;
 const NUM_OF_ITER_FOR_ZOOMED_GRAPHS: usize = 4;
 const DATA_PATH: &str = "/data1/hifi_consensus/try2/";
-const DEEP_BAM_PATH: &str = "/data1/hifi_consensus/try2/m64125_201109_000332.deep.mapped.bam";
+const DEEP_BAM_PATH: &str = "/data1/hifi_consensus/try2/deep.merged.bam";
 const READ_BAM_PATH: &str = "/data1/hifi_consensus/try2/merged.bam";
 const INTERMEDIATE_PATH: &str = "/data1/hifi_consensus/intermediate";
 const CONFIDENT_PATH: &str = "/data1/GiaB_benchmark/HG001_GRCh38_1_22_v4.2.1_benchmark.bed";
@@ -227,8 +227,10 @@ pub fn calculate_deep_quality (chromosone: &str, start: usize, end: usize, threa
         }
         for seq_name in seq_name_qual_and_errorpos_vec {
             let base_position_in_read = seq_name.3;
-            let write_string = format!("{} {} {} : {}\n", position_base, ref_base_context.as_bytes().to_vec()[0] as char, seq_name.2 as usize, seq_name.0.as_bytes().to_vec()[base_position_in_read] as char);
-            let write_file = format!("/data1/hifi_consensus/deepresult/{}_data.txt", thread_id);
+            let seq_len = seq_name.0.len();
+            let current_pos = seq_name.3;
+            let write_string = format!("{} {} {} : {} {} {}\n", position_base, ref_base_context.as_bytes().to_vec()[0] as char, seq_name.2 as usize, current_pos, seq_len, seq_name.0.as_bytes().to_vec()[base_position_in_read] as char);
+            let write_file = format!("/data1/hifi_consensus/deepresult/{}_{}_deep_data.txt", thread_id, chromosone);
             write_string_to_file(&write_file, &write_string);
         }
         position_base += 1;
@@ -1383,7 +1385,7 @@ fn check_the_scores_and_change_alignment (seqvec: Vec<String>, pacbio_consensus:
 
 fn get_corrosponding_seq_name_location_quality_from_bam (error_pos: usize, error_chr: &String, base_change: &char) -> Vec<(String, String, u8, usize)> {
     let mut seq_name_qual_and_errorpos: Vec<(String, String, u8, usize)> = vec![];
-    let path = &READ_BAM_PATH;
+    let path = &DEEP_BAM_PATH;
     let mut bam_reader = BamIndexedReader::from_path(path).unwrap();
     bam_reader.fetch((error_chr, error_pos as i64, error_pos as i64 + 1)).unwrap();
     'read_loop: for read in bam_reader.records() {

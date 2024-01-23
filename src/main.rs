@@ -6,7 +6,7 @@ mod generator;
 mod misc;
 mod quality;
 use std::thread;
-use crate::misc::concancate_files;
+use crate::misc::calculate_deep_quality;
 
 const SEED: u64 = 2;
 const GAP_OPEN: i32 = -2;
@@ -22,7 +22,7 @@ fn main() {
     let total_start = 5_000_000;
     let total_end = 240_000_000;
     let one_thread_allocation = (total_end - total_start) / NTHREADS;
-    concancate_files();
+    //concancate_files();
     for i in 0..NTHREADS {
         // calculate my start and end locations
         // spin up another thread
@@ -31,7 +31,7 @@ fn main() {
             let start = total_start + one_thread_allocation * i;
             let end = start + one_thread_allocation;
             println!("Thread number {} started, {} from {} to {}..", chromosone, i, start, end);
-            //calculate_deep_quality(chromosone, start, end, i);
+            calculate_deep_quality(chromosone, start, end, i);
         }));
     }
     for child in children {
