@@ -103,20 +103,20 @@ pub fn get_all_data_for_ml (chromosone: &str, start: usize, end: usize, thread_i
             let read_sevenbase_context = char_7base_context.iter().collect::<String>();
             let quality = seq_name_qual_and_errorpos.2;
             // error is here
-            let parallel_stuff;
+            //let parallel_stuff;
             // check if the file is already available
-            let file_name = format!("{}{}", seq_name_qual_and_errorpos.1, "_parallel.txt");
-            if check_file_availability(&file_name, INTERMEDIATE_PATH) {
-                let available_file_path = format!("{}/{}", INTERMEDIATE_PATH, file_name);
-                parallel_stuff = get_parallel_bases_from_file(&available_file_path, seq_name_qual_and_errorpos.3);
-            }
-            else {
-                continue;
-            }
+            //let file_name = format!("{}{}", seq_name_qual_and_errorpos.1, "_parallel.txt");
+            // if check_file_availability(&file_name, INTERMEDIATE_PATH) {
+            //     let available_file_path = format!("{}/{}", INTERMEDIATE_PATH, file_name);
+            //     parallel_stuff = get_parallel_bases_from_file(&available_file_path, seq_name_qual_and_errorpos.3);
+            // }
+            // else {
+            //     continue;
+            // }
             let read_position = seq_name_qual_and_errorpos.3;
             let read_len =  seq_name_qual_and_errorpos.0.len();
             // write data
-            let write_string = format!("{} {} {} : {} {} {} {}", position_base, ref_sevenbase_context, quality, read_position, read_len, read_sevenbase_context, parallel_stuff);
+            let write_string = format!("{} {} {} : {} {} {}", position_base, ref_sevenbase_context, quality, read_position, read_len, read_sevenbase_context);
             let write_file = format!("{}/{}_mldata.txt", RESULT_WRITE_PATH, thread_id);
             write_string_to_file(&write_file, &write_string);
         }
