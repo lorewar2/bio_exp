@@ -31,12 +31,12 @@ const NUMBER_OF_RANDOM_SEQUENCES: usize = 20;
 const THREE_BASE_CONTEXT_READ_LENGTH: usize = 2;
 const NUM_OF_ITER_FOR_ZOOMED_GRAPHS: usize = 4;
 const DATA_PATH: &str = "/data1/hifi_consensus/try2/";
-const DEEP_BAM_PATH: &str = "/data1/hifi_consensus/try2/deep.merged.bam";
+const DEEP_BAM_PATH: &str = "/data1/hifi_consensus/data_for_hicanu/human_out/human.mapped.bam";
 const READ_BAM_PATH: &str = "/data1/hifi_consensus/try2/merged.bam";
 const INTERMEDIATE_PATH: &str = "/data1/hifi_consensus/intermediate";
 const CONFIDENT_PATH: &str = "/data1/GiaB_benchmark/HG001_GRCh38_1_22_v4.2.1_benchmark.bed";
 const REF_GENOME_PATH: &str = "/data1/GiaB_benchmark/GRCh38.fa";
-const RESULT_WRITE_PATH: &str = "/data1/hifi_consensus/processed_data/chr2";
+const RESULT_WRITE_PATH: &str = "/data1/hifi_consensus/processed_data/chr21_hicanu";
 const DEEPVARIANT_PATH: &str = "/data1/hifi_consensus/try3/hg38.PD47269d.minimap2_ccs.deepvariant_1.1.0.vcf";
 const WRONG_ERROR_FILE_PATH: &str = "/data1/hifi_consensus/all_data/chr2_errors.txt";
 const HIMUT_PATH: &str = "/data1/hifi_consensus/try3/test.vcf";
@@ -125,6 +125,98 @@ pub fn get_all_data_for_ml (chromosone: &str, start: usize, end: usize, thread_i
             break 'bigloop;
         }
     }
+}
+
+fn get_corrosponding_seq_name_location_quality_from_bam (error_pos: usize, error_chr: &String, base_change: &char) -> Vec<(String, String, u8, usize)> {
+    let mut seq_name_qual_and_errorpos: Vec<(String, String, u8, usize)> = vec![];
+    let path = &DEEP_BAM_PATH;
+    let mut bam_reader = BamIndexedReader::from_path(path).unwrap();
+    bam_reader.fetch((error_chr, error_pos as i64, error_pos as i64 + 1)).unwrap();
+    'read_loop: for read in bam_reader.records() {
+        let readunwrapped = read.unwrap();
+        // get the data
+        let mut read_index = 0;
+        let read_name = String::from_utf8(readunwrapped.qname().to_vec()).expect("");
+        let read_vec = readunwrapped.seq().as_bytes().to_vec();
+        let read_string = String::from_utf8(readunwrapped.seq().as_bytes().to_vec()).expect("");
+        if readunwrapped.seq_len() < 5 {
+            continue;
+        }
+        // get the location from the cigar processing
+        let mut temp_character_vec: Vec<char> = vec![];
+        // get the read start position
+        let read_start_pos = readunwrapped.pos() as usize;
+        let mut current_ref_pos = read_start_pos;
+        let mut current_read_pos = 0;
+        // decode the cigar string
+        for character in readunwrapped.cigar().to_string().as_bytes() {
+            match *character as char {
+                'M' => {     
+                    let temp_string: String = temp_character_vec.clone().into_iter().collect();
+                    let temp_int = temp_string.parse::<usize>().unwrap();
+                    if (current_ref_pos + temp_int > error_pos)
+                        && (current_ref_pos <= error_pos + 1) {
+                        (read_index, _) = get_required_start_end_positions_from_read (temp_int, current_ref_pos, current_read_pos, error_pos, 1);
+                        if &(read_vec[read_index] as char) == base_change && ('X' != *base_change) {
+                            break;
+                        }
+                        else if 'X' == *base_change {
+                            break;
+                        }
+                        else {
+                            continue 'read_loop;
+                        }
+                    }
+                    current_ref_pos += temp_int;
+                    current_read_pos += temp_int;
+                    temp_character_vec = vec![];
+                },
+                'H' => {
+                    temp_character_vec = vec![];
+                },
+                'S' => {
+                    let temp_string: String = temp_character_vec.clone().into_iter().collect();
+                    let temp_int = temp_string.parse::<usize>().unwrap();
+                    current_read_pos += temp_int;
+                    temp_character_vec = vec![];
+                },
+                'I' => {
+                    let temp_string: String = temp_character_vec.clone().into_iter().collect();
+                    let temp_int = temp_string.parse::<usize>().unwrap();
+                    current_read_pos += temp_int;
+                    temp_character_vec = vec![];
+                },
+                'N' => {
+                    let temp_string: String = temp_character_vec.clone().into_iter().collect();
+                    let temp_int = temp_string.parse::<usize>().unwrap();
+                    if (current_ref_pos + temp_int >= error_pos)
+                        && (current_ref_pos <= error_pos + 1) {
+                        //(_, _) = get_required_start_end_positions_from_read (temp_int, current_ref_pos, current_read_pos, error_pos, 1);
+                        continue 'read_loop;
+                    }
+                    current_ref_pos += temp_int;
+                    temp_character_vec = vec![];
+                },
+                'D' => {
+                    let temp_string: String = temp_character_vec.clone().into_iter().collect();
+                    let temp_int = temp_string.parse::<usize>().unwrap();
+                    if (current_ref_pos + temp_int >= error_pos)
+                        && (current_ref_pos <= error_pos + 1) {
+                        //let (_, _) = get_required_start_end_positions_from_read (temp_int, current_ref_pos, current_read_pos, error_pos, 1);
+                        continue 'read_loop;
+                    }
+                    current_ref_pos += temp_int;
+                    temp_character_vec = vec![];
+                },
+                _ => {
+                    temp_character_vec.push(*character as char);
+                },
+            }
+        }
+        seq_name_qual_and_errorpos.push((read_string.clone(), read_name.clone(), readunwrapped.qual()[read_index], read_index));
+    }
+    drop(bam_reader);
+    seq_name_qual_and_errorpos
 }
 
 pub fn pipeline_load_graph_get_topological_parallel_bases (chromosone: &str, start: usize, end: usize, thread_id: usize) {
@@ -1381,98 +1473,6 @@ fn check_the_scores_and_change_alignment (seqvec: Vec<String>, pacbio_consensus:
     else {
         return seqvec;
     }
-}
-
-fn get_corrosponding_seq_name_location_quality_from_bam (error_pos: usize, error_chr: &String, base_change: &char) -> Vec<(String, String, u8, usize)> {
-    let mut seq_name_qual_and_errorpos: Vec<(String, String, u8, usize)> = vec![];
-    let path = &DEEP_BAM_PATH;
-    let mut bam_reader = BamIndexedReader::from_path(path).unwrap();
-    bam_reader.fetch((error_chr, error_pos as i64, error_pos as i64 + 1)).unwrap();
-    'read_loop: for read in bam_reader.records() {
-        let readunwrapped = read.unwrap();
-        // get the data
-        let mut read_index = 0;
-        let read_name = String::from_utf8(readunwrapped.qname().to_vec()).expect("");
-        let read_vec = readunwrapped.seq().as_bytes().to_vec();
-        let read_string = String::from_utf8(readunwrapped.seq().as_bytes().to_vec()).expect("");
-        if readunwrapped.seq_len() < 5 {
-            continue;
-        }
-        // get the location from the cigar processing
-        let mut temp_character_vec: Vec<char> = vec![];
-        // get the read start position
-        let read_start_pos = readunwrapped.pos() as usize;
-        let mut current_ref_pos = read_start_pos;
-        let mut current_read_pos = 0;
-        // decode the cigar string
-        for character in readunwrapped.cigar().to_string().as_bytes() {
-            match *character as char {
-                'M' => {     
-                    let temp_string: String = temp_character_vec.clone().into_iter().collect();
-                    let temp_int = temp_string.parse::<usize>().unwrap();
-                    if (current_ref_pos + temp_int > error_pos)
-                        && (current_ref_pos <= error_pos + 1) {
-                        (read_index, _) = get_required_start_end_positions_from_read (temp_int, current_ref_pos, current_read_pos, error_pos, 1);
-                        if &(read_vec[read_index] as char) == base_change && ('X' != *base_change) {
-                            break;
-                        }
-                        else if 'X' == *base_change {
-                            break;
-                        }
-                        else {
-                            continue 'read_loop;
-                        }
-                    }
-                    current_ref_pos += temp_int;
-                    current_read_pos += temp_int;
-                    temp_character_vec = vec![];
-                },
-                'H' => {
-                    temp_character_vec = vec![];
-                },
-                'S' => {
-                    let temp_string: String = temp_character_vec.clone().into_iter().collect();
-                    let temp_int = temp_string.parse::<usize>().unwrap();
-                    current_read_pos += temp_int;
-                    temp_character_vec = vec![];
-                },
-                'I' => {
-                    let temp_string: String = temp_character_vec.clone().into_iter().collect();
-                    let temp_int = temp_string.parse::<usize>().unwrap();
-                    current_read_pos += temp_int;
-                    temp_character_vec = vec![];
-                },
-                'N' => {
-                    let temp_string: String = temp_character_vec.clone().into_iter().collect();
-                    let temp_int = temp_string.parse::<usize>().unwrap();
-                    if (current_ref_pos + temp_int >= error_pos)
-                        && (current_ref_pos <= error_pos + 1) {
-                        //(_, _) = get_required_start_end_positions_from_read (temp_int, current_ref_pos, current_read_pos, error_pos, 1);
-                        continue 'read_loop;
-                    }
-                    current_ref_pos += temp_int;
-                    temp_character_vec = vec![];
-                },
-                'D' => {
-                    let temp_string: String = temp_character_vec.clone().into_iter().collect();
-                    let temp_int = temp_string.parse::<usize>().unwrap();
-                    if (current_ref_pos + temp_int >= error_pos)
-                        && (current_ref_pos <= error_pos + 1) {
-                        //let (_, _) = get_required_start_end_positions_from_read (temp_int, current_ref_pos, current_read_pos, error_pos, 1);
-                        continue 'read_loop;
-                    }
-                    current_ref_pos += temp_int;
-                    temp_character_vec = vec![];
-                },
-                _ => {
-                    temp_character_vec.push(*character as char);
-                },
-            }
-        }
-        seq_name_qual_and_errorpos.push((read_string.clone(), read_name.clone(), readunwrapped.qual()[read_index], read_index));
-    }
-    drop(bam_reader);
-    seq_name_qual_and_errorpos
 }
 
 pub fn write_string_to_file (file_name: &String, input_string: &String) {

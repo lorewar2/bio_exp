@@ -6,7 +6,7 @@ mod generator;
 mod misc;
 mod quality;
 use std::thread;
-use crate::misc::calculate_deep_quality;
+use crate::misc::get_all_data_for_ml;
 use rust_htslib::bcf::{self, Read as BcfRead};
 
 const SEED: u64 = 2;
@@ -17,12 +17,12 @@ const MISMATCH: i32 = -2;
 const NTHREADS: usize = 64;
 //m64125_201110_063134/0
 fn main() {
-    test_function();
+    //test_function();
     // make a vector to hold the children which are spawned.
     let mut children = vec![];
-    let chromosone = "chr2";
+    let chromosone = "chr21";
     let total_start = 5_000_000;
-    let total_end = 240_000_000;
+    let total_end = 41_000_000;
     let one_thread_allocation = (total_end - total_start) / NTHREADS;
     //concancate_files();
     for i in 0..NTHREADS {
@@ -33,7 +33,7 @@ fn main() {
             let start = total_start + one_thread_allocation * i;
             let end = start + one_thread_allocation;
             println!("Thread number {} started, {} from {} to {}..", chromosone, i, start, end);
-            //calculate_deep_quality(chromosone, start, end, i);
+            get_all_data_for_ml(chromosone, start, end, i);
         }));
     }
     for child in children {
